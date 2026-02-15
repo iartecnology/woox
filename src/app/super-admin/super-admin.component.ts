@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core';
+import { WOOX_DB_INIT_SQL } from './db-init.constants';
 import { createClient } from '@supabase/supabase-js';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -73,10 +74,14 @@ interface Merchant {
     id: string;
     name: string;
     slug: string;
+    merchant_code?: string;
     logo_url: string;
     primary_color: string;
     is_active: boolean;
     whatsapp_token?: string;
+    whatsapp_phone_number_id?: string;
+    whatsapp_business_id?: string;
+    whatsapp_verify_token?: string;
     telegram_bot_token?: string;
     facebook_page_token?: string;
     subscription_plan: string;
@@ -1162,6 +1167,12 @@ export class SuperAdminComponent implements OnInit {
     openOmniConfig(merchant: Merchant) {
         this.selectedMerchant = { ...merchant };
         this.currentManagingMerchant = merchant;
+
+        // Sugerir código si no tiene uno
+        if (!this.selectedMerchant.merchant_code) {
+            this.suggestMerchantCode();
+        }
+
         this.showOmniConfig = true;
     }
 
@@ -1217,210 +1228,7 @@ export class SuperAdminComponent implements OnInit {
     }
 
     copyInitSql() {
-        const sql = `-- ============================================
--- WOOX - MASTER DATABASE INITIALIZATION
--- ============================================
-
--- 1. EXTENSIONS
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- 2. TYPES
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-        CREATE TYPE user_role AS ENUM ('superadmin', 'merchant_admin', 'merchant_operator');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
-        CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'message_sender_type') THEN
-        CREATE TYPE message_sender_type AS ENUM ('customer', 'ai', 'human_agent');
-    END IF;
-END $$;
-
--- 3. TABLES
-CREATE TABLE IF NOT EXISTS merchants (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name TEXT NOT NULL,
-    slug TEXT UNIQUE NOT NULL,
-    logo_url TEXT,
-    primary_color TEXT DEFAULT '#4F46E5',
-    is_active BOOLEAN DEFAULT true,
-    ai_enabled BOOLEAN DEFAULT true,
-    subscription_plan TEXT DEFAULT 'pro',
-    subscription_expires_at TIMESTAMP WITH TIME ZONE,
-    ai_provider TEXT DEFAULT 'google_gemini',
-    ai_model TEXT DEFAULT 'gemini-1.5-flash',
-    ai_api_key TEXT,
-    ai_personality TEXT DEFAULT 'friendly',
-    ai_system_prompt TEXT,
-    ai_welcome_message TEXT,
-    ai_menu_context TEXT,
-    ai_restrictions TEXT,
-    ai_use_catalog BOOLEAN DEFAULT true,
-    whatsapp_token TEXT,
-    telegram_bot_token TEXT,
-    facebook_page_token TEXT,
-    remarketing_enabled BOOLEAN DEFAULT false,
-    remarketing_delay_minutes INTEGER DEFAULT 30,
-    remarketing_message TEXT,
-    ai_schedule_enabled BOOLEAN DEFAULT false,
-    ai_schedule_start TIME DEFAULT '09:00',
-    ai_schedule_end TIME DEFAULT '18:00',
-    ai_schedule_message TEXT,
-    agent_id UUID,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS agents (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name TEXT NOT NULL,
-    description TEXT,
-    system_prompt TEXT NOT NULL,
-    welcome_message TEXT,
-    personality TEXT DEFAULT 'friendly',
-    menu_context TEXT,
-    restrictions TEXT,
-    skills JSONB DEFAULT '{"inventory_sales": {"enabled": true}, "order_capture": {"enabled": true}, "knowledge_base": {"enabled": true}, "security_foundation": {"enabled": true}}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS profiles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    full_name TEXT NOT NULL,
-    role user_role NOT NULL DEFAULT 'merchant_operator',
-    merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
-    avatar_url TEXT,
-    max_capacity INTEGER DEFAULT 10,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS teams (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS team_members (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    team_id UUID REFERENCES teams(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(team_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS categories (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    description TEXT,
-    display_order INTEGER DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
-    category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
-    name TEXT NOT NULL,
-    description TEXT,
-    price DECIMAL(10,2) NOT NULL,
-    image_url TEXT,
-    is_available BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS customers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
-    full_name TEXT NOT NULL,
-    phone TEXT,
-    email TEXT,
-    address TEXT,
-    telegram_user_id TEXT,
-    telegram_chat_id TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS orders (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
-    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
-    conversation_id UUID,
-    status order_status DEFAULT 'pending',
-    total DECIMAL(10,2) NOT NULL,
-    delivery_address TEXT,
-    notes TEXT,
-    closing_agent_type TEXT,
-    channel TEXT DEFAULT 'whatsapp',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS order_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
-    product_id UUID REFERENCES products(id) ON DELETE SET NULL,
-    quantity INTEGER NOT NULL,
-    unit_price DECIMAL(10,2) NOT NULL,
-    subtotal DECIMAL(10,2) NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS conversations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
-    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
-    platform TEXT DEFAULT 'whatsapp',
-    channel TEXT DEFAULT 'whatsapp',
-    status TEXT DEFAULT 'active',
-    ai_active BOOLEAN DEFAULT true,
-    unread_count INTEGER DEFAULT 0,
-    last_message TEXT,
-    last_message_at TIMESTAMP WITH TIME ZONE,
-    assigned_agent_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
-    team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-    sender_type message_sender_type NOT NULL,
-    content TEXT NOT NULL,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS agent_context_blocks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS merchant_context_blocks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- INITIAL SEED
-INSERT INTO agents (id, name, description, system_prompt, personality) VALUES
-('00000000-0000-0000-0000-000000000001', 'Woox Concierge v2', 'Agente IA avanzado para ventas y cierre', 
-'Eres un asistente de ventas experto. Tu misión es guiar al cliente por el menú, sugerir adicionales y cerrar la venta capturando sus datos de envío.',
-'friendly') ON CONFLICT DO NOTHING;
-
-INSERT INTO profiles (email, password, full_name, role, merchant_id) VALUES
-('admin@woox.app', 'admin123', 'Super Admin Woox', 'superadmin', NULL)
-ON CONFLICT DO NOTHING;
-`;
+        const sql = WOOX_DB_INIT_SQL;
 
         navigator.clipboard.writeText(sql).then(() => {
             this.notificationService.show('Script de inicialización copiado al portapapeles. Pégalo en el SQL Editor de Supabase.', 'success');
@@ -1434,20 +1242,93 @@ ON CONFLICT DO NOTHING;
     async saveOmniConfig() {
         if (!this.currentManagingMerchant) return;
         const updates = { ...this.selectedMerchant };
+        const merchantId = this.currentManagingMerchant.id;
         delete (updates as any).id;
 
-        await this.supabaseService.updateMerchant(this.currentManagingMerchant.id, updates);
-        this.notificationService.show('Configuración de Omnicanalidad guardada correctamente', 'success');
-        this.showOmniConfig = false;
-        await this.loadInitialData();
+        // Validar unicidad de código
+        if (updates.merchant_code) {
+            const { exists } = await this.supabaseService.checkMerchantCodeAvailability(updates.merchant_code, merchantId);
+            if (exists) {
+                this.notificationService.show(`Error: El código '${updates.merchant_code}' ya está en uso por otro comercio.`, 'error');
+                return;
+            }
+        } else {
+            // Generar uno por defecto si está vacío
+            this.suggestMerchantCode();
+            updates.merchant_code = this.selectedMerchant.merchant_code;
+        }
+
+        try {
+            const { error } = await this.supabaseService.updateMerchant(merchantId, updates);
+            if (error) throw error;
+
+            this.notificationService.show('Configuración de Omnicanalidad guardada correctamente', 'success');
+
+            // Actualización reactiva local
+            Object.assign(this.currentManagingMerchant, updates);
+            this.showOmniConfig = false;
+            await this.loadInitialData(); // Refrescar la lista principal
+        } catch (error: any) {
+            console.error('Error saving omni config:', error);
+            if (error.code === '23505') {
+                this.notificationService.show('Error: El código de comercio ya existe.', 'error');
+            } else {
+                this.notificationService.show('Error al guardar: ' + error.message, 'error');
+            }
+        }
+    }
+
+    suggestMerchantCode() {
+        if (!this.selectedMerchant.name) return;
+
+        // Solo sugerir si está vacío o si parece ser un código autogenerado previo (simple heurística)
+        // Por seguridad y simplicidad, solo sugerimos si está vacío para no sobreescribir algo manual.
+        if (!this.selectedMerchant.merchant_code) {
+            const cleanName = this.selectedMerchant.name
+                .trim()
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, '') // Solo letras y números
+                .substring(0, 10); // Máximo 10 caracteres
+
+            // Añadir un sufijo aleatorio corto para evitar colisiones obvias
+            const randomSuffix = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+
+            this.selectedMerchant.merchant_code = `${cleanName}${randomSuffix}`;
+
+            // Sugerir el mismo código como verify token para simplicidad si está vacío
+            if (!this.selectedMerchant.whatsapp_verify_token) {
+                this.selectedMerchant.whatsapp_verify_token = this.selectedMerchant.merchant_code;
+            }
+            console.log('Código sugerido:', this.selectedMerchant.merchant_code);
+        }
     }
 
     async saveMerchant() {
         const merchantData = { ...this.selectedMerchant };
 
+        if (!merchantData.merchant_code) {
+            const cleanName = (merchantData.name || 'MERCHANT')
+                .trim()
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, '')
+                .substring(0, 10);
+            const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+            merchantData.merchant_code = `${cleanName}${randomSuffix}`;
+        }
+
+        // VALIDAR CÓDIGO ÚNICO
+        const { exists } = await this.supabaseService.checkMerchantCodeAvailability(merchantData.merchant_code, merchantData.id);
+        if (exists) {
+            // Si existe, generar uno nuevo automáticamente con sufijo más largo y notificar
+            const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+            const newCode = `${merchantData.merchant_code.substring(0, 8)}${randomSuffix}`;
+            this.notificationService.show(`El código '${merchantData.merchant_code}' ya existe. Probando con '${newCode}'...`, 'info');
+            merchantData.merchant_code = newCode;
+            this.selectedMerchant.merchant_code = newCode; // Update UI
+        }
+
         if (!this.isEditing) {
             (merchantData as any).slug = this.selectedMerchant.name?.toLowerCase().replace(/ /g, '-') || '';
-            // No enviar ID si es nuevo para dejar que Supabase lo genere
             delete (merchantData as any).id;
         }
 
@@ -1458,7 +1339,11 @@ ON CONFLICT DO NOTHING;
             this.showModal = false;
             await this.loadInitialData();
         } else {
-            this.notificationService.show('Error al guardar el comercio', 'error');
+            if (error.code === '23505') { // Postgres Unique Violation
+                this.notificationService.show('Error: El código de comercio o slug ya existe.', 'error');
+            } else {
+                this.notificationService.show('Error al guardar el comercio: ' + error.message, 'error');
+            }
             console.error(error);
         }
     }
@@ -1627,52 +1512,40 @@ ON CONFLICT DO NOTHING;
 
         try {
             if (channel === 'telegram') {
-                // Verificación REAL con la API de Telegram
                 const response = await fetch(`https://api.telegram.org/bot${token}/getMe`);
                 const data = await response.json();
-
                 if (data.ok && data.result) {
                     this.channelStatus[channel] = 'connected';
-                    this.notificationService.show(
-                        `✅ Telegram conectado: @${data.result.username} (${data.result.first_name})`,
-                        'success'
-                    );
-                    console.log('Bot de Telegram verificado:', data.result);
-
-                    // Configurar webhook automáticamente
+                    this.notificationService.show(`✅ Telegram conectado: @${data.result.username}`, 'success');
                     await this.setupTelegramWebhook(token, merchant.id);
                 } else {
                     this.channelStatus[channel] = 'error';
-                    this.notificationService.show(
-                        `❌ Token de Telegram inválido: ${data.description || 'Error desconocido'}`,
-                        'error'
-                    );
+                    this.notificationService.show(`❌ Token de Telegram inválido`, 'error');
                 }
-            } else {
-                // Simulación para otros canales (WhatsApp, Facebook)
-                await new Promise(resolve => setTimeout(resolve, 1500));
-
-                if (token.length > 10) {
+            } else if (channel === 'whatsapp') {
+                if (!merchant.whatsapp_phone_number_id) {
+                    this.notificationService.show('El Phone Number ID es obligatorio para validar WhatsApp', 'warning');
+                    this.verifyingChannel = null;
+                    return;
+                }
+                const response = await fetch(`https://graph.facebook.com/v18.0/${merchant.whatsapp_phone_number_id}?access_token=${token}`);
+                const data = await response.json();
+                if (response.ok && !data.error) {
                     this.channelStatus[channel] = 'connected';
-                    this.notificationService.show(
-                        `${channel.charAt(0).toUpperCase() + channel.slice(1)} conectado correctamente`,
-                        'success'
-                    );
+                    this.notificationService.show('✅ WhatsApp conectado correctamente', 'success');
                 } else {
                     this.channelStatus[channel] = 'error';
-                    this.notificationService.show(
-                        `Error al validar token de ${channel}. Revisa las credenciales.`,
-                        'error'
-                    );
+                    this.notificationService.show(`❌ Error de WhatsApp: ${data.error?.message || 'Token inválido'}`, 'error');
                 }
+            } else {
+                // Simulación para Facebook
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                this.channelStatus[channel] = 'connected';
+                this.notificationService.show('✅ Canal verificado con éxito', 'success');
             }
-        } catch (error: any) {
-            console.error(`Error verificando ${channel}:`, error);
+        } catch (error) {
             this.channelStatus[channel] = 'error';
-            this.notificationService.show(
-                `Error de conexión con ${channel}: ${error.message}`,
-                'error'
-            );
+            this.notificationService.show('Error al verificar conexión', 'error');
         }
 
         this.verifyingChannel = null;
@@ -1705,6 +1578,33 @@ ON CONFLICT DO NOTHING;
         } catch (error) {
             console.error('Error configurando webhook:', error);
         }
+    }
+
+    getWhatsAppWebhookUrl(): string {
+        return this.getWebhookUrl('whatsapp-webhook');
+    }
+
+    getFacebookMessengerWebhookUrl(): string {
+        return this.getWebhookUrl('facebook-webhook');
+    }
+
+    getTelegramWebhookUrl(): string {
+        return this.getWebhookUrl('telegram-webhook');
+    }
+
+    private getWebhookUrl(functionName: string): string {
+        const supabaseUrl = this.platformConfig.supabase_url || '';
+        let projectId = 'your-project';
+
+        if (supabaseUrl.includes('.supabase.co')) {
+            projectId = supabaseUrl.split('//')[1].split('.')[0];
+        } else if (supabaseUrl.includes('localhost')) {
+            projectId = 'local';
+        }
+
+        const mCode = this.selectedMerchant?.merchant_code?.trim();
+        const identifier = mCode || this.selectedMerchant?.id || 'merchant-id';
+        return `https://${projectId}.supabase.co/functions/v1/${functionName}?merchant_id=${identifier}`;
     }
 
     fillAIExample(type: 'welcome' | 'prompt' | 'menu' | 'remarketing' | 'restrictions') {

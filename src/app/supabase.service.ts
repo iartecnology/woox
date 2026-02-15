@@ -148,6 +148,20 @@ export class SupabaseService {
         return { data, error };
     }
 
+    async checkMerchantCodeAvailability(code: string, excludeId?: string) {
+        let query = supabase
+            .from('merchants')
+            .select('id', { count: 'exact', head: true })
+            .eq('merchant_code', code);
+
+        if (excludeId) {
+            query = query.neq('id', excludeId);
+        }
+
+        const { count, error } = await query;
+        return { exists: (count || 0) > 0, error };
+    }
+
     // --- AGENTES (AI AGENTS) ---
     async getAgents() {
         const { data, error } = await supabase

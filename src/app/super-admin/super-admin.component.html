@@ -188,7 +188,8 @@
 
             <div class="form-group">
                 <label>Nombre de la Empresa</label>
-                <input type="text" [(ngModel)]="selectedMerchant.name" placeholder="Ej: Pizza Hut">
+                <input type="text" [(ngModel)]="selectedMerchant.name" (blur)="suggestMerchantCode()"
+                    placeholder="Ej: Pizza Hut">
             </div>
 
             <div class="form-group">
@@ -202,6 +203,13 @@
             <div class="form-group full-width">
                 <label>URL del Logo</label>
                 <input type="text" [(ngModel)]="selectedMerchant.logo_url" placeholder="https://...">
+            </div>
+
+
+            <div class="form-group">
+                <label>Código de Comercio (Amigable)</label>
+                <input type="text" [(ngModel)]="selectedMerchant.merchant_code" placeholder="Ej: BKPRO1 (Sin guiones)">
+                <small>Identificador corto para URLs de Webhooks.</small>
             </div>
 
 
@@ -822,35 +830,76 @@
                 <h3>Canales de Mensajería</h3>
                 <p class="desc">Conecta tus canales de comunicación para que la IA pueda atender a tus clientes.</p>
 
+                <!-- NUEVO: URL de Webhook Amigable -->
+                <div class="webhook-display-box mb-20">
+                    <div class="label-with-action">
+                        <label class="inner-label">🔗 Tu URL de Webhook para WhatsApp</label>
+                        <div class="merchant-code-inline">
+                            <span>Cod:</span>
+                            <input type="text" [(ngModel)]="selectedMerchant.merchant_code"
+                                (blur)="suggestMerchantCode()" placeholder="BKPRO1" class="mini-input">
+                        </div>
+                    </div>
+                    <div class="url-copy-wrapper">
+                        <input type="text" readonly [value]="getWhatsAppWebhookUrl()" class="webhook-url-input">
+                        <button class="copy-btn-small" (click)="copyToClipboard(getWhatsAppWebhookUrl())">📋
+                            Copiar</button>
+                    </div>
+                    <small [style.color]="selectedMerchant.merchant_code ? '#059669' : '#d97706'">
+                        {{ selectedMerchant.merchant_code ? '✅ Usando código amigable' : '⚠️ Usando ID (UUID) con
+                        guiones - Recomendado crear uno corto' }}
+                    </small>
+                </div>
+
                 <div class="form-group">
                     <div class="label-with-action">
                         <label>
                             <span class="channel-icon">📱</span>
-                            WhatsApp Business API Token
+                            WhatsApp Meta API Config
                         </label>
                         <button class="help-action-btn" (click)="verifyChannel('whatsapp')"
                             [disabled]="verifyingChannel === 'whatsapp'">
                             {{ verifyingChannel === 'whatsapp' ? '⏳ Verificando...' : '⚡ Probar Conexión' }}
                         </button>
                     </div>
-                    <div class="token-input-wrapper">
-                        <input [type]="tokenVisibility['whatsapp'] ? 'text' : 'password'"
-                            [(ngModel)]="selectedMerchant.whatsapp_token"
-                            [placeholder]="tokenVisibility['whatsapp'] ? 'EAAl...' : '••••••••••••'"
-                            [class.masked]="!tokenVisibility['whatsapp']">
-                        <span class="token-preview"
-                            *ngIf="!tokenVisibility['whatsapp'] && selectedMerchant.whatsapp_token">
-                            {{ getMaskedToken(selectedMerchant.whatsapp_token) }}
-                        </span>
-                        <button class="toggle-token-btn" (click)="toggleTokenVisibility('whatsapp')">
-                            {{ tokenVisibility['whatsapp'] ? '👁️‍🗨️' : '👁️' }}
-                        </button>
+
+                    <div class="sub-form-whatsapp">
+                        <div class="token-input-wrapper mb-10">
+                            <label class="inner-label">Access Token (Permanent)</label>
+                            <input [type]="tokenVisibility['whatsapp'] ? 'text' : 'password'"
+                                [(ngModel)]="selectedMerchant.whatsapp_token"
+                                [placeholder]="tokenVisibility['whatsapp'] ? 'EAAl...' : '••••••••••••'"
+                                [class.masked]="!tokenVisibility['whatsapp']">
+                            <button class="toggle-token-btn" (click)="toggleTokenVisibility('whatsapp')">
+                                {{ tokenVisibility['whatsapp'] ? '👁️‍🗨️' : '👁️' }}
+                            </button>
+                        </div>
+
+                        <div class="grid-2-cols mb-10">
+                            <div class="input-with-label">
+                                <label class="inner-label">Phone Number ID</label>
+                                <input type="text" [(ngModel)]="selectedMerchant.whatsapp_phone_number_id"
+                                    placeholder="102938... ">
+                            </div>
+                            <div class="input-with-label">
+                                <label class="inner-label">WhatsApp Business ID</label>
+                                <input type="text" [(ngModel)]="selectedMerchant.whatsapp_business_id"
+                                    placeholder="847563... ">
+                            </div>
+                        </div>
+
+                        <div class="verify-token-box">
+                            <label class="inner-label">Webhook Verify Token (Configúralo en Meta)</label>
+                            <input type="text" [(ngModel)]="selectedMerchant.whatsapp_verify_token"
+                                [placeholder]="selectedMerchant.merchant_code || 'woox_secret_token_123'">
+                        </div>
                     </div>
+
                     <small [class.success-text]="channelStatus['whatsapp'] === 'connected'"
                         [class.error-text]="channelStatus['whatsapp'] === 'error'">
                         {{ channelStatus['whatsapp'] === 'connected' ? '✅ Conectado con éxito' :
                         channelStatus['whatsapp'] === 'error' ? '❌ Error en las credenciales' :
-                        'Obtén tu token en Meta Business Manager' }}
+                        'Configura estos datos en Meta for Developers' }}
                     </small>
                 </div>
 
@@ -878,6 +927,12 @@
                             {{ tokenVisibility['telegram'] ? '👁️‍🗨️' : '👁️' }}
                         </button>
                     </div>
+                    <div class="url-copy-wrapper mb-15">
+                        <input type="text" readonly [value]="getTelegramWebhookUrl()" class="webhook-url-input">
+                        <button class="copy-btn-small" (click)="copyToClipboard(getTelegramWebhookUrl())">📋 Copiar
+                            Webhook</button>
+                    </div>
+
                     <small [class.success-text]="channelStatus['telegram'] === 'connected'"
                         [class.error-text]="channelStatus['telegram'] === 'error'">
                         {{ channelStatus['telegram'] === 'connected' ? '✅ Conectado con éxito' :
@@ -910,6 +965,13 @@
                             {{ tokenVisibility['facebook'] ? '👁️‍🗨️' : '👁️' }}
                         </button>
                     </div>
+                    <div class="url-copy-wrapper mb-15">
+                        <input type="text" readonly [value]="getFacebookMessengerWebhookUrl()"
+                            class="webhook-url-input">
+                        <button class="copy-btn-small" (click)="copyToClipboard(getFacebookMessengerWebhookUrl())">📋
+                            Copiar Webhook</button>
+                    </div>
+
                     <small [class.success-text]="channelStatus['facebook'] === 'connected'"
                         [class.error-text]="channelStatus['facebook'] === 'error'">
                         {{ channelStatus['facebook'] === 'connected' ? '✅ Conectado con éxito' :

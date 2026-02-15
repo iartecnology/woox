@@ -43,6 +43,9 @@ Deno.serve(async (req) => {
         const channel = conv.channel;
         const botToken = conv.merchants?.telegram_bot_token;
         const chatId = conv.customers?.telegram_chat_id;
+        const waToken = conv.merchants?.whatsapp_token;
+        const waPhoneId = conv.merchants?.whatsapp_phone_number_id;
+        const waCustomerPhone = conv.customers?.whatsapp_phone;
 
         if (channel === 'telegram') {
             if (!botToken || !chatId) {
@@ -67,6 +70,37 @@ Deno.serve(async (req) => {
             }
 
             return new Response(JSON.stringify({ ok: true, provider_response: telData }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+        }
+
+        if (channel === 'whatsapp') {
+            if (!waToken || !waPhoneId || !waCustomerPhone) {
+                throw new Error("WhatsApp configuration missing (token, phone id or customer phone)");
+            }
+
+            console.log(`[Deliver] Enviando a WhatsApp (${waCustomerPhone}): ${content}`);
+
+            const waRes = await fetch(`https://graph.facebook.com/v22.0/${waPhoneId}/messages`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${waToken}`
+                },
+                body: JSON.stringify({
+                    messaging_product: "whatsapp",
+                    to: waCustomerPhone,
+                    type: "text",
+                    text: { body: content }
+                })
+            });
+
+            const waData = await waRes.json();
+            if (!waRes.ok) {
+                throw new Error(`WhatsApp API Error: ${JSON.stringify(waData)}`);
+            }
+
+            return new Response(JSON.stringify({ ok: true, provider_response: waData }), {
                 headers: { ...corsHeaders, "Content-Type": "application/json" }
             });
         }

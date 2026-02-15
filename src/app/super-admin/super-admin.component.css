@@ -1459,7 +1459,106 @@ textarea::placeholder {
     color: #475569;
 }
 
-/* --- QR Section Styles --- */
+/* WhatsApp Specific Config Styles */
+.sub-form-whatsapp {
+    background: var(--bg-primary);
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    margin-top: 15px;
+}
+
+.inner-label {
+    display: block !important;
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    color: var(--text-secondary) !important;
+    margin-bottom: 6px !important;
+    text-transform: uppercase;
+}
+
+.grid-2-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.mb-10 {
+    margin-bottom: 10px;
+}
+
+.verify-token-box {
+    background: var(--bg-secondary);
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px dashed var(--accent-color);
+}
+
+.masked {
+    letter-spacing: 0.15em;
+}
+
+.token-preview {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 8px;
+}
+
+/* Webhook Display Styles */
+.webhook-display-box {
+    background: var(--bg-secondary);
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid var(--accent-color);
+}
+
+.url-copy-wrapper {
+    display: flex;
+    gap: 10px;
+    margin: 8px 0;
+}
+
+.webhook-url-input {
+    font-family: monospace;
+    font-size: 0.85rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+}
+
+.copy-btn-small {
+    padding: 0 16px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.merchant-code-inline {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.merchant-code-inline .mini-input {
+    width: 80px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    border: 1px dashed var(--accent-color);
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-weight: bold;
+    color: var(--accent-color);
+}
+
 .qr-container-row {
     display: flex;
     gap: 20px;

@@ -21,3 +21,6 @@ api_url = "http://localhost"
 
 [functions.telegram-webhook]
 verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
