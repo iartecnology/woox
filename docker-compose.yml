@@ -1,14 +1,15 @@
 version: '3.8'
 
 services:
-  woox-app:
-    build: .
+  woox-pro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: woox-frontend
     ports:
-      - "8080:80"
-    environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - "80:80"
     restart: always
-
-# Nota: El archivo init_database.sql generado contiene la estructura de la base de datos
-# para ser importada manualmente en Supabase o usada como referencia.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
