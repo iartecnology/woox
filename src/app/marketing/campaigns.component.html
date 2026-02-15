@@ -1,0 +1,145 @@
+<div class="marketing-container">
+    <header class="page-header">
+        <div class="header-text">
+            <h1>📢 Campañas de Marketing</h1>
+            <p>Envía promociones y mensajes masivos a tus clientes a través de múltiples canales.</p>
+        </div>
+        <button class="create-btn" (click)="showCreateModal = true">+ Nueva Campaña</button>
+    </header>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-icon">📈</span>
+            <div class="stat-info">
+                <span class="stat-label">Total Enviados</span>
+                <span class="stat-value">6,842</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <span class="stat-icon">💬</span>
+            <div class="stat-info">
+                <span class="stat-label">Click Rate Avg.</span>
+                <span class="stat-value">14.5%</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <span class="stat-icon">💰</span>
+            <div class="stat-info">
+                <span class="stat-label">ROI Estimado</span>
+                <span class="stat-value">2.4x</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="campaigns-table-card">
+        <table class="campaigns-table">
+            <thead>
+                <tr>
+                    <th (click)="toggleSort('name')" class="sortable">
+                        Nombre de Campaña
+                        <span class="sort-icon" *ngIf="sortKey === 'name'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th (click)="toggleSort('type')" class="sortable">
+                        Canal
+                        <span class="sort-icon" *ngIf="sortKey === 'type'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th>Audiencia</th>
+                    <th (click)="toggleSort('status')" class="sortable">
+                        Estado
+                        <span class="sort-icon" *ngIf="sortKey === 'status'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th (click)="toggleSort('sent_count')" class="sortable">
+                        Enviados
+                        <span class="sort-icon" *ngIf="sortKey === 'sent_count'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th>Rendimiento</th>
+                    <th (click)="toggleSort('created_at')" class="sortable">
+                        Fecha
+                        <span class="sort-icon" *ngIf="sortKey === 'created_at'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let c of paginatedCampaigns">
+                    <td><strong>{{ c.name }}</strong></td>
+                    <td>
+                        <span class="channel-badge" [class]="c.type">{{ c.type }}</span>
+                    </td>
+                    <td>{{ c.audience }}</td>
+                    <td>
+                        <span class="status-badge" [class]="c.status">{{ c.status | uppercase }}</span>
+                    </td>
+                    <td>{{ c.sent_count }}</td>
+                    <td>
+                        <div class="perf-stats" *ngIf="c.open_rate">
+                            <span>👁️ {{ c.open_rate }}%</span>
+                            <span>🖱️ {{ c.click_rate }}%</span>
+                        </div>
+                        <span *ngIf="!c.open_rate" class="muted">Procesando...</span>
+                    </td>
+                    <td>{{ c.created_at | date:'dd/MM/yyyy' }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Controles de Paginación -->
+        <div class="pagination-controls">
+            <div class="pagination-info">
+                Mostrando {{ (currentPage - 1) * itemsPerPage + 1 }} - {{ Math.min(currentPage * itemsPerPage,
+                campaigns.length) }} de {{ campaigns.length }} campañas
+            </div>
+            <div class="pagination-buttons">
+                <button [disabled]="currentPage === 1" (click)="changePage(currentPage - 1)"
+                    class="page-btn">Anterior</button>
+                <button *ngFor="let page of pagesArray" (click)="changePage(page)" [class.active]="page === currentPage"
+                    class="page-btn num-btn">
+                    {{ page }}
+                </button>
+                <button [disabled]="currentPage === totalPages" (click)="changePage(currentPage + 1)"
+                    class="page-btn">Siguiente</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nueva Campaña -->
+<div class="modal-overlay" *ngIf="showCreateModal" (click)="showCreateModal = false">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+        <h2>🚀 Crear Nueva Campaña</h2>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Nombre de la Campaña</label>
+                <input type="text" [(ngModel)]="newCampaign.name" placeholder="Ej: Oferta de Invierno">
+            </div>
+            <div class="form-group">
+                <label>Canal de Envío</label>
+                <select [(ngModel)]="newCampaign.type">
+                    <option value="whatsapp">WhatsApp Business</option>
+                    <option value="email">Email Marketing</option>
+                    <option value="sms">SMS Directo</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Segmento de Audiencia</label>
+                <select [(ngModel)]="newCampaign.audience">
+                    <option value="all">Todos los clientes (1,240)</option>
+                    <option value="vips">Clientes VIP (150)</option>
+                    <option value="inactive">Inactivos > 30 días (320)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Mensaje / Plantilla</label>
+                <textarea rows="4" placeholder="Escribe tu mensaje aquí o elige una plantilla..."></textarea>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showCreateModal = false">Cancelar</button>
+            <button class="save-btn" (click)="createCampaign()">Lanzar Campaña Ahora</button>
+        </div>
+    </div>
+</div>

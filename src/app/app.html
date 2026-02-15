@@ -1,0 +1,274 @@
+<div class="app-container" *ngIf="!isLoginPage && !isBioLinkPage">
+    <!-- Top Bar -->
+    <header class="top-bar">
+        <!-- Hamburger Menu Button -->
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <button class="hamburger-btn" (click)="toggleSidebar()" [class.open]="sidebarOpen">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Merchant Indicator next to menu -->
+            <div class="merchant-badge" *ngIf="activeMerchantId || (!isSuperAdmin && merchantName !== 'Super Admin')"
+                style="font-size: 0.9rem; color: #4b5563; font-weight: 700; background: #f3f4f6; padding: 4px 12px; border-radius: 8px;">
+                {{ merchantName }}
+            </div>
+        </div>
+
+        <!-- Platform Name/Logo (Centered) -->
+        <div class="platform-name" style="display: flex; flex-direction: column; align-items: center; line-height: 1;">
+            <img *ngIf="usePlatformLogoImage && platformLogoUrl" [src]="platformLogoUrl" alt="Platform Logo"
+                class="platform-logo-img">
+            <span *ngIf="!usePlatformLogoImage || !platformLogoUrl" style="font-weight: 800; font-size: 1.2rem;">{{
+                platformName }}</span>
+            <small class="app-version-tag"
+                style="font-size: 0.6rem; opacity: 0.5; font-weight: 500; font-family: monospace; margin-top: 2px;">v{{
+                appVersion }}</small>
+        </div>
+
+
+        <!-- Profile Menu -->
+        <div class="profile-menu-container">
+            <!-- Global Notification Bubble & Simulator -->
+            <div class="header-actions-global"
+                style="display: flex; align-items: center; gap: 16px; margin-right: 16px;">
+
+                <!-- Control de Sonido -->
+                <button (click)="toggleSound()" class="icon-btn"
+                    [style.background]="isSoundEnabled() ? '#e0e7ff' : '#f1f5f9'"
+                    [style.color]="isSoundEnabled() ? '#4338ca' : '#64748b'"
+                    style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.05); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
+                    [title]="isSoundEnabled() ? 'Desactivar sonido' : 'Activar sonido'">
+                    {{ isSoundEnabled() ? '🔊' : '🔇' }}
+                </button>
+
+                <!-- Presencia (Chatwoot style) -->
+                <select *ngIf="!isSuperAdmin" [ngModel]="agentStatus()" (ngModelChange)="updateStatus($event)"
+                    style="padding: 4px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; border: 1px solid #ddd6fe; outline: none; cursor: pointer; background: white;"
+                    [style.border-color]="agentStatus() === 'online' ? '#22c55e' : (agentStatus() === 'busy' ? '#eab308' : '#94a3b8')"
+                    [style.color]="agentStatus() === 'online' ? '#15803d' : (agentStatus() === 'busy' ? '#854d0e' : '#475569')">
+                    <option value="online">🟢 Online</option>
+                    <option value="busy">🟡 Busy</option>
+                    <option value="offline">⚪ Offline</option>
+                </select>
+
+                <!-- Botón Simulador (Nuevo Ubicación) -->
+                <button class="icon-btn primary" routerLink="/chats" [queryParams]="{ action: 'simulator' }"
+                    style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
+                    title="Nuevo Simulacro">
+                    🚀
+                </button>
+
+                <!-- Notificaciones (Burbuja) -->
+                <div class="notification-bell-wrapper" style="position: relative; cursor: pointer;" routerLink="/chats">
+                    <span style="font-size: 1.4rem;">💬</span>
+                    <span *ngIf="unreadCount() > 0" class="header-badge">{{ unreadCount() }}</span>
+                </div>
+            </div>
+
+            <button class="profile-btn" (click)="toggleProfileMenu()">
+                <img src="https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=100&h=100&fit=crop" alt="User"
+                    class="profile-logo">
+                <span class="profile-name">{{ userData.full_name }}</span>
+                <span class="profile-arrow">▼</span>
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div class="profile-dropdown" *ngIf="profileMenuOpen" (click)="$event.stopPropagation()">
+                <div class="dropdown-header">
+                    <img src="https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=100&h=100&fit=crop"
+                        alt="User">
+                    <div>
+                        <div class="dropdown-name">{{ userData.full_name }}</div>
+                        <div class="dropdown-role">{{ isSuperAdmin ? 'Super Admin' : 'Usuario' }}</div>
+                    </div>
+                </div>
+                <div class="dropdown-divider"></div>
+                <button class="dropdown-item profile-link" (click)="openProfileModal()">
+                    <span class="icon">👤</span>
+                    <span>Mi Perfil</span>
+                </button>
+                <div class="dropdown-divider"></div>
+                <a (click)="exitMerchantView()" *ngIf="isSuperAdmin && activeMerchantId" class="dropdown-item"
+                    style="color: var(--primary-color); font-weight: 700; cursor: pointer;">
+                    <span class="icon">🔙</span>
+                    <span>Salir de Comercio</span>
+                </a>
+                <button class="dropdown-item logout" (click)="logout()">
+                    <span class="icon">🚪</span>
+                    <span>Cerrar Sesión</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" *ngIf="sidebarOpen" (click)="closeSidebar()"></div>
+    <div class="profile-overlay" *ngIf="profileMenuOpen" (click)="closeProfileMenu()"></div>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" [class.open]="sidebarOpen">
+        <div class="sidebar-header">
+            <div class="nav-brand" style="display: flex; flex-direction: column; line-height: 1.1;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <img *ngIf="usePlatformLogoImage && platformLogoUrl" [src]="platformLogoUrl" alt="Platform Logo"
+                        class="sidebar-logo-img">
+                    <span *ngIf="!usePlatformLogoImage || !platformLogoUrl"
+                        style="font-weight: 800; font-size: 1.3rem;">{{ platformName }}</span>
+                </div>
+                <small class="app-version-tag"
+                    style="font-size: 0.6rem; opacity: 0.4; font-weight: 500; font-family: monospace; margin-left: 2px;">PRO
+                    Edition v{{ appVersion }}</small>
+            </div>
+            <button class="close-sidebar" (click)="closeSidebar()">✕</button>
+        </div>
+
+        <div class="sidebar-content">
+            <!-- Links para Super Admin -->
+            <ng-container *ngIf="isSuperAdmin">
+                <a routerLink="/super-admin" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">🏢</span>
+                    <span>Empresas</span>
+                </a>
+                <a routerLink="/platform-analytics" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">📈</span>
+                    <span>Analytics Global</span>
+                </a>
+                <a routerLink="/audit-logs" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">🕵️</span>
+                    <span>Auditoría</span>
+                </a>
+            </ng-container>
+
+            <!-- Links para Empresas (O para SuperAdmin viendo una empresa) -->
+            <ng-container *ngIf="!isSuperAdmin || activeMerchantId">
+                <div *ngIf="isSuperAdmin && activeMerchantId" class="sidebar-divider"
+                    style="margin: 10px 0; border-top: 1px solid var(--border-color); opacity: 0.3;"></div>
+                <div *ngIf="isSuperAdmin && activeMerchantId"
+                    style="padding: 10px 20px; font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">
+                    Viendo: {{ merchantName }}
+                </div>
+
+                <a routerLink="/chats" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">💬</span>
+                    <span>Chats</span>
+                </a>
+                <a routerLink="/orders" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">🛵</span>
+                    <span>Pedidos</span>
+                </a>
+                <a routerLink="/metrics" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">📊</span>
+                    <span>Estadísticas</span>
+                </a>
+                <a routerLink="/crm" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">👥</span>
+                    <span>Clientes (CRM)</span>
+                </a>
+                <a routerLink="/marketing" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">📢</span>
+                    <span>Campañas</span>
+                </a>
+                <a routerLink="/delivery" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">🚚</span>
+                    <span>Reparto</span>
+                </a>
+                <a routerLink="/products" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">🍱</span>
+                    <span>Catálogo</span>
+                </a>
+                <a routerLink="/ai-config" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">🤖</span>
+                    <span>IA Config</span>
+                </a>
+                <a routerLink="/biolink-admin" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">🔗</span>
+                    <span>BioLink</span>
+                </a>
+            </ng-container>
+        </div>
+
+        <div class="sidebar-footer">
+            <a (click)="exitMerchantView()" *ngIf="isSuperAdmin && activeMerchantId" class="logout-btn"
+                style="background: #e0e7ff; color: #4338ca; margin-bottom: 8px; border: 1px solid #c7d2fe; text-decoration: none; justify-content: center; width: 100%; box-sizing: border-box; cursor: pointer;">
+                <span class="icon">🔙</span>
+                <span>Salir de Comercio</span>
+            </a>
+            <button class="logout-btn" (click)="logout()">
+                <span class="icon">🚪</span>
+                <span>Cerrar Sesión</span>
+            </button>
+        </div>
+    </nav>
+</div>
+
+<main class="content-area" [class.no-nav]="isLoginPage || isBioLinkPage"
+    [class.sidebar-mode]="!isLoginPage && !isBioLinkPage">
+    <router-outlet></router-outlet>
+</main>
+
+<!-- Toasts Globales -->
+<div class="toast-container">
+    <div *ngFor="let toast of toasts()" class="toast" [class]="toast.type">
+        <span class="toast-icon">
+            <ng-container [ngSwitch]="toast.type">
+                <span *ngSwitchCase="'success'">✅</span>
+                <span *ngSwitchCase="'error'">❌</span>
+                <span *ngSwitchCase="'warning'">⚠️</span>
+                <span *ngSwitchDefault>ℹ️</span>
+            </ng-container>
+        </span>
+        <div class="toast-message">{{ toast.message }}</div>
+    </div>
+</div>
+
+<!-- Modal Mi Perfil -->
+<div class="modal-overlay" *ngIf="showProfileModal" (click)="showProfileModal = false">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+        <h2>👤 Mi Perfil</h2>
+        <p>Actualiza tus datos personales y de acceso.</p>
+
+        <div class="profile-form">
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Nombre Completo</label>
+                <input type="text" [(ngModel)]="userData.full_name" placeholder="Tu nombre"
+                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);">
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Email / Usuario</label>
+                <input type="email" [(ngModel)]="userData.email" placeholder="tu@email.com"
+                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);">
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Nueva Contraseña</label>
+                <input type="password" [(ngModel)]="userData.password" placeholder="********"
+                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);">
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Repetir Contraseña</label>
+                <input type="password" [(ngModel)]="userData.confirm_password" placeholder="********"
+                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);">
+                <small style="display: block; margin-top: 6px; font-size: 0.75rem; color: #6b7280;">Deja en blanco para
+                    no cambiar.</small>
+            </div>
+        </div>
+
+        <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+            <button class="cancel-btn" (click)="showProfileModal = false">Cancelar</button>
+            <button class="save-btn" (click)="saveProfile()">Guardar Cambios</button>
+        </div>
+    </div>
+</div><!-- Global Loading Animation -->
+<div class="global-loading-overlay" *ngIf="isLoading()">
+    <div class="loading-content">
+        <div class="woox-loader">
+            <div class="spinner"></div>
+            <div class="loader-logo">W</div>
+        </div>
+        <h2 class="loading-text">Cargando Woox...</h2>
+        <div class="loading-bar">
+            <div class="loading-progress"></div>
+        </div>
+    </div>
+</div>

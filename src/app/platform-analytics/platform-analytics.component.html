@@ -1,0 +1,269 @@
+<div class="analytics-container">
+    <header class="analytics-header">
+        <div>
+            <h1>📊 Analytics de Plataforma</h1>
+            <p>Vista global del rendimiento y uso de Woox SaaS</p>
+        </div>
+        <div class="header-stats">
+            <div class="mini-stat">
+                <span class="mini-value">{{ globalMetrics.active_merchants }}/{{ globalMetrics.total_merchants }}</span>
+                <span class="mini-label">Empresas Activas</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Filtros de Analíticas -->
+    <div class="analytics-filters">
+        <div class="filter-group">
+            <label for="merchantSelect">🏢 Empresa</label>
+            <select id="merchantSelect" [(ngModel)]="selectedMerchant" (change)="onFilterChange()">
+                <option *ngFor="let m of merchants" [value]="m.id">{{ m.name }}</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="periodSelect">📅 Periodo</label>
+            <select id="periodSelect" [(ngModel)]="selectedPeriod" (change)="onFilterChange()">
+                <option *ngFor="let p of periods" [value]="p.id">{{ p.name }}</option>
+            </select>
+        </div>
+
+        <div class="filter-group animate-fade-in" *ngIf="selectedPeriod === 'custom'">
+            <label>📍 Rango Personalizado</label>
+            <div class="date-range">
+                <input type="date" [(ngModel)]="startDate" (change)="onFilterChange()">
+                <span class="range-sep">a</span>
+                <input type="date" [(ngModel)]="endDate" (change)="onFilterChange()">
+            </div>
+        </div>
+
+        <button class="export-btn" (click)="exportReport()">
+            <span>📥 Exportar Informe</span>
+        </button>
+    </div>
+
+    <!-- Métricas Globales -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-icon">💬</div>
+            <div class="metric-content">
+                <div class="metric-value">{{ formatNumber(globalMetrics.total_conversations) }}</div>
+                <div class="metric-label">Conversaciones Totales</div>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">🤖</div>
+            <div class="metric-content">
+                <div class="metric-value">{{ formatNumber(globalMetrics.total_ai_tokens) }}</div>
+                <div class="metric-label">Tokens de IA Consumidos</div>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">💰</div>
+            <div class="metric-content">
+                <div class="metric-value">{{ formatCurrency(globalMetrics.total_revenue) }}</div>
+                <div class="metric-label">Ingresos Totales (MRR)</div>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">⚡</div>
+            <div class="metric-content">
+                <div class="metric-value">{{ globalMetrics.avg_response_time }}s</div>
+                <div class="metric-label">Tiempo de Respuesta Promedio</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección de IA -->
+    <div class="section-grid">
+        <div class="section-card">
+            <h3>🧠 Consumo de IA</h3>
+            <div class="ai-stats">
+                <div class="ai-stat-row">
+                    <span class="label">Total de Tokens:</span>
+                    <span class="value">{{ formatNumber(aiConsumption.total_tokens) }}</span>
+                </div>
+                <div class="ai-stat-row">
+                    <span class="label">Tokens de Entrada:</span>
+                    <span class="value">{{ formatNumber(aiConsumption.input_tokens) }}</span>
+                </div>
+                <div class="ai-stat-row">
+                    <span class="label">Tokens de Salida:</span>
+                    <span class="value">{{ formatNumber(aiConsumption.output_tokens) }}</span>
+                </div>
+                <div class="ai-stat-row highlight">
+                    <span class="label">Costo Estimado:</span>
+                    <span class="value">${{ aiConsumption.cost_estimate }}</span>
+                </div>
+                <div class="ai-stat-row">
+                    <span class="label">Conversaciones IA:</span>
+                    <span class="value">{{ formatNumber(aiConsumption.conversations_handled) }}</span>
+                </div>
+                <div class="ai-stat-row">
+                    <span class="label">Promedio Tokens/Conv:</span>
+                    <span class="value">{{ aiConsumption.avg_tokens_per_conversation }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <h3>🔮 Distribución por Provider</h3>
+            <div class="providers-list">
+                <div *ngFor="let provider of aiProviders" class="provider-item">
+                    <div class="provider-info">
+                        <span class="provider-name">{{ provider.name }}</span>
+                        <span class="provider-merchants">{{ provider.merchants }} empresas</span>
+                    </div>
+                    <div class="provider-bar">
+                        <div class="bar-fill" [style.width.%]="provider.percentage"
+                            [style.background-color]="provider.color"></div>
+                    </div>
+                    <div class="provider-stats">
+                        <span>{{ formatNumber(provider.tokens) }} tokens</span>
+                        <span class="percentage">{{ provider.percentage }}%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conversaciones -->
+    <div class="section-card full-width">
+        <h3>💬 Métricas de Conversaciones</h3>
+        <div class="conversation-grid">
+            <div class="conv-stat">
+                <div class="conv-value">{{ formatNumber(conversationMetrics.total) }}</div>
+                <div class="conv-label">Total</div>
+            </div>
+            <div class="conv-stat">
+                <div class="conv-value">{{ formatNumber(conversationMetrics.ai_handled) }}</div>
+                <div class="conv-label">Manejadas por IA</div>
+            </div>
+            <div class="conv-stat">
+                <div class="conv-value">{{ formatNumber(conversationMetrics.human_handled) }}</div>
+                <div class="conv-label">Manejadas por Humanos</div>
+            </div>
+            <div class="conv-stat">
+                <div class="conv-value">{{ conversationMetrics.avg_duration }}</div>
+                <div class="conv-label">Duración Promedio</div>
+            </div>
+            <div class="conv-stat">
+                <div class="conv-value">{{ conversationMetrics.conversion_rate }}%</div>
+                <div class="conv-label">Tasa de Conversión</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-card full-width">
+        <h3>🏆 Top Empresas por Uso</h3>
+        <table class="merchants-table">
+            <thead>
+                <tr>
+                    <th (click)="toggleSort('name')" class="sortable">
+                        Empresa
+                        <span class="sort-icon" *ngIf="sortKey === 'name'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th (click)="toggleSort('plan')" class="sortable">
+                        Plan
+                        <span class="sort-icon" *ngIf="sortKey === 'plan'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th (click)="toggleSort('conversations')" class="sortable">
+                        Conversaciones
+                        <span class="sort-icon" *ngIf="sortKey === 'conversations'">{{ sortDirection === 'asc' ? '↑' :
+                            '↓' }}</span>
+                    </th>
+                    <th (click)="toggleSort('ai_tokens')" class="sortable">
+                        Tokens IA
+                        <span class="sort-icon" *ngIf="sortKey === 'ai_tokens'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th>Tiempo Resp.</th>
+                    <th>Pedidos</th>
+                    <th (click)="toggleSort('revenue')" class="sortable">
+                        Ingresos
+                        <span class="sort-icon" *ngIf="sortKey === 'revenue'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let merchant of paginatedTopMerchants">
+                    <td><strong>{{ merchant.name }}</strong></td>
+                    <td><span class="plan-badge" [class]="merchant.plan.toLowerCase()">{{ merchant.plan }}</span></td>
+                    <td>{{ formatNumber(merchant.conversations) }}</td>
+                    <td>{{ formatNumber(merchant.ai_tokens) }}</td>
+                    <td>{{ merchant.avg_response_time }}s</td>
+                    <td>{{ formatNumber(merchant.total_orders) }}</td>
+                    <td>{{ formatCurrency(merchant.revenue) }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Controles de Paginación -->
+        <div class="pagination-controls">
+            <div class="pagination-info">
+                Mostrando {{ (currentPage - 1) * itemsPerPage + 1 }} - {{ Math.min(currentPage * itemsPerPage,
+                topMerchants.length) }} de {{ topMerchants.length }} empresas
+            </div>
+            <div class="pagination-buttons">
+                <button [disabled]="currentPage === 1" (click)="changePage(currentPage - 1)"
+                    class="page-btn">Anterior</button>
+                <button *ngFor="let page of pagesArray" (click)="changePage(page)" [class.active]="page === currentPage"
+                    class="page-btn num-btn">
+                    {{ page }}
+                </button>
+                <button [disabled]="currentPage === totalPages" (click)="changePage(currentPage + 1)"
+                    class="page-btn">Siguiente</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actividad por Hora -->
+    <div class="section-card full-width">
+        <h3>📈 Actividad por Hora (Hoy)</h3>
+        <div class="hourly-chart">
+            <div *ngFor="let hour of hourlyActivity" class="hour-bar">
+                <div class="bar" [style.height.%]="(hour.conversations / getMaxConversations()) * 100">
+                    <span class="bar-value">{{ hour.conversations }}</span>
+                </div>
+                <span class="hour-label">{{ hour.hour }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Crecimiento Mensual -->
+    <div class="section-grid">
+        <div class="section-card">
+            <h3>📊 Crecimiento de Empresas</h3>
+            <div class="growth-chart">
+                <div *ngFor="let month of monthlyGrowth" class="growth-item">
+                    <div class="growth-bar">
+                        <div class="bar-fill" [style.height.%]="(month.merchants / 12) * 100"></div>
+                    </div>
+                    <div class="growth-info">
+                        <span class="month">{{ month.month }}</span>
+                        <span class="value">{{ month.merchants }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <h3>💵 Crecimiento de Ingresos (MRR)</h3>
+            <div class="revenue-list">
+                <div *ngFor="let month of monthlyGrowth" class="revenue-item">
+                    <span class="month">{{ month.month }}</span>
+                    <div class="revenue-bar">
+                        <div class="bar-fill" [style.width.%]="(month.revenue / 50000) * 100"></div>
+                    </div>
+                    <span class="amount">{{ formatCurrency(month.revenue) }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

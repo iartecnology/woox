@@ -1,0 +1,140 @@
+<div class="product-mgmt-container">
+    <aside class="category-sidebar">
+        <div class="sidebar-header">
+            <h3>Menú</h3>
+            <button class="add-btn-small" (click)="openCategoryModal()">+</button>
+        </div>
+        <ul class="category-list">
+            <li *ngFor="let cat of filteredCategories" [class.active]="selectedCategoryId === cat.id"
+                (click)="selectCategory(cat.id)">
+                {{ cat.name }}
+            </li>
+        </ul>
+    </aside>
+
+    <main class="product-content">
+        <header class="content-header">
+            <div class="header-text">
+                <div class="breadcrumb">
+                    <a routerLink="/super-admin">Super Admin</a> / <span>Catálogo</span>
+                </div>
+                <h2>Catálogo de Productos</h2>
+                <p>Gestiona los productos disponibles para esta empresa.</p>
+            </div>
+            <button class="add-product-btn" (click)="openProductModal()">
+                <span>+ Nuevo Producto</span>
+            </button>
+        </header>
+
+        <div class="product-grid">
+            <!-- Loading Spinner -->
+            <div *ngIf="isLoading"
+                style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; width: 100%;">
+                <div class="spinner"
+                    style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;">
+                </div>
+                <p style="margin-top: 15px; color: #666; font-size: 1.1em;">Cargando catálogo...</p>
+                <style>
+                    @keyframes spin {
+                        0% {
+                            transform: rotate(0deg);
+                        }
+
+                        100% {
+                            transform: rotate(360deg);
+                        }
+                    }
+                </style>
+            </div>
+
+            <!-- Content (Solo visible si NO está cargando) -->
+            <ng-container *ngIf="!isLoading">
+                <!-- Debug Info -->
+                <div *ngIf="filteredCategories.length === 0"
+                    style="padding: 20px; background: #fff3cd; color: #856404; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeeba;">
+                    ⚠️ No hay categorías cargadas. MerchantId: {{ merchantId }}
+                </div>
+
+                <div *ngIf="products.length === 0 && filteredCategories.length > 0"
+                    style="padding: 20px; background: #fff3cd; color: #856404; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeeba;">
+                    ⚠️ No hay productos en la base de datos para este comercio.
+                </div>
+
+                <div *ngIf="filteredProducts.length === 0 && products.length > 0"
+                    style="padding: 20px; background: #d1ecf1; color: #0c5460; border-radius: 8px; margin-bottom: 20px; border: 1px solid #bee5eb;">
+                    ℹ️ No hay productos en la categoría seleccionada: {{ selectedCategoryId }}
+                </div>
+
+                <div *ngFor="let product of filteredProducts" class="product-card">
+                    <div class="product-image" [style.background-image]="'url(' + product.image_url + ')'">
+                        <div class="status-badge" [class.unavailable]="!product.is_available">
+                            {{ product.is_available ? 'Disponible' : 'Agotado' }}
+                        </div>
+                    </div>
+                    <div class="product-info">
+                        <div class="info-top">
+                            <h4>{{ product.name }}</h4>
+                            <span class="price">${{ product.price | number:'1.0-0' }}</span>
+                        </div>
+                        <p class="desc">{{ product.description }}</p>
+                        <div class="actions">
+                            <button class="edit-btn" (click)="openProductModal(product)">Editar</button>
+                            <button class="delete-btn" (click)="deleteProduct(product.id)">Eliminar</button>
+                        </div>
+                    </div>
+                </div>
+            </ng-container>
+        </div>
+    </main>
+</div>
+
+<!-- Modal de Producto -->
+<div class="modal-overlay" *ngIf="showProductModal" (click)="showProductModal = false">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+        <h2>{{ newProduct.id ? 'Editar' : 'Nuevo' }} Producto</h2>
+        <div class="form-group">
+            <label>Nombre del Producto</label>
+            <input type="text" [(ngModel)]="newProduct.name" placeholder="Ej: Hamburguesa woox">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Precio</label>
+                <input type="number" [(ngModel)]="newProduct.price" placeholder="0.00">
+            </div>
+            <div class="form-group">
+                <label>Disponibilidad</label>
+                <select [(ngModel)]="newProduct.is_available">
+                    <option [ngValue]="true">Disponible</option>
+                    <option [ngValue]="false">Agotado</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Descripción</label>
+            <textarea [(ngModel)]="newProduct.description" rows="3" placeholder="Ingredientes, detalle..."></textarea>
+        </div>
+        <div class="form-group">
+            <label>URL de la imagen</label>
+            <input type="text" [(ngModel)]="newProduct.image_url" placeholder="https://...">
+        </div>
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showProductModal = false">Cancelar</button>
+            <button class="save-btn" (click)="saveProduct()">Guardar Producto</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Categoría -->
+<div class="modal-overlay" *ngIf="showCategoryModal" (click)="showCategoryModal = false">
+    <div class="modal-content small" (click)="$event.stopPropagation()">
+        <h2>Nueva Categoría</h2>
+        <div class="form-group">
+            <label>Nombre de la Categoría</label>
+            <input type="text" [(ngModel)]="newCategoryName" placeholder="Ej: Pizzas, Postres...">
+        </div>
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showCategoryModal = false">Cancelar</button>
+            <button class="save-btn" (click)="saveCategory()">Crear Categoría</button>
+        </div>
+    </div>
+</div>

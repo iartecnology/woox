@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  woox-app:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    restart: always
+
+# Nota: El archivo init_database.sql generado contiene la estructura de la base de datos
+# para ser importada manualmente en Supabase o usada como referencia.

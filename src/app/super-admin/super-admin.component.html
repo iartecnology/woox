@@ -1,0 +1,1454 @@
+<div class="admin-container">
+    <header class="admin-header">
+        <div class="header-info">
+            <h1>Panel de Super Administrador</h1>
+            <p>Gestión global de empresas y plataforma SaaS Woox.</p>
+        </div>
+        <div class="header-actions">
+            <button class="users-mgr-btn" (click)="openGlobalUserManager()">
+                👥 Gestión de Usuarios
+            </button>
+            <button class="agents-mgr-btn" (click)="openAgentManager()">
+                🤖 Gestionar Agentes IA
+            </button>
+            <button class="platform-config-btn" (click)="openPlatformConfig()">
+                ⚙️ Configurar Plataforma
+            </button>
+            <button class="add-merchant-btn" (click)="openModal()">
+                + Registrar Nueva Empresa
+            </button>
+        </div>
+    </header>
+
+    <section class="merchants-section">
+        <div class="table-card">
+            <!-- Loading Spinner -->
+            <div *ngIf="isLoading"
+                style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; width: 100%;">
+                <div class="spinner"
+                    style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;">
+                </div>
+                <p style="margin-top: 15px; color: #666; font-size: 1.1em;">Cargando empresas...</p>
+                <style>
+                    @keyframes spin {
+                        0% {
+                            transform: rotate(0deg);
+                        }
+
+                        100% {
+                            transform: rotate(360deg);
+                        }
+                    }
+                </style>
+            </div>
+            <ng-container *ngIf="!isLoading">
+                <table class="merchants-table">
+                    <thead>
+                        <tr>
+                            <th (click)="toggleSort('name')" class="sortable">
+                                Empresa
+                                <span class="sort-icon" *ngIf="sortKey === 'name'">{{ sortDirection === 'asc' ? '↑' :
+                                    '↓'
+                                    }}</span>
+                            </th>
+                            <th (click)="toggleSort('ai_provider')" class="sortable">
+                                IA Provider
+                                <span class="sort-icon" *ngIf="sortKey === 'ai_provider'">{{ sortDirection === 'asc' ?
+                                    '↑' :
+                                    '↓' }}</span>
+                            </th>
+                            <th (click)="toggleSort('subscription_plan')" class="sortable">
+                                Suscripción
+                                <span class="sort-icon" *ngIf="sortKey === 'subscription_plan'">{{ sortDirection ===
+                                    'asc' ?
+                                    '↑' : '↓' }}</span>
+                            </th>
+                            <th>Performance 📈</th>
+                            <th>Estado</th>
+                            <th>Gestión</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let m of paginatedMerchants">
+                            <td>
+                                <div class="merchant-cell">
+                                    <img [src]="m.logo_url" alt="Logo" class="merchant-logo">
+                                    <div class="m-text">
+                                        <span class="merchant-name">{{ m.name }}</span>
+                                        <code>/{{ m.slug }}</code>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="provider-info" [title]="m.ai_provider">
+                                    <span class="provider-icon">{{ getProviderLogo(m.ai_provider) }}</span>
+                                    <span class="provider-name">{{ m.ai_provider }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="sub-info">
+                                    <span class="plan-badge" [class]="m.subscription_plan">{{ m.subscription_plan |
+                                        uppercase }}</span>
+                                    <span class="expiry-date"
+                                        [class.warn]="isSubscriptionNearExpiring(m.subscription_expires_at)"
+                                        [class.expired]="isSubscriptionExpired(m.subscription_expires_at)">
+                                        {{ m.subscription_expires_at ? (m.subscription_expires_at | date:'dd MMM yyyy')
+                                        :
+                                        'Sin fecha' }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="performance-stats" *ngIf="m.stats">
+                                    <div class="stat-item" title="Mensajes en las últimas 24h">
+                                        <span class="stat-val">{{ m.stats.messages_24h }}</span>
+                                        <span class="stat-lbl">msjs</span>
+                                    </div>
+                                    <div class="stat-item" title="Pedidos este mes">
+                                        <span class="stat-val">{{ m.stats.orders_month }}</span>
+                                        <span class="stat-lbl">ventas</span>
+                                    </div>
+                                    <div class="stat-item highlight" title="Tasa de conversión">
+                                        <span class="stat-val">{{ m.stats.conversion_rate }}%</span>
+                                        <span class="stat-lbl">conv.</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="status-badge" [class.active]="m.is_active"
+                                    (click)="toggleMerchantStatus(m)">
+                                    {{ m.is_active ? 'Activo' : 'Suspendido' }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="config-btns">
+                                    <button class="config-icon-btn" title="Entrar como empresa"
+                                        (click)="enterAsMerchant(m)">👁️</button>
+                                    <button class="config-icon-btn" title="Gestionar Usuarios"
+                                        (click)="openUserManager(m)">👤</button>
+                                    <button class="config-icon-btn team" title="Gestionar Equipos"
+                                        (click)="openTeamManager(m)">👥</button>
+                                    <button class="config-icon-btn stats" title="Ver analíticas de la empresa"
+                                        (click)="viewMerchantStats(m)">📊</button>
+                                    <button class="config-icon-btn test" title="Probar simulador de chat"
+                                        (click)="testChatSimulator(m)" [disabled]="isPreparingSimulator">
+                                        <span *ngIf="!isPreparingSimulator">🚀</span>
+                                        <span *ngIf="isPreparingSimulator" class="small-spinner">⌛</span>
+                                    </button>
+                                    <button class="config-icon-btn live" title="Monitorea carritos en tiempo real"
+                                        (click)="openLiveMonitor(m)">🛒</button>
+                                    <div class="btn-divider"></div>
+                                    <button class="config-icon-btn" title="Configuración General"
+                                        (click)="openModal(m)">⚙️</button>
+                                    <button class="config-icon-btn ai" title="Configuración de IA"
+                                        (click)="openAIConfig(m)">🤖</button>
+                                    <button class="config-icon-btn omni" title="Omnicanalidad"
+                                        (click)="openOmniConfig(m)">💬</button>
+                                    <button class="config-icon-btn code" title="Widget Code"
+                                        (click)="generateChatCode(m)">📟</button>
+                                    <button class="config-icon-btn catalog" title="Configurar Catálogo de Productos"
+                                        (click)="goToCatalog(m)">🍔</button>
+                                    <button class="config-icon-btn biolink" title="Configurar BioLink (Linktree)"
+                                        (click)="openBiolinkConfig(m)">🔗</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </ng-container>
+
+            <!-- Controles de Paginación -->
+            <div class="pagination-controls">
+                <div class="pagination-info">
+                    Mostrando {{ (currentPage - 1) * itemsPerPage + 1 }} - {{ Math.min(currentPage * itemsPerPage,
+                    merchants.length) }} de {{ merchants.length }} empresas
+                </div>
+                <div class="pagination-buttons">
+                    <button [disabled]="currentPage === 1" (click)="changePage(currentPage - 1)"
+                        class="page-btn">Anterior</button>
+                    <button *ngFor="let page of pagesArray" (click)="changePage(page)"
+                        [class.active]="page === currentPage" class="page-btn num-btn">
+                        {{ page }}
+                    </button>
+                    <button [disabled]="currentPage === totalPages" (click)="changePage(currentPage + 1)"
+                        class="page-btn">Siguiente</button>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- Modal para Registro/Edición/Configuración -->
+<div class="modal-overlay" *ngIf="showModal" (click)="showModal = false">
+    <div class="modal-content large" (click)="$event.stopPropagation()">
+        <h2>{{ isEditing ? 'Configurar' : 'Registrar' }} Empresa</h2>
+
+        <div class="form-grid">
+            <div class="section-divider full-width">Información Básica</div>
+
+            <div class="form-group">
+                <label>Nombre de la Empresa</label>
+                <input type="text" [(ngModel)]="selectedMerchant.name" placeholder="Ej: Pizza Hut">
+            </div>
+
+            <div class="form-group">
+                <label>Color Principal</label>
+                <div class="color-input">
+                    <input type="color" [(ngModel)]="selectedMerchant.primary_color">
+                    <input type="text" [(ngModel)]="selectedMerchant.primary_color">
+                </div>
+            </div>
+
+            <div class="form-group full-width">
+                <label>URL del Logo</label>
+                <input type="text" [(ngModel)]="selectedMerchant.logo_url" placeholder="https://...">
+            </div>
+
+
+            <div class="section-divider full-width">Plan y Suscripción</div>
+
+            <div class="form-group">
+                <label>Plan Woox</label>
+                <select [(ngModel)]="selectedMerchant.subscription_plan">
+                    <option value="basic">Woox Basic</option>
+                    <option value="pro">Woox Pro</option>
+                    <option value="enterprise">Woox Enterprise</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Fecha de Vencimiento</label>
+                <input type="date" [(ngModel)]="selectedMerchant.subscription_expires_at">
+            </div>
+
+            <div class="form-group">
+                <label>Estado de la Empresa</label>
+                <select [(ngModel)]="selectedMerchant.is_active">
+                    <option [ngValue]="true">Activo / Operativo</option>
+                    <option [ngValue]="false">Suspendido / En Mora</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showModal = false">Cancelar</button>
+            <button class="save-btn" (click)="saveMerchant()">
+                {{ isEditing ? 'Guardar Cambios' : 'Registrar Empresa' }}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Código de Chat -->
+<div class="modal-overlay" *ngIf="showCodeModal" (click)="showCodeModal = false">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+        <h2>Código del Widget de Chat</h2>
+        <p class="modal-desc">Copia este código y pégalo antes de cerrar la etiqueta <code>&lt;/body&gt;</code> en el
+            sitio web de la empresa.</p>
+
+        <div class="code-area">
+            <pre>{{ generatedCode }}</pre>
+        </div>
+
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showCodeModal = false">Cerrar</button>
+            <button class="save-btn" (click)="copyCode()">Copiar Código</button>
+        </div>
+    </div>
+</div>
+
+<!-- SIMULADOR DE CHAT -->
+<app-chat-simulator *ngIf="showSimulator && selectedMerchant.name" [merchantName]="selectedMerchant.name"
+    [merchantId]="selectedMerchant.id || ''" [logoUrl]="selectedMerchant.logo_url || ''"
+    [primaryColor]="selectedMerchant.primary_color || '#4F46E5'"
+    [aiProvider]="selectedMerchant.ai_provider || 'google_gemini'" [aiApiKey]="selectedMerchant.ai_api_key || ''"
+    [aiModel]="selectedMerchant.ai_model || ''" [aiWelcomeMessage]="selectedMerchant.ai_welcome_message || ''"
+    [context]="getConsolidatedPrompt()" (onClose)="showSimulator = false">
+</app-chat-simulator>
+
+<!-- MONITOR DE CARRITOS EN TIEMPO REAL -->
+<div class="modal-overlay monitor-overlay" *ngIf="showLiveMonitor" (click)="showLiveMonitor = false">
+    <div class="monitor-modal-content" (click)="$event.stopPropagation()">
+        <button class="close-monitor-btn" (click)="showLiveMonitor = false">✕</button>
+        <app-live-orders-monitor [merchantId]="currentMonitoringMerchantId"></app-live-orders-monitor>
+    </div>
+</div>
+
+<!-- Modal de Configuración de Plataforma -->
+<div class="modal-overlay" *ngIf="showPlatformConfig" (click)="showPlatformConfig = false">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+        <h2>⚙️ Configuración de Plataforma</h2>
+        <p class="modal-desc">Personaliza el branding global de tu plataforma SaaS.</p>
+
+        <div class="form-grid">
+            <div class="form-group full-width">
+                <label>Nombre de la Plataforma</label>
+                <input type="text" [(ngModel)]="platformConfig.platform_name" placeholder="Ej: Woox">
+                <small>Este nombre aparecerá en el sidebar y en la barra superior.</small>
+            </div>
+
+            <div class="form-group full-width">
+                <label>
+                    <input type="checkbox" [(ngModel)]="platformConfig.use_logo_image">
+                    Usar logo de imagen en lugar de texto
+                </label>
+            </div>
+
+            <div class="form-group full-width" *ngIf="platformConfig.use_logo_image">
+                <label>URL del Logo de Plataforma</label>
+                <input type="text" [(ngModel)]="platformConfig.platform_logo_url" placeholder="https://...">
+                <small>Recomendado: PNG transparente, 200x60px</small>
+            </div>
+
+            <div class="form-group full-width"
+                *ngIf="platformConfig.use_logo_image && platformConfig.platform_logo_url">
+                <label>Vista Previa</label>
+                <div class="logo-preview">
+                    <img [src]="platformConfig.platform_logo_url" alt="Logo Preview">
+                </div>
+            </div>
+
+            <div class="section-divider full-width">💰 Moneda e Idioma</div>
+
+            <div class="form-group">
+                <label>Idioma de la Plataforma</label>
+                <select [(ngModel)]="platformConfig.language">
+                    <option *ngFor="let lang of languages" [value]="lang.code">
+                        {{ lang.name }}
+                    </option>
+                </select>
+                <small>Idioma predeterminado para la interfaz.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Moneda</label>
+                <select [(ngModel)]="platformConfig.currency">
+                    <option *ngFor="let curr of currencies" [value]="curr.code">
+                        {{ curr.name }}
+                    </option>
+                </select>
+                <small>Moneda para mostrar precios en toda la plataforma.</small>
+            </div>
+
+            <div class="section-divider full-width">🗄️ Configuración de Base de Datos (Supabase)</div>
+
+            <div class="form-group full-width">
+                <label>Supabase URL</label>
+                <input type="text" [(ngModel)]="platformConfig.supabase_url" placeholder="https://xxxxxx.supabase.co">
+                <small>La URL de tu proyecto Supabase.</small>
+            </div>
+
+            <div class="form-group full-width">
+                <label>Supabase Anon Key</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="password" [(ngModel)]="platformConfig.supabase_key" style="flex: 1;"
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+                    <button class="action-btn" (click)="testSupabaseConnection()" [disabled]="isValidatingSupabase"
+                        style="white-space: nowrap; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;">
+                        {{ isValidatingSupabase ? '🕒 Probando...' : '🔍 Probar' }}
+                    </button>
+                </div>
+                <small *ngIf="supabaseStatus === 'success'"
+                    style="color: #059669; font-weight: 600; margin-top: 4px; display: block;">✅ Conexión
+                    Exitosa</small>
+                <small *ngIf="supabaseStatus === 'error'"
+                    style="color: #dc2626; font-weight: 600; margin-top: 4px; display: block;">❌ Error de
+                    Conexión</small>
+                <small *ngIf="supabaseStatus === 'none'">La clave pública (anon key) de tu proyecto.</small>
+            </div>
+
+            <!-- Alerta de Inicialización (Base de datos vacía) -->
+            <div class="init-alert-box full-width" *ngIf="dbNeedsInitialization"
+                style="background: #fffbeb; border: 1px solid #fde68a; padding: 20px; border-radius: 16px; margin-top: 10px; animation: slideDown 0.3s ease-out;">
+                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                    <div style="font-size: 2rem;">🚧</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 800; color: #92400e; font-size: 1.1rem; margin-bottom: 6px;">
+                            ¡Conexión OK, pero Base de Datos Vacía!
+                        </div>
+                        <p style="font-size: 0.9rem; color: #b45309; line-height: 1.5; margin: 0;">
+                            Hemos detectado que tu proyecto en Supabase no tiene las tablas de Woox.
+                            ¿Deseas inicializarla ahora con el esquema oficial?
+                        </p>
+                        <button (click)="copyInitSql()"
+                            style="margin-top: 16px; background: #d97706; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3); transition: all 0.2s;">
+                            🚀 Copiar Script SQL & Abrir Editor
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-divider full-width">ℹ️ Información del Sistema</div>
+            <div class="form-group">
+                <label>Versión Actual</label>
+                <input type="text" value="1.0.0" disabled
+                    style="background: #f9fafb; cursor: not-allowed; opacity: 0.7;">
+                <small>Versión del software Woox PRO.</small>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showPlatformConfig = false">Cancelar</button>
+            <button class="save-btn" (click)="savePlatformConfig()">Guardar y Aplicar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Gestión de Usuarios de Empresa -->
+<div class="modal-overlay" *ngIf="showUserManager" (click)="showUserManager = false">
+    <div class="modal-content large" (click)="$event.stopPropagation()">
+        <h2>👥 Usuarios de {{ currentManagingMerchant?.name }}</h2>
+        <div class="info-alert-small"
+            style="background: #e0f2fe; color: #0369a1; padding: 10px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem;">
+            ℹ️ Los nuevos usuarios son asignados automáticamente al equipo de <strong>Atención al Cliente</strong>.
+        </div>
+        <p>Administra quiénes tienen acceso al panel de esta empresa.</p>
+
+        <div class="user-form-card">
+            <h4>{{ isEditingMerchantUser ? 'Editar Usuario' : 'Añadir Nuevo Usuario' }}</h4>
+            <div class="form-row-inline">
+                <input type="text" [(ngModel)]="newUser.full_name" placeholder="Nombre completo">
+                <input type="email" [(ngModel)]="newUser.email" placeholder="Correo electrónico">
+                <input type="password" [(ngModel)]="newUser.password"
+                    [placeholder]="isEditingMerchantUser ? 'Cambiar contraseña (vacío para mantener)' : 'Contraseña (defecto: password123)'">
+                <select [(ngModel)]="newUser.role">
+                    <option value="merchant_admin">Administrador</option>
+                    <option value="merchant_admin">Gerente</option>
+                    <option value="merchant_operator">Operador</option>
+                </select>
+                <select [(ngModel)]="newUser.team_id">
+                    <option value="">Equipo Principal (Defecto)...</option>
+                    <option *ngFor="let team of merchantTeams" [value]="team.id">{{ team.name }}</option>
+                </select>
+                <div class="capacity-input-group">
+                    <label>Capacidad:</label>
+                    <input type="number" [(ngModel)]="newUser.max_capacity" placeholder="10" title="Chats simultáneos"
+                        style="width: 60px;">
+                </div>
+                <button class="add-user-btn" (click)="saveMerchantUser()">
+                    {{ isEditingMerchantUser ? 'Guardar Cambios' : 'Añadir' }}
+                </button>
+                <button class="cancel-btn-small" *ngIf="isEditingMerchantUser"
+                    (click)="cancelEditMerchantUser()">Cancelar</button>
+            </div>
+        </div>
+
+        <!-- Lista de Usuarios -->
+        <div class="users-list-container">
+            <table class="users-table-small">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Rol</th>
+                        <th>Equipo</th>
+                        <th>Capacidad</th>
+                        <th>Estado</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let user of getUsersForMerchant(currentManagingMerchant?.id || '')">
+                        <td>{{ user.full_name }}</td>
+                        <td>{{ user.email }}</td>
+                        <td><span class="role-badge" [class]="user.role">{{ getRoleLabel(user.role) }}</span></td>
+                        <td><span class="team-badge"
+                                style="background: #f1f5f9; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem;">{{
+                                getTeamName(user) }}</span></td>
+                        <td><strong>{{ user.max_capacity || 10 }}</strong> <small>chats</small></td>
+                        <td>
+                            <span class="status-dot" [class.active]="user.is_active"></span>
+                            {{ user.is_active ? 'Activo' : 'Inactivo' }}
+                        </td>
+                        <td>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="edit-user-btn" (click)="startEditMerchantUser(user)"
+                                    title="Editar Usuario">✏️</button>
+                                <button class="delete-user-btn" (click)="removeUser(user.id)"
+                                    title="Eliminar Usuario">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showUserManager = false">Cerrar</button>
+        </div>
+    </div>
+</div><!-- Modal de Configuración de IA -->
+<div class="modal-overlay" *ngIf="showAIConfig" (click)="showAIConfig = false">
+    <div class="modal-content ai-config-modal" (click)="$event.stopPropagation()">
+        <h2>🤖 Configuración de IA - {{ currentManagingMerchant?.name }}</h2>
+
+        <div class="ai-config-content">
+            <!-- Estado General del Bot (Diseño Premium Pill) -->
+            <div class="ai-master-toggle-pill" [class.active]="selectedMerchant.ai_enabled !== false">
+                <div class="pill-info">
+                    <span class="pill-emoji">🤖</span>
+                    <span class="pill-text">{{ selectedMerchant.ai_enabled !== false ? 'IA Activa' : 'IA Desactivada'
+                        }}</span>
+                </div>
+                <label class="switch-pill">
+                    <input type="checkbox" [(ngModel)]="selectedMerchant.ai_enabled">
+                    <span class="slider-pill round"></span>
+                </label>
+            </div>
+
+            <!-- Motor de IA (Agrupado y Organizado) -->
+            <section class="config-section ai-engine-container">
+                <div class="section-title-group">
+                    <h3>⚙️ Motor de IA</h3>
+                    <p class="section-subtitle">Configura el "cerebro" que procesará los mensajes.</p>
+                </div>
+
+                <div class="ai-engine-grid">
+                    <!-- Tarjeta 1: Conectividad -->
+                    <div class="ai-config-card">
+                        <div class="card-header">
+                            <span class="card-icon">🔌</span>
+                            <h4>Conectividad y API</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Proveedor de IA</label>
+                                <select [(ngModel)]="selectedMerchant.ai_provider"
+                                    (change)="aiConnectionStatus = 'none'">
+                                    <option *ngFor="let provider of aiProviders" [value]="provider.id">
+                                        {{ provider.icon }} {{ provider.name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>API Key del Proveedor</label>
+                                <div class="input-with-status">
+                                    <input type="text" [(ngModel)]="selectedMerchant.ai_api_key"
+                                        placeholder="sk-... o API Key" autocomplete="off"
+                                        (ngModelChange)="aiConnectionStatus = 'none'">
+                                </div>
+                                <small class="input-hint">Tu clave se guarda de forma segura y solo se usa para estas
+                                    conexiones.</small>
+                            </div>
+
+                            <button class="verify-btn" (click)="testAIConnection()"
+                                [disabled]="isTestingAI || !selectedMerchant.ai_api_key">
+                                <span *ngIf="!isTestingAI">⚡ Verificar y Listar Modelos</span>
+                                <span *ngIf="isTestingAI">⌛ Conectando con {{ selectedMerchant.ai_provider }}...</span>
+                            </button>
+
+                            <div *ngIf="aiConnectionStatus !== 'none'" class="connection-status-pill"
+                                [class.success]="aiConnectionStatus === 'success'"
+                                [class.error]="aiConnectionStatus === 'error'">
+                                <span *ngIf="aiConnectionStatus === 'success'">✅ Conexión Exitosa</span>
+                                <span *ngIf="aiConnectionStatus === 'error'">❌ Error: {{ aiConnectionMessage }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tarjeta 2: Modelo y Agente -->
+                    <div class="ai-config-card">
+                        <div class="card-header">
+                            <span class="card-icon">🧠</span>
+                            <h4>Modelo y Agente</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Agente Maestro (Personalidad)</label>
+                                <select [(ngModel)]="selectedMerchant.agent_id">
+                                    <option [ngValue]="undefined">Seleccionar un agente base...</option>
+                                    <option *ngFor="let agent of agents" [value]="agent.id">
+                                        🤖 {{ agent.name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Modelo de IA</label>
+                                <select [(ngModel)]="selectedMerchant.ai_model"
+                                    [disabled]="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model">
+                                    <option value="">Seleccionar modelo...</option>
+                                    <option
+                                        *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider || 'google_gemini')"
+                                        [value]="model.id">
+                                        {{ model.name }}
+                                    </option>
+                                </select>
+                                <small *ngIf="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model"
+                                    class="warn-text">
+                                    ⚠️ Verifica la conexión para ver modelos.
+                                </small>
+                            </div>
+
+                            <!-- Botón de Simulación Destacado -->
+                            <div class="simulator-trigger-box">
+                                <button class="test-chat-btn" (click)="toggleAISimulator()"
+                                    [disabled]="!selectedMerchant.ai_api_key || !selectedMerchant.ai_model || isPreparingSimulator">
+                                    <span class="icon" *ngIf="!isPreparingSimulator">💬</span>
+                                    <span class="icon" *ngIf="isPreparingSimulator">⌛</span>
+                                    <div class="btn-text">
+                                        <strong>{{ isPreparingSimulator ? 'Preparando...' : 'Probar Chat' }}</strong>
+                                        <span>{{ isPreparingSimulator ? 'Obteniendo contexto del catálogo...' : 'Simular
+                                            conversación con esta config.' }}</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Fila superior: Remarketing y Horario -->
+                <div class="ai-config-grid-dual">
+                    <!-- Tarjeta: Remarketing -->
+                    <section class="config-section remarketing-box">
+                        <div class="section-header-compact">
+                            <h3>🔔 Remarketing</h3>
+                            <label class="switch-small">
+                                <input type="checkbox" [(ngModel)]="selectedMerchant.remarketing_enabled">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="remarketing-config" [class.disabled]="!selectedMerchant.remarketing_enabled">
+                            <div class="form-group-inline">
+                                <label>Espera (min)</label>
+                                <input type="number" [(ngModel)]="selectedMerchant.remarketing_delay_minutes"
+                                    placeholder="30">
+                            </div>
+                            <textarea [(ngModel)]="selectedMerchant.remarketing_message" rows="2"
+                                placeholder="¡Hola {{ '{{' }}nombre{{ '}}' }}! Notamos que..."></textarea>
+                        </div>
+                    </section>
+
+                    <!-- Tarjeta: Horario IA (NUEVO) -->
+                    <section class="config-section schedule-box">
+                        <div class="section-header-compact">
+                            <h3>⏰ Horario de Atención</h3>
+                            <label class="switch-small">
+                                <input type="checkbox" [(ngModel)]="selectedMerchant.ai_schedule_enabled">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="schedule-config" [class.disabled]="!selectedMerchant.ai_schedule_enabled">
+                            <p class="section-desc-time">La IA solo responderá dentro de este rango horario.</p>
+                            <div class="flex-row time-inputs">
+                                <div class="form-group-compact">
+                                    <label>Inicio</label>
+                                    <input type="time" [(ngModel)]="selectedMerchant.ai_schedule_start">
+                                </div>
+                                <div class="form-group-compact">
+                                    <label>Fin</label>
+                                    <input type="time" [(ngModel)]="selectedMerchant.ai_schedule_end">
+                                </div>
+                            </div>
+
+                            <div class="form-group mt-15">
+                                <label class="small-label">Mensaje Fuera de Horario</label>
+                                <textarea [(ngModel)]="selectedMerchant.ai_schedule_message" rows="2"
+                                    placeholder="Mensaje automático cuando la IA está descansando..."></textarea>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Prompts Principales (Lógica Central) -->
+                <section class="config-section prompts-master-container">
+                    <div class="section-title-group">
+                        <h3>📝 Personaliza la lógica específica de este comercio</h3>
+                        <p class="section-subtitle">Define las reglas, fuentes y biblioteca de conocimiento para este
+                            negocio.</p>
+                    </div>
+
+                    <!-- SECCIÓN: CONOCIMIENTO ESPECÍFICO -->
+                    <div class="knowledge-group-integrated">
+
+                        <!-- 1. Fuente de Conocimiento (Catálogo) -->
+                        <div class="knowledge-item-row">
+                            <div class="knowledge-info">
+                                <h4 style="margin:0;">📦 Catálogo Woox (Dinámico)</h4>
+                                <p class="section-desc-small" style="margin: 4px 0 0 0;">La IA lee tus productos e
+                                    inventario en tiempo real.</p>
+                            </div>
+                            <label class="checkbox-container-modern">
+                                <input type="checkbox" [(ngModel)]="selectedMerchant.ai_use_catalog">
+                                <span class="checkmark"></span>
+                                <span class="label-text">{{ selectedMerchant.ai_use_catalog ? 'Activado' : 'Desactivado'
+                                    }}</span>
+                            </label>
+                        </div>
+
+                        <hr class="separator-soft">
+
+                        <!-- 2. Entrenamiento Base (Contexto General) -->
+                        <div class="knowledge-item-base">
+                            <div class="label-with-action mb-10">
+                                <div class="knowledge-info">
+                                    <h4 style="margin:0;">📖 Entrenamiento Base (Contexto General)</h4>
+                                    <p class="section-desc-small" style="margin: 2px 0 0 0;">Historia, servicios
+                                        generales o información estática que la IA siempre debe saber.</p>
+                                </div>
+                                <button class="help-action-btn" (click)="fillAIExample('menu')">🪄 Ejemplo</button>
+                            </div>
+                            <textarea [(ngModel)]="selectedMerchant.ai_menu_context" rows="4" class="modern-textarea"
+                                placeholder="Ej: Somos una hamburguesería fundada en 2010..."></textarea>
+                        </div>
+
+                        <hr class="separator-soft">
+
+                        <!-- 3. Biblioteca de Conocimiento (Bloques Específicos) -->
+                        <div class="knowledge-item-blocks">
+                            <div class="header-with-action">
+                                <div class="knowledge-info">
+                                    <h4 style="margin:0;">📚 Biblioteca de Conocimiento (Snippets)</h4>
+                                    <p class="section-desc-small" style="margin: 4px 0 0 0;">Datos específicos o
+                                        temporales (Menú de hoy, promos, FAQs).</p>
+                                </div>
+                                <button class="help-action-btn add-block" (click)="addContextBlock()">➕ Añadir
+                                    Bloque</button>
+                            </div>
+
+                            <div class="knowledge-blocks-merchant mt-15">
+                                <div class="knowledge-block" *ngFor="let block of selectedMerchant.ai_context_blocks">
+                                    <div class="block-header">
+                                        <input type="text" [(ngModel)]="block.title" placeholder="Título del bloque...">
+                                        <button class="delete-block-btn"
+                                            (click)="removeContextBlock(block.id)">🗑️</button>
+                                    </div>
+                                    <textarea [(ngModel)]="block.content" rows="3"
+                                        placeholder="Contenido detallado..."></textarea>
+                                </div>
+                            </div>
+
+                            <div *ngIf="!selectedMerchant.ai_context_blocks?.length" class="empty-state-mini">
+                                <p>No hay bloques adicionales cargados.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="prompts-grid">
+                        <!-- Selector de Plantilla de Agente -->
+                        <div class="form-group highlight-blue">
+                            <label>🤖 Cargar Plantilla de Agente (Base Inicial)</label>
+                            <div class="template-loader">
+                                <select #agentTemplateSelect (change)="applyAgentTemplate(agentTemplateSelect.value)">
+                                    <option value="">Seleccionar una plantilla...</option>
+                                    <option *ngFor="let agent of agents" [value]="agent.id">{{ agent.name }} ({{
+                                        agent.personality }})</option>
+                                </select>
+                                <small>Al seleccionar, se copiará la configuración maestra del agente a este
+                                    comercio.</small>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="label-with-action">
+                                <label>Mensaje de Bienvenida</label>
+                                <button class="help-action-btn" (click)="fillAIExample('welcome')">🪄 Ejemplo</button>
+                            </div>
+                            <input type="text" [(ngModel)]="selectedMerchant.ai_welcome_message"
+                                placeholder="¡Hola! Soy el asistente de {{selectedMerchant.name}}...">
+                        </div>
+
+
+                        <div class="form-group">
+                            <div class="label-with-action">
+                                <label>System Prompt (Reglas de Oro)</label>
+                                <button class="help-action-btn" (click)="fillAIExample('prompt')">🪄 Ejemplo
+                                    Base</button>
+                            </div>
+
+                            <!-- NUEVA ESTRUCTURA DE SECCIONES -->
+                            <div class="ai-config-sections">
+                                <div class="config-section-card" *ngFor="let section of aiConfigSections"
+                                    [style.border-color]="section.borderColor">
+                                    <div class="section-card-header" [style.background-color]="section.color">
+                                        <span class="section-icon">{{section.icon}}</span>
+                                        <div>
+                                            <h4>{{section.title}}</h4>
+                                            <p>{{section.description}}</p>
+                                        </div>
+                                    </div>
+                                    <div class="section-card-body">
+                                        <div class="chips-wrapper">
+                                            <button *ngFor="let rule of section.rules" class="rule-chip"
+                                                [class.active]="isRuleActive(rule.text, selectedMerchant.ai_system_prompt || '')"
+                                                (click)="toggleRuleForMerchant(rule)">
+                                                {{rule.label}}
+                                                <span
+                                                    *ngIf="isRuleActive(rule.text, selectedMerchant.ai_system_prompt || '')"
+                                                    class="check-mark">✓</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <textarea [(ngModel)]="selectedMerchant.ai_system_prompt" rows="12"
+                                class="system-prompt-area"
+                                placeholder="Las reglas seleccionadas aparecerán aquí como texto..."></textarea>
+                        </div>
+
+
+
+                        <div class="form-group highlight-restrictions">
+                            <div class="label-with-action">
+                                <label>🚫 Restricciones Específicas (Prohibiciones)</label>
+                                <button class="help-action-btn" (click)="fillAIExample('restrictions')">🪄
+                                    Ejemplo</button>
+                            </div>
+                            <textarea [(ngModel)]="selectedMerchant.ai_restrictions" rows="3"
+                                placeholder="NUNCA menciones a la competencia, NO des descuentos superiores al 5%..."></textarea>
+                        </div>
+
+                    </div>
+                </section>
+
+            </section>
+        </div>
+
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showAIConfig = false">Cancelar</button>
+            <button class="save-btn" (click)="saveAIConfig()">Guardar Configuración de IA</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Configuración de Omnicanalidad -->
+<div class="modal-overlay" *ngIf="showOmniConfig" (click)="showOmniConfig = false">
+    <div class="modal-content omni-config-modal" (click)="$event.stopPropagation()">
+        <h2>💬 Configuración de Omnicanalidad - {{ currentManagingMerchant?.name }}</h2>
+
+        <div class="omni-config-content">
+            <section class="config-section">
+                <h3>Canales de Mensajería</h3>
+                <p class="desc">Conecta tus canales de comunicación para que la IA pueda atender a tus clientes.</p>
+
+                <div class="form-group">
+                    <div class="label-with-action">
+                        <label>
+                            <span class="channel-icon">📱</span>
+                            WhatsApp Business API Token
+                        </label>
+                        <button class="help-action-btn" (click)="verifyChannel('whatsapp')"
+                            [disabled]="verifyingChannel === 'whatsapp'">
+                            {{ verifyingChannel === 'whatsapp' ? '⏳ Verificando...' : '⚡ Probar Conexión' }}
+                        </button>
+                    </div>
+                    <div class="token-input-wrapper">
+                        <input [type]="tokenVisibility['whatsapp'] ? 'text' : 'password'"
+                            [(ngModel)]="selectedMerchant.whatsapp_token"
+                            [placeholder]="tokenVisibility['whatsapp'] ? 'EAAl...' : '••••••••••••'"
+                            [class.masked]="!tokenVisibility['whatsapp']">
+                        <span class="token-preview"
+                            *ngIf="!tokenVisibility['whatsapp'] && selectedMerchant.whatsapp_token">
+                            {{ getMaskedToken(selectedMerchant.whatsapp_token) }}
+                        </span>
+                        <button class="toggle-token-btn" (click)="toggleTokenVisibility('whatsapp')">
+                            {{ tokenVisibility['whatsapp'] ? '👁️‍🗨️' : '👁️' }}
+                        </button>
+                    </div>
+                    <small [class.success-text]="channelStatus['whatsapp'] === 'connected'"
+                        [class.error-text]="channelStatus['whatsapp'] === 'error'">
+                        {{ channelStatus['whatsapp'] === 'connected' ? '✅ Conectado con éxito' :
+                        channelStatus['whatsapp'] === 'error' ? '❌ Error en las credenciales' :
+                        'Obtén tu token en Meta Business Manager' }}
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <div class="label-with-action">
+                        <label>
+                            <span class="channel-icon">✈️</span>
+                            Telegram Bot Token
+                        </label>
+                        <button class="help-action-btn" (click)="verifyChannel('telegram')"
+                            [disabled]="verifyingChannel === 'telegram'">
+                            {{ verifyingChannel === 'telegram' ? '⏳ Verificando...' : '⚡ Probar Conexión' }}
+                        </button>
+                    </div>
+                    <div class="token-input-wrapper">
+                        <input [type]="tokenVisibility['telegram'] ? 'text' : 'password'"
+                            [(ngModel)]="selectedMerchant.telegram_bot_token"
+                            [placeholder]="tokenVisibility['telegram'] ? '000000:AA...' : '••••••••••••'"
+                            [class.masked]="!tokenVisibility['telegram']">
+                        <span class="token-preview"
+                            *ngIf="!tokenVisibility['telegram'] && selectedMerchant.telegram_bot_token">
+                            {{ getMaskedToken(selectedMerchant.telegram_bot_token) }}
+                        </span>
+                        <button class="toggle-token-btn" (click)="toggleTokenVisibility('telegram')">
+                            {{ tokenVisibility['telegram'] ? '👁️‍🗨️' : '👁️' }}
+                        </button>
+                    </div>
+                    <small [class.success-text]="channelStatus['telegram'] === 'connected'"
+                        [class.error-text]="channelStatus['telegram'] === 'error'">
+                        {{ channelStatus['telegram'] === 'connected' ? '✅ Conectado con éxito' :
+                        channelStatus['telegram'] === 'error' ? '❌ Token inválido' :
+                        'Crea un bot con @BotFather en Telegram' }}
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <div class="label-with-action">
+                        <label>
+                            <span class="channel-icon">👍</span>
+                            Facebook Page Access Token
+                        </label>
+                        <button class="help-action-btn" (click)="verifyChannel('facebook')"
+                            [disabled]="verifyingChannel === 'facebook'">
+                            {{ verifyingChannel === 'facebook' ? '⏳ Verificando...' : '⚡ Probar Conexión' }}
+                        </button>
+                    </div>
+                    <div class="token-input-wrapper">
+                        <input [type]="tokenVisibility['facebook'] ? 'text' : 'password'"
+                            [(ngModel)]="selectedMerchant.facebook_page_token"
+                            [placeholder]="tokenVisibility['facebook'] ? 'EAAl...' : '••••••••••••'"
+                            [class.masked]="!tokenVisibility['facebook']">
+                        <span class="token-preview"
+                            *ngIf="!tokenVisibility['facebook'] && selectedMerchant.facebook_page_token">
+                            {{ getMaskedToken(selectedMerchant.facebook_page_token) }}
+                        </span>
+                        <button class="toggle-token-btn" (click)="toggleTokenVisibility('facebook')">
+                            {{ tokenVisibility['facebook'] ? '👁️‍🗨️' : '👁️' }}
+                        </button>
+                    </div>
+                    <small [class.success-text]="channelStatus['facebook'] === 'connected'"
+                        [class.error-text]="channelStatus['facebook'] === 'error'">
+                        {{ channelStatus['facebook'] === 'connected' ? '✅ Conectado con éxito' :
+                        channelStatus['facebook'] === 'error' ? '❌ Error de acceso' :
+                        'Configura en Meta for Developers' }}
+                    </small>
+                </div>
+            </section>
+
+            <section class="config-section">
+                <h3>Estado de Conexiones</h3>
+                <div class="connection-status">
+                    <div class="status-item">
+                        <span class="status-icon">
+                            {{ selectedMerchant.whatsapp_token ? '✅' : '⭕' }}
+                        </span>
+                        <span>WhatsApp</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-icon">
+                            {{ selectedMerchant.telegram_bot_token ? '✅' : '⭕' }}
+                        </span>
+                        <span>Telegram</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-icon">
+                            {{ selectedMerchant.facebook_page_token ? '✅' : '⭕' }}
+                        </span>
+                        <span>Facebook</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showOmniConfig = false">Cancelar</button>
+            <button class="save-btn" (click)="saveOmniConfig()">Guardar Configuración Omnicanal</button>
+        </div>
+    </div>
+</div>
+<!-- Modal BioLink (Linktree) -->
+<div class="modal-overlay" *ngIf="showBiolinkConfig" (click)="showBiolinkConfig = false">
+    <div class="modal-content biolink-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header-with-preview">
+            <div class="modal-form-side">
+                <div class="modal-header">
+                    <h2>🔗 Configuración de BioLink</h2>
+                    <p>Crea tu página de enlaces personalizada para Instagram, WhatsApp y más.</p>
+                </div>
+
+                <div class="biolink-form" *ngIf="selectedMerchant.biolink">
+                    <!-- Nueva sección de Enlace de Acceso -->
+                    <section class="config-sub-section url-access-section">
+                        <h3>🌐 Enlace de Acceso</h3>
+                        <div class="url-input-group">
+                            <input type="text" [value]="getBiolinkUrl(selectedMerchant)" readonly class="url-display">
+                            <button class="copy-url-btn" (click)="copyBiolinkUrl(selectedMerchant)"
+                                title="Copiar enlace">
+                                📋 Copiar
+                            </button>
+                            <a [href]="getBiolinkUrl(selectedMerchant)" target="_blank" class="visit-url-btn"
+                                title="Ver en vivo">
+                                👁️ Ver
+                            </a>
+                        </div>
+                        <p class="url-hint">Este es el enlace que debes poner en tu biografía de Instagram o TikTok.</p>
+                    </section>
+
+                    <section class="config-sub-section">
+                        <div class="section-header">
+                            <h3>📱 Acceso y QR</h3>
+                        </div>
+                        <div class="qr-container-row">
+                            <div class="qr-image-box">
+                                <img [src]="getQRCodeUrl()" alt="QR BioLink">
+                            </div>
+                            <div class="qr-info-box">
+                                <p>Escanea este código para acceder directamente al BioLink.</p>
+                                <div class="qr-actions">
+                                    <button class="download-qr-btn" (click)="downloadQRCode()"
+                                        title="Solo el código QR">
+                                        <i class="fa-solid fa-qrcode"></i> QR (.png)
+                                    </button>
+                                    <button class="download-poster-btn" (click)="downloadPoster()">
+                                        <i class="fa-solid fa-file-pdf"></i> Descargar Poster (.pdf)
+                                    </button>
+                                    <button class="copy-url-btn"
+                                        (click)="copyToClipboard(getBiolinkUrl(selectedMerchant))">
+                                        <i class="fa-solid fa-copy"></i> Copiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="config-sub-section">
+                        <h3>🎨 Apariencia</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Título de la Página</label>
+                                <input type="text" [(ngModel)]="selectedMerchant.biolink.title">
+                            </div>
+                            <div class="form-group">
+                                <label>Color de Texto</label>
+                                <input type="color" [(ngModel)]="selectedMerchant.biolink.text_color"
+                                    style="height: 48px; padding: 4px;">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Descripción / Bio</label>
+                            <textarea [(ngModel)]="selectedMerchant.biolink.description" rows="2"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tipo de Fondo</label>
+                                <select [(ngModel)]="selectedMerchant.biolink.background_type">
+                                    <option value="color">Color Sólido</option>
+                                    <option value="gradient">Degradado</option>
+                                    <option value="image">Imagen URL</option>
+                                </select>
+                            </div>
+                            <!-- Selector dinámico según el tipo de fondo -->
+                            <div class="form-group" *ngIf="selectedMerchant.biolink.background_type === 'color'">
+                                <label>Color de Fondo</label>
+                                <input type="color" [(ngModel)]="selectedMerchant.biolink.background_value"
+                                    style="height: 48px; padding: 4px;">
+                            </div>
+                            <div class="form-group" *ngIf="selectedMerchant.biolink.background_type === 'image'">
+                                <label>URL de Imagen</label>
+                                <input type="text" [(ngModel)]="selectedMerchant.biolink.background_value"
+                                    placeholder="https://images.unsplash.com/...">
+                            </div>
+                            <div class="form-group gradient-pickers"
+                                *ngIf="selectedMerchant.biolink.background_type === 'gradient'">
+                                <label>Colores del Degradado</label>
+                                <div class="dual-pickers">
+                                    <input type="color" [(ngModel)]="selectedMerchant.biolink.gradient_color1"
+                                        (change)="updateGradient()">
+                                    <input type="color" [(ngModel)]="selectedMerchant.biolink.gradient_color2"
+                                        (change)="updateGradient()">
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="config-sub-section">
+                        <div class="section-header">
+                            <h3>🔗 Botones / Enlaces</h3>
+                            <button class="add-btn-small" (click)="addBiolinkButton()">+ Añadir Enlace</button>
+                        </div>
+
+                        <div class="links-list-scroll">
+                            <div *ngFor="let link of selectedMerchant.biolink.buttons; let i = index"
+                                class="link-edit-card">
+                                <div class="link-header">
+                                    <div class="icon-picker-container">
+                                        <div class="icon-preview-box">
+                                            <i *ngIf="link.icon && link.icon.startsWith('fa-')" [class]="link.icon"></i>
+                                            <span *ngIf="link.icon && !link.icon.startsWith('fa-')">{{ link.icon
+                                                }}</span>
+                                            <span *ngIf="!link.icon">🏠</span>
+                                        </div>
+                                        <input type="text" [(ngModel)]="link.icon" placeholder="fa-brands fa-instagram"
+                                            class="icon-input-small" title="Clase de FontAwesome o Emoji">
+                                        <div class="icon-dropdown">
+                                            <span *ngFor="let p of biolinkPresets" (click)="setIcon(link, p.icon)"
+                                                [title]="p.name">
+                                                <i [class]="p.icon"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <input type="text" [(ngModel)]="link.label" placeholder="Texto del botón"
+                                        class="label-input-flex">
+                                    <button class="delete-btn-icon" (click)="removeBiolinkButton(i)">🗑️</button>
+                                </div>
+                                <input type="text" [(ngModel)]="link.url" placeholder="URL (https://...)">
+                                <div class="link-settings">
+                                    <select [(ngModel)]="link.style">
+                                        <option value="solid">Sólido</option>
+                                        <option value="outline">Contorno</option>
+                                        <option value="ghost">Fantasma</option>
+                                    </select>
+                                    <label class="switch-small">
+                                        <input type="checkbox" [(ngModel)]="link.is_active">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="cancel-btn" (click)="showBiolinkConfig = false">Cancelar</button>
+                    <button class="save-btn" (click)="saveBiolinkConfig()">Guardar BioLink</button>
+                </div>
+            </div>
+
+            <div class="modal-preview-side">
+                <div class="phone-frame">
+                    <div class="phone-screen" *ngIf="selectedMerchant.biolink"
+                        [style.background]="selectedMerchant.biolink.background_type === 'image' ? 'url(' + selectedMerchant.biolink.background_value + ') center/cover' : selectedMerchant.biolink.background_value"
+                        [style.color]="selectedMerchant.biolink.text_color">
+
+                        <div class="preview-content">
+                            <div class="preview-logo-container">
+                                <img [src]="selectedMerchant.logo_url" class="preview-logo">
+                            </div>
+                            <h2 class="preview-title">{{ selectedMerchant.biolink.title }}</h2>
+                            <p class="preview-desc">{{ selectedMerchant.biolink.description }}</p>
+
+                            <div class="preview-links">
+                                <ng-container *ngFor="let b of selectedMerchant.biolink.buttons">
+                                    <div *ngIf="b.is_active" class="preview-btn" [class]="b.style"
+                                        [style.border-color]="selectedMerchant.biolink.text_color"
+                                        [style.color]="b.style === 'solid' ? '#000' : selectedMerchant.biolink.text_color"
+                                        [style.background]="b.style === 'solid' ? selectedMerchant.biolink.text_color : 'transparent'">
+                                        <span *ngIf="b.icon" class="btn-icon">
+                                            <i *ngIf="b.icon.startsWith('fa-')" [class]="b.icon"></i>
+                                            <span *ngIf="!b.icon.startsWith('fa-')">{{ b.icon }}</span>
+                                        </span>
+                                        {{ b.label }}
+                                    </div>
+                                </ng-container>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="preview-label">Vista Previa en Vivo</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Gestión de Agentes IA -->
+<div class="modal-overlay" *ngIf="showAgentManager" (click)="showAgentManager = false">
+    <div class="modal-content large" (click)="$event.stopPropagation()">
+        <div class="modal-header-with-action">
+            <h2>🤖 Gestión de Agentes IA</h2>
+            <button class="add-agent-tab-btn" (click)="resetSelectedAgent()">
+                + Crear Nuevo Agente
+            </button>
+        </div>
+        <p>Define prompts maestros que pueden ser asignados a diferentes empresas.</p>
+
+        <div class="agent-manager-layout">
+            <!-- Lista de Agentes -->
+            <div class="agents-sidebar">
+                <div class="agent-item-card" *ngFor="let agent of agents" [class.active]="selectedAgent.id === agent.id"
+                    (click)="editAgent(agent)">
+                    <span class="agent-name">{{ agent.name }}</span>
+                    <span class="agent-date">{{ agent.created_at | date:'shortDate' }}</span>
+                    <button class="del-agent-btn" (click)="deleteAgent(agent.id); $event.stopPropagation()">🗑️</button>
+                </div>
+            </div>
+
+            <!-- Editor de Agente -->
+            <div class="agent-editor scrollable">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Nombre del Agente</label>
+                        <input type="text" [(ngModel)]="selectedAgent.name" placeholder="Ej: Agente de Ventas Estándar">
+                    </div>
+                    <div class="form-group">
+                        <label>Descripción Corta</label>
+                        <input type="text" [(ngModel)]="selectedAgent.description"
+                            placeholder="Para qué sirve este agente...">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Personalidad Base</label>
+                    <select [(ngModel)]="selectedAgent.personality">
+                        <option value="friendly">😊 Amigable</option>
+                        <option value="professional">💼 Profesional</option>
+                        <option value="funny">🤣 Divertido</option>
+                        <option value="formal">🎩 Formal</option>
+                    </select>
+                </div>
+
+                <!-- SECCIÓN DE HABILIDADES (SKILLS) - AGENTE 2.0 -->
+                <div class="skills-config-section" *ngIf="selectedAgent.skills">
+                    <label>🛠️ Habilidades del Agente (Skills)</label>
+                    <p class="section-hint">Activa los módulos que este agente dominará. Cada habilidad inyecta reglas
+                        automáticas al cerebro de la IA.</p>
+                    <div class="skills-grid">
+                        <div class="skill-checkbox-card" [class.active]="selectedAgent.skills.inventory_sales?.enabled">
+                            <input type="checkbox" id="skill_sales"
+                                [(ngModel)]="selectedAgent.skills.inventory_sales.enabled">
+                            <label for="skill_sales">
+                                <span class="skill-icon">🍔</span>
+                                <div class="skill-info">
+                                    <strong>Ventas/Catálogo</strong>
+                                    <span>Precios oficiales y matemáticas.</span>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="skill-checkbox-card" [class.active]="selectedAgent.skills.order_capture?.enabled">
+                            <input type="checkbox" id="skill_orders"
+                                [(ngModel)]="selectedAgent.skills.order_capture.enabled">
+                            <label for="skill_orders">
+                                <span class="skill-icon">🛒</span>
+                                <div class="skill-info">
+                                    <strong>Cierre de Pedidos</strong>
+                                    <span>Flujo de 4 pasos y comando final.</span>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="skill-checkbox-card" [class.active]="selectedAgent.skills.knowledge_base?.enabled">
+                            <input type="checkbox" id="skill_knowledge"
+                                [(ngModel)]="selectedAgent.skills.knowledge_base.enabled">
+                            <label for="skill_knowledge">
+                                <span class="skill-icon">📚</span>
+                                <div class="skill-info">
+                                    <strong>Conocimiento</strong>
+                                    <span>Consultas a documentos y PDFs.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="label-with-action">
+                        <label>Mensaje de Bienvenida Predeterminado</label>
+                        <button class="help-action-btn" (click)="fillAgentExample('welcome')">✨ Cargar Ejemplo</button>
+                    </div>
+                    <textarea [(ngModel)]="selectedAgent.welcome_message" rows="2"
+                        placeholder="¡Hola! Soy tu asistente..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <div class="label-with-variables">
+                        <div class="label-with-action">
+                            <label>Prompt Maestro (Reglas de Oro)</label>
+                            <button class="help-action-btn" (click)="fillAgentExample('prompt')">✨ Cargar
+                                Ejemplo</button>
+                        </div>
+                        <div class="variable-pills">
+                            <span class="v-pill">{{ '{{' }}merchantName{{ '}}' }}</span>
+                            <span class="v-pill">{{ '{{' }}personality{{ '}}' }}</span>
+                            <span class="v-pill">{{ '{{' }}welcomeMessage{{ '}}' }}</span>
+                            <span class="v-pill">{{ '{{' }}catalogContext{{ '}}' }}</span>
+                            <span class="v-pill">{{ '{{' }}knowledgeContext{{ '}}' }}</span>
+                        </div>
+                    </div>
+                    <!-- NUEVA ESTRUCTURA DE SECCIONES PARA AGENTES -->
+                    <div class="ai-config-sections">
+                        <div class="config-section-card" *ngFor="let section of aiConfigSections"
+                            [style.border-color]="section.borderColor">
+                            <div class="section-card-header" [style.background-color]="section.color">
+                                <span class="section-icon">{{section.icon}}</span>
+                                <div>
+                                    <h4>{{section.title}}</h4>
+                                    <p>{{section.description}}</p>
+                                </div>
+                            </div>
+                            <div class="section-card-body">
+                                <div class="chips-wrapper">
+                                    <button *ngFor="let rule of section.rules" class="rule-chip"
+                                        [class.active]="isRuleActive(rule.text, selectedAgent.system_prompt || '')"
+                                        (click)="toggleRuleForAgent(rule)">
+                                        {{rule.label}}
+                                        <span *ngIf="isRuleActive(rule.text, selectedAgent.system_prompt || '')"
+                                            class="check-mark">✓</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <textarea [(ngModel)]="selectedAgent.system_prompt" rows="12" class="system-prompt-area"
+                        placeholder="Define aquí la lógica principal..."></textarea>
+                </div>
+
+                <div class="form-group highlight-restrictions">
+                    <div class="label-with-action">
+                        <label>🚫 Restricciones Globales (Prohibiciones)</label>
+                        <button class="help-action-btn" (click)="fillAgentExample('restrictions')">✨ Cargar
+                            Ejemplo</button>
+                    </div>
+                    <textarea [(ngModel)]="selectedAgent.restrictions" rows="4"
+                        placeholder="Ej: NUNCA dar descuentos, PROHIBIDO hablar de política..."></textarea>
+                    <small>Estas reglas se aplicarán a todos los comercios que usen este agente.</small>
+                </div>
+
+                <div class="knowledge-base-section">
+                    <div class="label-with-action">
+                        <label>Biblioteca de Conocimiento del Agente (Entrenamiento Base)</label>
+                        <button class="help-action-btn add-block" (click)="addAgentContextBlock()">➕ Añadir
+                            Bloque</button>
+                    </div>
+                    <div class="knowledge-blocks">
+                        <div class="knowledge-block" *ngFor="let block of selectedAgent.context_blocks">
+                            <div class="block-header">
+                                <input type="text" [(ngModel)]="block.title" placeholder="Título...">
+                                <button class="delete-block-btn"
+                                    (click)="removeAgentContextBlock(block.id)">🗑️</button>
+                            </div>
+                            <textarea [(ngModel)]="block.content" rows="3" placeholder="Contenido..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-editor-actions">
+                    <button class="save-agent-btn" (click)="saveAgent()">
+                        {{ isEditingAgent ? 'Actualizar Agente' : 'Crear Agente' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showAgentManager = false">Cerrar</button>
+        </div>
+    </div>
+</div>
+<!-- Modal de Gestión Global de Usuarios -->
+<div class="modal-overlay" *ngIf="showGlobalUsers" (click)="showGlobalUsers = false">
+    <div class="modal-content large" (click)="$event.stopPropagation()">
+        <h2>👥 Gestión Global de Usuarios</h2>
+        <p>Administra todos los usuarios de la plataforma Woox.</p>
+
+        <!-- Formulario para Nuevo Usuario -->
+        <div class="user-form-card">
+            <h4>{{ editingUser ? 'Editar Usuario' : 'Añadir Nuevo Usuario' }}</h4>
+            <div class="form-row-inline">
+                <input type="text" [(ngModel)]="globalUserForm.full_name" placeholder="Nombre completo">
+                <input type="email" [(ngModel)]="globalUserForm.email" placeholder="Correo electrónico">
+                <select [(ngModel)]="globalUserForm.role">
+                    <option value="superadmin">Super Admin</option>
+                    <option value="merchant_admin">Admin de Comercio</option>
+                    <option value="merchant_operator">Operador</option>
+                </select>
+                <select [(ngModel)]="globalUserForm.merchant_id" [disabled]="globalUserForm.role === 'superadmin'"
+                    *ngIf="globalUserForm.role !== 'superadmin'">
+                    <option [ngValue]="null">Seleccionar comercio...</option>
+                    <option *ngFor="let m of merchants" [value]="m.id">{{ m.name }}</option>
+                </select>
+                <button class="add-user-btn" (click)="saveGlobalUser()">
+                    {{ editingUser ? 'Actualizar' : 'Añadir' }}
+                </button>
+                <button class="cancel-btn" *ngIf="editingUser" (click)="cancelEditUser()">Cancelar</button>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="filters-row">
+            <input type="text" [(ngModel)]="userSearchTerm" placeholder="🔍 Buscar por nombre o email..."
+                (ngModelChange)="filterUsers()" class="search-input">
+            <select [(ngModel)]="userRoleFilter" (ngModelChange)="filterUsers()" class="filter-select">
+                <option value="">Todos los roles</option>
+                <option value="superadmin">Super Admin</option>
+                <option value="merchant_admin">Admin de Comercio</option>
+                <option value="merchant_operator">Operador</option>
+            </select>
+        </div>
+
+        <!-- Lista de Usuarios -->
+        <div class="users-list-container">
+            <table class="users-table-small">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Rol</th>
+                        <th>Comercio</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let user of filteredUsers">
+                        <td>{{ user.full_name }}</td>
+                        <td>{{ user.email }}</td>
+                        <td><span class="role-badge" [class]="user.role">{{ getRoleLabel(user.role) }}</span></td>
+                        <td>{{ user.merchants?.name || '-' }}</td>
+                        <td>
+                            <span class="status-dot" [class.active]="user.is_active"></span>
+                            {{ user.is_active ? 'Activo' : 'Inactivo' }}
+                        </td>
+                        <td>
+                            <button class="edit-user-btn" (click)="editUser(user)" title="Editar">✏️</button>
+                            <button class="delete-user-btn" (click)="deleteGlobalUser(user.id)"
+                                title="Eliminar">🗑️</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showGlobalUsers = false">Cerrar</button>
+        </div>
+    </div>
+</div>
+<!-- Modal para Gestión de Equipos -->
+<div class="modal-overlay" *ngIf="showTeamManager" (click)="showTeamManager = false">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+            <h2>👥 Equipos de {{ currentManagingMerchant?.name }}</h2>
+            <p>Agrupa agentes para asignar chats por departamentos (Ej: Ventas, Soporte).</p>
+        </div>
+
+        <div class="team-form-card"
+            style="background: #f8fafc; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
+            <h4 style="margin-top: 0;">Añadir Nuevo Equipo</h4>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <input type="text" [(ngModel)]="newTeam.name" placeholder="Nombre del Equipo (ej: Ventas)"
+                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px;">
+                <input type="text" [(ngModel)]="newTeam.description" placeholder="Descripción de la función del equipo"
+                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px;">
+                <button class="save-btn" (click)="addTeam()" [disabled]="isAddingTeam" style="width: 100%;">
+                    {{ isAddingTeam ? "⌛ Creando..." : "✅ Crear Equipo" }}
+                </button>
+            </div>
+        </div>
+
+        <div class="teams-grid"
+            style="display: grid; grid-template-columns: 1fr; gap: 12px; max-height: 400px; overflow-y: auto;">
+            <div *ngFor="let team of merchantTeams" class="team-card"
+                style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: white; border: 1px solid var(--border-color); border-radius: 12px;">
+                <div class="team-info">
+                    <h4 style="margin: 0; color: var(--text-dark);">{{ team.name }}</h4>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">{{ team.description
+                        }}</p>
+                </div>
+                <button class="delete-user-btn" (click)="removeTeam(team.id)"
+                    style="background: #fee2e2; color: #b91c1c; border: none; width: 32px; height: 32px; border-radius: 8px; cursor: pointer;">🗑️</button>
+            </div>
+            <div *ngIf="merchantTeams.length === 0"
+                style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                <span style="font-size: 2rem;">📂</span>
+                <p>No hay equipos configurados para este comercio.</p>
+            </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 24px;">
+            <button class="cancel-btn" (click)="showTeamManager = false" style="width: 100%;">Cerrar</button>
+        </div>
+    </div>
+</div>

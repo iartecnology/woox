@@ -1,0 +1,33 @@
+<div class="delivery-container">
+    <header class="delivery-header">
+        <h1>Woox Delivery</h1>
+        <p>Pedidos Listos para Reparto</p>
+    </header>
+
+    <div class="orders-list">
+        <div *ngIf="orders.length === 0" class="empty-state">
+            📭 No hay pedidos pendientes de entrega.
+        </div>
+
+        <div *ngFor="let order of orders" class="delivery-card">
+            <div class="card-info">
+                <span class="order-id">{{ order.id }}</span>
+                <h3>{{ order.customer_name }}</h3>
+                <p class="address">📍 {{ order.address }}</p>
+                <div class="order-meta">
+                    <span>🥡 {{ order.items_count }} productos</span>
+                    <span class="price">Total: ${{ order.total }}</span>
+                </div>
+            </div>
+
+            <div class="card-actions">
+                <button *ngIf="order.status === 'ready'" class="btn-primary" (click)="startDelivery(order)">
+                    🚚 Iniciar Entrega
+                </button>
+                <button *ngIf="order.status === 'shipped'" class="btn-success" (click)="completeDelivery(order)">
+                    ✅ Marcar Entregado
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

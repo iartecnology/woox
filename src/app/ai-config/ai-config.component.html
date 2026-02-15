@@ -1,0 +1,254 @@
+<div class="config-container">
+    <header class="config-header">
+        <div class="header-text">
+            <h1>Centro de Control IA</h1>
+            <p>Configura el cerebro de tu empresa y automatiza tu crecimiento.</p>
+        </div>
+        <div class="header-actions">
+            <button class="test-btn" (click)="toggleSimulator()">
+                💬 Probar Chat
+            </button>
+            <button class="save-btn" (click)="saveConfig()" [disabled]="isSaving">
+                {{ isSaving ? 'Guardando...' : 'Guardar Cambios' }}
+            </button>
+        </div>
+    </header>
+
+    <nav class="config-tabs">
+        <button [class.active]="activeTab === 'general'" (click)="setTab('general')">🛠️ Configuración</button>
+        <button [class.active]="activeTab === 'training'" (click)="setTab('training')">🧠 Entrenamiento</button>
+        <button [class.active]="activeTab === 'remarketing'" (click)="setTab('remarketing')">🚀 Remarketing</button>
+        <button [class.active]="activeTab === 'schedule'" (click)="setTab('schedule')">⏰ Horarios</button>
+    </nav>
+
+    <div class="config-content">
+        <!-- ... (resto del contenido previo) ... -->
+
+        <!-- Pestaña Horarios -->
+        <div *ngIf="activeTab === 'schedule'" class="tab-pane">
+            <section class="config-section highlight">
+                <div class="section-header">
+                    <h3>Atención Programada Inteligente</h3>
+                    <label class="switch">
+                        <input type="checkbox" [(ngModel)]="merchantConfig.ai_schedule_enabled">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <p class="desc">Define en qué horario la IA debe responder a tus clientes. Fuera de este horario, se
+                    enviará un mensaje automático.</p>
+
+                <div class="schedule-grid" [class.disabled]="!merchantConfig.ai_schedule_enabled">
+                    <div class="form-group">
+                        <label>Hora de Inicio</label>
+                        <input type="time" [(ngModel)]="merchantConfig.ai_schedule_start"
+                            [disabled]="!merchantConfig.ai_schedule_enabled">
+                    </div>
+                    <div class="form-group">
+                        <label>Hora de Cierre</label>
+                        <input type="time" [(ngModel)]="merchantConfig.ai_schedule_end"
+                            [disabled]="!merchantConfig.ai_schedule_enabled">
+                    </div>
+                </div>
+
+                <div class="form-group mt-20" [class.disabled]="!merchantConfig.ai_schedule_enabled">
+                    <label>Mensaje de "Fuera de Horario"</label>
+                    <textarea [(ngModel)]="merchantConfig.ai_schedule_message" rows="4"
+                        placeholder="Ej: Lo sentimos, estamos cerrados por ahora..."
+                        [disabled]="!merchantConfig.ai_schedule_enabled"></textarea>
+                    <small>Este mensaje se enviará automáticamente si un cliente escribe fuera del horario
+                        definido.</small>
+                </div>
+            </section>
+        </div>
+        <!-- Pestaña General -->
+        <div *ngIf="activeTab === 'general'" class="tab-pane">
+            <section class="config-section">
+                <h3>Agente Maestro</h3>
+                <div class="form-group">
+                    <label>Agente Seleccionado</label>
+                    <select [(ngModel)]="merchantConfig.agent_id">
+                        <option value="">Seleccionar agente...</option>
+                        <option *ngFor="let agent of agents" [value]="agent.id">
+                            🤖 {{ agent.name }}
+                        </option>
+                    </select>
+                    <small *ngIf="selectedAgent">Este agente define tu lógica base de venta.</small>
+                </div>
+
+                <div class="form-group mt-15" *ngIf="merchantConfig.ai_api_key">
+                    <label>Modelo de Inteligencia (Cerebro)</label>
+                    <select [(ngModel)]="merchantConfig.ai_model">
+                        <option *ngFor="let model of availableModels" [value]="model.id">
+                            {{ model.name }}
+                        </option>
+                    </select>
+                    <small>Este modelo procesa todas tus conversaciones de ventas.</small>
+                </div>
+
+                <div class="warning-text mt-15" *ngIf="!merchantConfig.ai_api_key">
+                    ⚠️ IA Desactivada: Contacta al administrador para configurar tu API Key y activar el asistente.
+                </div>
+            </section>
+
+            <section class="config-section highlight">
+                <h3>📚 Fuente de Conocimiento</h3>
+                <p class="desc">Define de dónde debe obtener la IA la información sobre tus productos y precios.</p>
+
+                <div class="form-group">
+                    <label class="checkbox-container">
+                        <input type="checkbox" [(ngModel)]="merchantConfig.ai_use_catalog">
+                        <span class="checkmark"></span>
+                        Consultar Catálogo de Productos (Woox Catalog)
+                    </label>
+                    <small>Si está activo, la IA consultará en tiempo real tus productos cargados en la sección de
+                        Inventario.</small>
+                </div>
+            </section>
+
+            <section class="config-section">
+                <h3>Mensaje de Bienvenida</h3>
+                <p class="desc">Este es el primer mensaje que verán tus clientes. Si lo dejas vacío, se usará el del
+                    Agente.</p>
+
+                <div class="form-group">
+                    <textarea [(ngModel)]="merchantConfig.ai_welcome_message" rows="2"
+                        placeholder="Ej: ¡Bienvenidos a Mi Negocio! ¿En qué puedo ayudarte hoy?"></textarea>
+                    <small *ngIf="selectedAgent && !merchantConfig.ai_welcome_message">
+                        Actual: <i>"{{ selectedAgent.welcome_message }}"</i>
+                    </small>
+                </div>
+            </section>
+
+            <section class="config-section">
+                <h3>Instrucciones Base del Agente</h3>
+                <p class="desc">Estas instrucciones son heredadas del agente seleccionado y no pueden ser modificadas
+                    aquí.</p>
+                <div class="form-group" *ngIf="selectedAgent">
+                    <label>Lógica de Venta Maestro</label>
+                    <div class="agent-instructions-preview">
+                        {{ selectedAgent.system_prompt }}
+                    </div>
+                </div>
+                <div class="form-group" *ngIf="!selectedAgent">
+                    <p class="warning-text">⚠️ Selecciona un agente arriba para ver sus instrucciones.</p>
+                </div>
+            </section>
+
+            <section class="config-section">
+                <h3>Instrucciones Específicas del Comercio</h3>
+                <p class="desc">Define reglas o historia única de tu negocio. Se sumarán a la lógica del agente.</p>
+                <div class="form-group">
+                    <!-- SMART RULE BUILDER UI -->
+                    <div class="smart-rules-container">
+                        <div class="rules-intro">
+                            <span>⚡ Constructor de Reglas (Clic para activar)</span>
+                        </div>
+
+                        <!-- NUEVA ESTRUCTURA DE SECCIONES -->
+                        <div class="ai-config-sections">
+                            <div class="config-section-card" *ngFor="let section of aiConfigSections"
+                                [style.border-color]="section.borderColor">
+                                <div class="section-card-header" [style.background-color]="section.color">
+                                    <span class="section-icon">{{section.icon}}</span>
+                                    <div>
+                                        <h4>{{section.title}}</h4>
+                                        <p>{{section.description}}</p>
+                                    </div>
+                                </div>
+                                <div class="section-card-body">
+                                    <div class="chips-wrapper">
+                                        <button *ngFor="let rule of section.rules" class="rule-chip"
+                                            [class.active]="isRuleActive(rule.text)" (click)="togglePromptRule(rule)">
+                                            {{rule.label}}
+                                            <span *ngIf="isRuleActive(rule.text)" class="check-mark">✓</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <textarea [(ngModel)]="merchantConfig.ai_system_prompt" rows="8" class="system-prompt-area"
+                        placeholder="Las reglas seleccionadas aparecerán aquí..."></textarea>
+                </div>
+            </section>
+
+            <section class="config-section highlight">
+                <h3>🚫 Restricciones y Prohibiciones</h3>
+                <p class="desc">Define lo que la IA **NUNCA** debe hacer o decir (Límites de seguridad).</p>
+
+                <div class="form-group" *ngIf="selectedAgent && selectedAgent.restrictions">
+                    <label>Prohibiciones del Agente Maestro (Heredadas)</label>
+                    <div class="agent-instructions-preview restrictions-pre">
+                        {{ selectedAgent.restrictions }}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Restricciones Extra de tu Negocio</label>
+                    <textarea [(ngModel)]="merchantConfig.ai_restrictions" rows="4"
+                        placeholder="Ej: NUNCA des descuentos, NO menciones a la competencia, PROHIBIDO hablar de política..."></textarea>
+                </div>
+            </section>
+        </div>
+
+        <!-- Pestaña Entrenamiento -->
+        <div *ngIf="activeTab === 'training'" class="tab-pane">
+
+
+            <section class="config-section">
+                <h3>Entrenamiento Base (Manual)</h3>
+                <p class="desc">Sube tu menú en PDF o escribe instrucciones adicionales sobre tus servicios. La IA usará
+                    esto como conocimiento base.</p>
+
+                <div class="upload-box" (click)="fileInput.click()">
+                    <input type="file" #fileInput (change)="onFileUpload($event)" style="display: none">
+                    <span class="upload-icon">📄</span>
+                    <p>Subir Menú o Catálogo (PDF, Imagen)</p>
+                </div>
+
+                <div class="form-group mt-20">
+                    <label>Información de Entrenamiento / Servicios Adicionales</label>
+                    <textarea [(ngModel)]="merchantConfig.ai_system_prompt" rows="12"
+                        placeholder="Ej: Además de comida, ofrecemos servicio de catering para eventos..."></textarea>
+                    <small>Este contenido se sumará a las instrucciones del agente maestro.</small>
+                </div>
+            </section>
+        </div>
+
+        <!-- Pestaña Remarketing -->
+        <div *ngIf="activeTab === 'remarketing'" class="tab-pane">
+            <section class="config-section">
+                <div class="section-header">
+                    <h3>Ventas Recuperadas (Remarketing)</h3>
+                    <label class="switch">
+                        <input type="checkbox" [(ngModel)]="merchantConfig.remarketing_enabled">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <p class="desc">La IA contactará automáticamente a los clientes que abandonaron el carrito o mostraron
+                    interés pero no compraron.</p>
+
+                <div class="form-group" [class.disabled]="!merchantConfig.remarketing_enabled">
+                    <label>Tiempo de espera (minutos)</label>
+                    <input type="number" [(ngModel)]="merchantConfig.remarketing_delay_minutes"
+                        [disabled]="!merchantConfig.remarketing_enabled">
+                </div>
+
+                <div class="form-group" [class.disabled]="!merchantConfig.remarketing_enabled">
+                    <label>Mensaje Persuasivo de Recuperación</label>
+                    <textarea [(ngModel)]="merchantConfig.remarketing_message" rows="4"
+                        placeholder="Hola {{ '{{' }}nombre{{ '}}' }}, vimos que dejaste..."
+                        [disabled]="!merchantConfig.remarketing_enabled"></textarea>
+                    <span class="hint">Usa {{ '{{' }}nombre{{ '}}' }} para personalizar el mensaje.</span>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- Simulador de Chat -->
+<app-chat-simulator *ngIf="showSimulator" [merchantName]="merchantConfig.name" [logoUrl]="merchantConfig.logo_url"
+    [primaryColor]="merchantConfig.primary_color" [aiApiKey]="merchantConfig.ai_api_key"
+    [aiModel]="merchantConfig.ai_model" [context]="fullContext" (onClose)="toggleSimulator()">
+</app-chat-simulator>

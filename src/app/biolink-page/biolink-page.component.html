@@ -1,0 +1,50 @@
+<div class="biolink-container" *ngIf="merchant && merchant.biolink"
+    [style.background]="merchant.biolink.background_type === 'image' ? 'url(' + merchant.biolink.background_value + ') center/cover' : merchant.biolink.background_value"
+    [style.color]="merchant.biolink.text_color">
+
+    <div class="biolink-content">
+        <div class="profile-section">
+            <div class="logo-wrapper">
+                <img [src]="merchant.logo_url" [alt]="merchant.name" class="merchant-logo">
+            </div>
+            <h1 class="page-title">{{ merchant.biolink.title }}</h1>
+            <p class="page-description">{{ merchant.biolink.description }}</p>
+        </div>
+
+        <div class="links-section">
+            <ng-container *ngFor="let link of merchant.biolink.buttons">
+                <a *ngIf="link.is_active" [href]="link.url" target="_blank" class="biolink-button"
+                    [class]="merchant.biolink.button_style + ' ' + link.style"
+                    [style.border-color]="merchant.biolink.text_color"
+                    [style.color]="link.style === 'solid' ? '#000' : merchant.biolink.text_color"
+                    [style.background]="link.style === 'solid' ? merchant.biolink.text_color : 'transparent'">
+                    <span *ngIf="link.icon" class="btn-icon">
+                        <i *ngIf="link.icon.startsWith('fa-')" [class]="link.icon"></i>
+                        <span *ngIf="!link.icon.startsWith('fa-')">{{ link.icon }}</span>
+                    </span>
+                    {{ link.label }}
+                </a>
+            </ng-container>
+        </div>
+
+        <div class="share-actions-container">
+            <button class="share-button-circle" (click)="share()" [style.color]="merchant.biolink.text_color"
+                [style.border-color]="merchant.biolink.text_color + '44'">
+                <i class="fa-solid fa-share-nodes"></i>
+                Compartir
+            </button>
+        </div>
+
+        <footer class="biolink-footer">
+            <p>Potenciado por <strong>{{ platformName }}</strong></p>
+        </footer>
+    </div>
+</div>
+
+<div class="not-found-container" *ngIf="notFound">
+    <div class="not-found-card">
+        <h1>404</h1>
+        <p>Lo sentimos, esta página de enlaces no existe o ha sido desactivada.</p>
+        <button onclick="window.location.href='/'">Volver a Woox</button>
+    </div>
+</div>

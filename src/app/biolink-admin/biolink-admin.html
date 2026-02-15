@@ -1,0 +1,211 @@
+<div class="biolink-admin-container">
+    <div class="page-header">
+        <h1>🔗 Administrador de BioLink</h1>
+        <p>Configura tu página de enlaces personalizada</p>
+    </div>
+
+    <div class="biolink-config-card" *ngIf="merchant.biolink">
+        <!-- Preview Section -->
+        <div class="preview-section">
+            <div class="preview-header">
+                <h3>📱 Vista Previa</h3>
+                <button class="preview-btn" (click)="previewBiolink()">
+                    <i class="fa-solid fa-external-link"></i> Ver en Vivo
+                </button>
+            </div>
+            <div class="phone-mockup">
+                <div class="phone-screen"
+                    [style.background]="merchant.biolink.background_type === 'gradient' ? merchant.biolink.background_value : merchant.biolink.background_value"
+                    [style.color]="merchant.biolink.text_color">
+                    <div class="preview-content">
+                        <img [src]="merchant.logo_url" alt="Logo" class="preview-logo">
+                        <h2>{{ merchant.biolink.title }}</h2>
+                        <p>{{ merchant.biolink.description }}</p>
+                        <div class="preview-buttons">
+                            <div *ngFor="let btn of merchant.biolink.buttons" class="preview-button"
+                                [class]="merchant.biolink.button_style + ' ' + btn.style"
+                                [style.border-color]="merchant.biolink.text_color"
+                                [style.color]="btn.style === 'solid' ? '#000' : merchant.biolink.text_color"
+                                [style.background]="btn.style === 'solid' ? merchant.biolink.text_color : 'transparent'">
+                                <i *ngIf="btn.icon?.startsWith('fa-')" [class]="btn.icon"></i>
+                                {{ btn.label }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Section -->
+        <div class="config-section">
+            <!-- Apariencia -->
+            <section class="config-sub-section">
+                <div class="section-header">
+                    <h3>🎨 Apariencia</h3>
+                </div>
+
+                <div class="form-group">
+                    <label>Título</label>
+                    <input type="text" [(ngModel)]="merchant.biolink.title" placeholder="Nombre de tu negocio">
+                </div>
+
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea [(ngModel)]="merchant.biolink.description" rows="2"
+                        placeholder="Breve descripción"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Tipo de Fondo</label>
+                    <select [(ngModel)]="merchant.biolink.background_type">
+                        <option value="color">Color Sólido</option>
+                        <option value="gradient">Degradado</option>
+                    </select>
+                </div>
+
+                <div class="form-group" *ngIf="merchant.biolink.background_type === 'color'">
+                    <label>Color de Fondo</label>
+                    <div class="color-input-wrapper">
+                        <input type="color" [(ngModel)]="merchant.biolink.background_value">
+                        <span class="color-value">{{ merchant.biolink.background_value }}</span>
+                    </div>
+                </div>
+
+                <div class="gradient-picker" *ngIf="merchant.biolink.background_type === 'gradient'">
+                    <div class="form-group">
+                        <label>Color 1</label>
+                        <div class="color-input-wrapper">
+                            <input type="color" [(ngModel)]="merchant.biolink.gradient_color1"
+                                (change)="updateGradient()">
+                            <span class="color-value">{{ merchant.biolink.gradient_color1 }}</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Color 2</label>
+                        <div class="color-input-wrapper">
+                            <input type="color" [(ngModel)]="merchant.biolink.gradient_color2"
+                                (change)="updateGradient()">
+                            <span class="color-value">{{ merchant.biolink.gradient_color2 }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Color de Texto</label>
+                    <div class="color-input-wrapper">
+                        <input type="color" [(ngModel)]="merchant.biolink.text_color">
+                        <span class="color-value">{{ merchant.biolink.text_color }}</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Estilo de Botones</label>
+                    <select [(ngModel)]="merchant.biolink.button_style">
+                        <option value="rounded">Redondeados</option>
+                        <option value="pill">Píldora</option>
+                        <option value="square">Cuadrados</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- Enlaces -->
+            <section class="config-sub-section">
+                <div class="section-header">
+                    <h3>🔗 Enlaces</h3>
+                    <button class="add-btn" (click)="addBiolinkButton()">
+                        <i class="fa-solid fa-plus"></i> Agregar Enlace
+                    </button>
+                </div>
+
+                <div class="links-list">
+                    <div *ngFor="let link of merchant.biolink.buttons; let i = index" class="link-item">
+                        <div class="link-header">
+                            <span class="link-number">#{{ i + 1 }}</span>
+                            <button class="remove-btn" (click)="removeBiolinkButton(i)">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Etiqueta</label>
+                            <input type="text" [(ngModel)]="link.label" placeholder="Ej: Ver Menú">
+                        </div>
+
+                        <div class="form-group">
+                            <label>URL</label>
+                            <input type="url" [(ngModel)]="link.url" placeholder="https://...">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Icono</label>
+                            <div class="icon-picker-container">
+                                <div class="icon-preview-box">
+                                    <i *ngIf="link.icon && link.icon.startsWith('fa-')" [class]="link.icon"></i>
+                                    <span *ngIf="link.icon && !link.icon.startsWith('fa-')">{{ link.icon }}</span>
+                                    <span *ngIf="!link.icon">🏠</span>
+                                </div>
+                                <input type="text" [(ngModel)]="link.icon" placeholder="fa-brands fa-instagram"
+                                    class="icon-input-small">
+                                <div class="icon-dropdown">
+                                    <span *ngFor="let p of biolinkPresets" (click)="setIcon(link, p.icon)"
+                                        [title]="p.name">
+                                        <i [class]="p.icon"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Estilo</label>
+                            <select [(ngModel)]="link.style">
+                                <option value="solid">Sólido</option>
+                                <option value="outline">Contorno</option>
+                                <option value="ghost">Fantasma</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" [(ngModel)]="link.is_active">
+                                <span>Activo</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- QR y Compartir -->
+            <section class="config-sub-section">
+                <div class="section-header">
+                    <h3>📱 Acceso y QR</h3>
+                </div>
+                <div class="qr-container-row">
+                    <div class="qr-image-box">
+                        <img [src]="getQRCodeUrl()" alt="QR BioLink">
+                    </div>
+                    <div class="qr-info-box">
+                        <p>Escanea este código para acceder directamente al BioLink.</p>
+                        <div class="qr-actions">
+                            <button class="download-qr-btn" (click)="downloadQRCode()" title="Solo el código QR">
+                                <i class="fa-solid fa-qrcode"></i> QR (.png)
+                            </button>
+                            <button class="download-poster-btn" (click)="downloadPoster()">
+                                <i class="fa-solid fa-file-pdf"></i> Descargar Poster (.pdf)
+                            </button>
+                            <button class="copy-url-btn" (click)="copyToClipboard(getBiolinkUrl())">
+                                <i class="fa-solid fa-copy"></i> Copiar Enlace
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Botón Guardar -->
+            <div class="save-section">
+                <button class="save-btn-large" (click)="saveBiolinkConfig()">
+                    <i class="fa-solid fa-save"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

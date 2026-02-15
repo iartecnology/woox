@@ -1,0 +1,102 @@
+<div class="logs-container">
+    <header class="logs-header">
+        <h1>🕵️ Historial de Auditoría</h1>
+        <p>Registro completo de acciones realizadas en la plataforma</p>
+    </header>
+
+    <!-- Filtros de Auditoría -->
+    <div class="analytics-filters">
+        <div class="filter-group">
+            <label for="merchantSelect">🏢 Entidad</label>
+            <select id="merchantSelect" [(ngModel)]="selectedMerchant" (change)="onFilterChange()">
+                <option *ngFor="let m of merchants" [value]="m.id">{{ m.name }}</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="periodSelect">📅 Periodo</label>
+            <select id="periodSelect" [(ngModel)]="selectedPeriod" (change)="onFilterChange()">
+                <option *ngFor="let p of periods" [value]="p.id">{{ p.name }}</option>
+            </select>
+        </div>
+
+        <div class="filter-group animate-fade-in" *ngIf="selectedPeriod === 'custom'">
+            <label>📍 Rango Personalizado</label>
+            <div class="date-range">
+                <input type="date" [(ngModel)]="startDate" (change)="onFilterChange()">
+                <span class="range-sep">a</span>
+                <input type="date" [(ngModel)]="endDate" (change)="onFilterChange()">
+            </div>
+        </div>
+
+        <button class="export-btn">
+            <span>📥 Exportar PDF</span>
+        </button>
+    </div>
+
+    <div class="table-card">
+        <table class="logs-table">
+            <thead>
+                <tr>
+                    <th (click)="toggleSort('timestamp')" class="sortable">
+                        Fecha y Hora
+                        <span class="sort-icon" *ngIf="sortKey === 'timestamp'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th (click)="toggleSort('user')" class="sortable">
+                        Usuario
+                        <span class="sort-icon" *ngIf="sortKey === 'user'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th (click)="toggleSort('action')" class="sortable">
+                        Acción
+                        <span class="sort-icon" *ngIf="sortKey === 'action'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th (click)="toggleSort('entity')" class="sortable">
+                        Entidad
+                        <span class="sort-icon" *ngIf="sortKey === 'entity'">{{ sortDirection === 'asc' ? '↑' : '↓'
+                            }}</span>
+                    </th>
+                    <th>Detalles</th>
+                    <th>IP</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let log of paginatedLogs">
+                    <td class="timestamp">{{ log.timestamp | date:'short' }}</td>
+                    <td class="user">
+                        <span class="avatar">{{ log.user.charAt(0) }}</span>
+                        {{ log.user }}
+                    </td>
+                    <td>
+                        <span class="action-badge" [class]="getSeverityClass(log.severity)">
+                            {{ log.action }}
+                        </span>
+                    </td>
+                    <td><strong>{{ log.entity }}</strong></td>
+                    <td class="details">{{ log.details }}</td>
+                    <td class="ip">{{ log.ip_address }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Controles de Paginación -->
+        <div class="pagination-controls">
+            <div class="pagination-info">
+                Mostrando {{ (currentPage - 1) * itemsPerPage + 1 }} - {{ Math.min(currentPage * itemsPerPage,
+                logs.length) }} de {{ logs.length }} registros
+            </div>
+            <div class="pagination-buttons">
+                <button [disabled]="currentPage === 1" (click)="changePage(currentPage - 1)"
+                    class="page-btn">Anterior</button>
+                <button *ngFor="let page of pagesArray" (click)="changePage(page)" [class.active]="page === currentPage"
+                    class="page-btn num-btn">
+                    {{ page }}
+                </button>
+                <button [disabled]="currentPage === totalPages" (click)="changePage(currentPage + 1)"
+                    class="page-btn">Siguiente</button>
+            </div>
+        </div>
+    </div>
+</div>

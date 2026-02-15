@@ -1,0 +1,34 @@
+<div class="login-page">
+    <div class="login-card">
+        <div class="login-header">
+            <h1 class="brand">Woox</h1>
+            <p>Bienvenido de nuevo. Ingresa a tu panel de gestión.</p>
+        </div>
+
+        <form (ngSubmit)="onLogin()" #loginForm="ngForm">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" [(ngModel)]="loginData.email" required
+                    placeholder="admin@woox.app">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" name="password" [(ngModel)]="loginData.password" required
+                    placeholder="••••••••">
+            </div>
+
+            <div class="error-msg" *ngIf="error">
+                {{ error }}
+            </div>
+
+            <button type="submit" class="login-btn" [disabled]="isSubmitting || !loginForm.valid">
+                {{ isSubmitting ? 'Ingresando...' : 'Iniciar Sesión' }}
+            </button>
+        </form>
+
+        <div class="login-footer">
+            <p>¿Olvidaste tu contraseña? Contacta a soporte.</p>
+        </div>
+    </div>
+</div>

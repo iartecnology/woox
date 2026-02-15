@@ -1,0 +1,185 @@
+.biolink-container {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 60px 20px;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.biolink-content {
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.profile-section {
+    margin-bottom: 40px;
+}
+
+.logo-wrapper {
+    width: 96px;
+    height: 96px;
+    background: white;
+    border-radius: 50%;
+    padding: 4px;
+    margin-bottom: 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    display: inline-block;
+}
+
+.merchant-logo {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.page-description {
+    font-size: 1rem;
+    opacity: 0.9;
+    max-width: 80%;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+.links-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 40px;
+}
+
+.biolink-button {
+    width: 100%;
+    padding: 16px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.biolink-button:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Button Shapes */
+.biolink-button.rounded {
+    border-radius: 12px;
+}
+
+.biolink-button.pill {
+    border-radius: 100px;
+}
+
+.biolink-button.square {
+    border-radius: 4px;
+}
+
+/* Button Styles */
+.biolink-button.outline {
+    background: transparent !important;
+}
+
+.biolink-button.ghost {
+    background: transparent !important;
+    border-color: transparent !important;
+}
+
+
+/* Share Actions Container */
+.share-actions-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.share-button-circle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 32px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 2px solid;
+    border-radius: 100px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.share-button-circle:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.share-button-circle:active {
+    transform: translateY(0);
+}
+
+.share-button-circle i {
+    font-size: 1.2rem;
+}
+
+.biolink-footer {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+/* Not Found Styles */
+.not-found-container {
+    min-height: 100vh;
+    background: #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.not-found-card {
+    background: white;
+    padding: 40px;
+    border-radius: 24px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    max-width: 400px;
+}
+
+.not-found-card h1 {
+    font-size: 4rem;
+    color: #4f46e5;
+    margin-bottom: 10px;
+}
+
+.not-found-card button {
+    margin-top: 24px;
+    padding: 12px 24px;
+    background: #4f46e5;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-icon {
+    margin-right: 10px;
+}

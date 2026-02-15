@@ -1,0 +1,255 @@
+<div class="orders-container" style="position: relative;">
+    <!-- Botones de Control Superior -->
+    <div style="position: absolute; top: 0px; right: 20px; z-index: 10; display: flex; gap: 8px;">
+        <!-- Botones de Vista -->
+        <div style="display: flex; gap: 4px; background: #f3f4f6; padding: 4px; border-radius: 8px;">
+            <button (click)="toggleView('kanban')" [class.active]="viewMode === 'kanban'" class="view-toggle-btn"
+                title="Vista Kanban">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                </svg>
+            </button>
+            <button (click)="toggleView('list')" [class.active]="viewMode === 'list'" class="view-toggle-btn"
+                title="Vista Lista">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Botón Refrescar -->
+        <button class="icon-btn" (click)="loadOrders()" title="Actualizar Pedidos"
+            style="background: #10b981; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                <polyline points="21 3 21 8 16 8"></polyline>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Spinner de Carga General -->
+    <div *ngIf="isLoading"
+        style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.7); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+        <div class="spinner-premium"></div>
+        <p style="margin-top: 16px; font-weight: 800; color: #10b981;">Actualizando pedidos...</p>
+    </div>
+
+    <!-- VISTA KANBAN (Columnas) -->
+    <div *ngIf="viewMode === 'kanban'" class="orders-kanban-wrapper">
+        <div class="orders-kanban" cdkDropListGroup>
+            <!-- Columna: Pendientes -->
+            <div class="kanban-column" cdkDropList [cdkDropListData]="ordersByStatus.pending"
+                (cdkDropListDropped)="onDrop($event, 'pending')">
+                <div class="column-header">
+                    <h3>Pendientes</h3>
+                    <span class="count">{{ ordersByStatus.pending.length }}</span>
+                </div>
+                <div class="order-cards">
+                    <div *ngFor="let order of ordersByStatus.pending" class="order-card" cdkDrag
+                        [cdkDragDisabled]="order.processing" [class.active]="selectedOrder?.id === order.id"
+                        (click)="selectOrder(order)">
+                        <div class="card-top">
+                            <span class="order-id">{{ order.id }}</span>
+                            <span class="channel-icon" [class]="order.channel">{{ order.channel }}</span>
+                        </div>
+                        <p class="customer">{{ order.customer_name }}</p>
+                        <div class="card-bottom">
+                            <span class="total">${{ order.total }}</span>
+                            <span class="time">{{ order.created_at | date:'shortTime' }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna: Preparando -->
+            <div class="kanban-column" cdkDropList [cdkDropListData]="ordersByStatus.cooking"
+                (cdkDropListDropped)="onDrop($event, 'cooking')">
+                <div class="column-header">
+                    <h3>En Cocina</h3>
+                    <span class="count">{{ ordersByStatus.cooking.length }}</span>
+                </div>
+                <div class="order-cards">
+                    <div *ngFor="let order of ordersByStatus.cooking" class="order-card" cdkDrag
+                        [cdkDragDisabled]="order.processing" [class.active]="selectedOrder?.id === order.id"
+                        (click)="selectOrder(order)">
+                        <div class="card-top">
+                            <span class="order-id">{{ order.id }}</span>
+                            <span class="channel-icon" [class]="order.channel">{{ order.channel }}</span>
+                        </div>
+                        <p class="customer">{{ order.customer_name }}</p>
+                        <div class="card-bottom">
+                            <span class="total">${{ order.total }}</span>
+                            <span class="time">{{ order.created_at | date:'shortTime' }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna: Listos -->
+            <div class="kanban-column" cdkDropList [cdkDropListData]="ordersByStatus.ready"
+                (cdkDropListDropped)="onDrop($event, 'ready')">
+                <div class="column-header">
+                    <h3>Listos / Enviados</h3>
+                    <span class="count">{{ ordersByStatus.ready.length }}</span>
+                </div>
+                <div class="order-cards">
+                    <div *ngFor="let order of ordersByStatus.ready" class="order-card" cdkDrag
+                        [cdkDragDisabled]="order.processing" [class.active]="selectedOrder?.id === order.id"
+                        (click)="selectOrder(order)">
+                        <div class="card-top">
+                            <span class="order-id">{{ order.id }}</span>
+                            <span class="channel-icon" [class]="order.channel">{{ order.channel }}</span>
+                        </div>
+                        <p class="customer">{{ order.customer_name }}</p>
+                        <div class="card-bottom">
+                            <span class="total">${{ order.total }}</span>
+                            <span class="time">{{ order.created_at | date:'shortTime' }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalle del Pedido Seleccionado -->
+        <div class="order-detail" *ngIf="selectedOrder">
+            <ng-container *ngTemplateOutlet="orderDetailTemplate"></ng-container>
+        </div>
+    </div>
+
+    <!-- VISTA LISTA (Tabla con Panel de Detalles) -->
+    <div *ngIf="viewMode === 'list'" class="orders-list-container">
+        <!-- Lista de Pedidos -->
+        <div class="orders-list-section">
+            <table class="orders-table-compact">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Cliente</th>
+                        <th>Total</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let order of paginatedOrders" (click)="selectOrder(order)"
+                        [class.active]="selectedOrder?.id === order.id" style="cursor: pointer;">
+                        <td><strong>{{ order.id }}</strong></td>
+                        <td>{{ order.customer_name }}</td>
+                        <td><strong>${{ order.total.toFixed(2) }}</strong></td>
+                        <td>
+                            <span class="status-badge-compact" [class]="order.status">
+                                {{ getStatusLabel(order.status) }}
+                            </span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Pagination Footer -->
+            <div class="pagination-footer"
+                style="padding: 16px; border-top: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center;">
+                <button (click)="prevPage()" [disabled]="currentPage === 1"
+                    style="padding: 6px 12px; border: 1px solid #e5e7eb; border-radius: 6px; background: white; cursor: pointer; color: #374151;"
+                    [style.opacity]="currentPage === 1 ? '0.5' : '1'">
+                    Anterior
+                </button>
+                <span style="font-size: 0.9rem; color: #6b7280;">
+                    Página {{ currentPage }} de {{ totalPages }}
+                </span>
+                <button (click)="nextPage()" [disabled]="currentPage === totalPages"
+                    style="padding: 6px 12px; border: 1px solid #e5e7eb; border-radius: 6px; background: white; cursor: pointer; color: #374151;"
+                    [style.opacity]="currentPage === totalPages ? '0.5' : '1'">
+                    Siguiente
+                </button>
+            </div>
+        </div>
+
+        <!-- Panel de Detalles -->
+        <div class="order-detail active-list" *ngIf="selectedOrder">
+            <ng-container *ngTemplateOutlet="orderDetailTemplate"></ng-container>
+        </div>
+
+        <!-- Mensaje si no hay selección -->
+        <div class="order-detail empty-state" *ngIf="!selectedOrder">
+            <div style="text-align: center; padding: 60px 20px; color: #9ca3af;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                    style="margin: 0 auto 16px;">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="9" y1="9" x2="15" y2="9"></line>
+                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                <p style="font-size: 1.1rem; font-weight: 600;">Selecciona un pedido</p>
+                <p style="font-size: 0.9rem; margin-top: 8px;">Haz clic en cualquier pedido de la lista para ver sus
+                    detalles</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template Unificado para el Detalle del Pedido -->
+<ng-template #orderDetailTemplate>
+    <div class="detail-header" *ngIf="selectedOrder">
+        <h2>Detalle del Pedido {{ selectedOrder.id }}</h2>
+        <div class="status-badge" [class]="selectedOrder.status">
+            {{ getStatusLabel(selectedOrder.status) }}
+        </div>
+    </div>
+
+    <div class="customer-info-section" *ngIf="selectedOrder">
+        <p><strong>Cliente:</strong> {{ selectedOrder.customer_name }}</p>
+        <p><strong>Dirección:</strong> {{ selectedOrder.delivery_address }}</p>
+        <p><strong>Canal de Venta:</strong> {{ selectedOrder.channel | uppercase }}</p>
+    </div>
+
+    <div class="items-list" *ngIf="selectedOrder">
+        <h3>Productos</h3>
+        <div class="item-row" *ngFor="let item of selectedOrder.items">
+            <span class="qty">{{ item.quantity }}x</span>
+            <span class="name">{{ item.product_name }}</span>
+            <span class="price">${{ (item.unit_price * item.quantity).toFixed(2) }}</span>
+        </div>
+        <div class="total-row">
+            <span>Total</span>
+            <span class="final-price">${{ selectedOrder.total.toFixed(2) }}</span>
+        </div>
+    </div>
+
+    <div class="action-buttons" *ngIf="selectedOrder">
+        <button *ngIf="selectedOrder.status === 'pending'" class="primary-btn pulse"
+            [disabled]="selectedOrder.processing" (click)="updateStatus(selectedOrder, 'cooking')">
+            <span *ngIf="!selectedOrder.processing">👩‍🍳 Empezar a Cocinar</span>
+            <span *ngIf="selectedOrder.processing">⌛ Procesando...</span>
+        </button>
+        <button *ngIf="selectedOrder.status === 'cooking'" class="primary-btn" [disabled]="selectedOrder.processing"
+            (click)="updateStatus(selectedOrder, 'ready')">
+            <span *ngIf="!selectedOrder.processing">📦 Marcar como Listo / Enviado</span>
+            <span *ngIf="selectedOrder.processing">⌛ Procesando...</span>
+        </button>
+        <button *ngIf="selectedOrder.status === 'ready'" class="success-btn" [disabled]="selectedOrder.processing"
+            (click)="updateStatus(selectedOrder, 'delivered')">
+            <span *ngIf="!selectedOrder.processing">✅ Marcar como Entregado</span>
+            <span *ngIf="selectedOrder.processing">⌛ Procesando...</span>
+        </button>
+
+        <!-- Botón de Regresar -->
+        <button *ngIf="selectedOrder.status !== 'pending' && selectedOrder.status !== 'delivered'" class="secondary-btn"
+            [disabled]="selectedOrder.processing" (click)="moveBack(selectedOrder)">
+            <span *ngIf="!selectedOrder.processing">↩️ Regresar etapa anterior</span>
+            <span *ngIf="selectedOrder.processing">⌛ Procesando...</span>
+        </button>
+
+        <button class="cancel-btn" [disabled]="selectedOrder.processing"
+            (click)="updateStatus(selectedOrder, 'cancelled')">
+            <span *ngIf="!selectedOrder.processing">Cancelar Pedido</span>
+            <span *ngIf="selectedOrder.processing">⌛ Cancelando...</span>
+        </button>
+    </div>
+</ng-template>

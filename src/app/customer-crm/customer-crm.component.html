@@ -1,0 +1,113 @@
+<div class="crm-container">
+    <header class="crm-header">
+        <div>
+            <h1>👥 CRM de Clientes</h1>
+            <p>Gestiona y fideliza a tu base de clientes con IA</p>
+        </div>
+        <button class="campaign-btn" (click)="openCampaignModal()">
+            🚀 Crear Campaña de Remarketing
+        </button>
+    </header>
+
+    <div class="crm-content">
+        <!-- Lista de Clientes -->
+        <div class="customers-sidebar">
+            <div class="search-box">
+                <input type="text" [(ngModel)]="searchTerm" (input)="search()" placeholder="Buscar cliente...">
+            </div>
+            <div class="customer-list">
+                <div *ngFor="let customer of filteredCustomers" class="customer-row"
+                    [class.active]="selectedCustomer?.id === customer.id" (click)="selectCustomer(customer)">
+                    <div class="customer-avatar">
+                        {{ customer.name.charAt(0) }}
+                        <span class="vip-badge" *ngIf="customer.is_vip">⭐</span>
+                    </div>
+                    <div class="customer-info">
+                        <span class="name">{{ customer.name }}</span>
+                        <span class="phone">{{ customer.phone }}</span>
+                    </div>
+                    <span class="sentiment">{{ getSentimentEmoji(customer.sentiment) }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalle del Cliente -->
+        <div class="customer-detail" *ngIf="selectedCustomer">
+            <div class="detail-header">
+                <div class="detail-main">
+                    <h2>{{ selectedCustomer.name }}</h2>
+                    <div class="tags">
+                        <span class="tag" *ngFor="let label of selectedCustomer.labels">{{ label }}</span>
+                        <span class="tag vip" *ngIf="selectedCustomer.is_vip">VIP</span>
+                    </div>
+                </div>
+                <div class="detail-actions">
+                    <button class="action-btn">Enviar Mensaje 💬</button>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="label">Total Pedidos</span>
+                    <span class="value">{{ selectedCustomer.total_orders }}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">Total Gastado</span>
+                    <span class="value">{{ formatCurrency(selectedCustomer.total_spent) }}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">Sentimiento</span>
+                    <span class="value">{{ getSentimentEmoji(selectedCustomer.sentiment) }}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">Canal Preferido</span>
+                    <span class="value">{{ getChannelIcon(selectedCustomer.channel_preference) }} {{
+                        selectedCustomer.channel_preference | uppercase }}</span>
+                </div>
+            </div>
+
+            <div class="history-section">
+                <h3>Historial Reciente</h3>
+                <div class="history-item">
+                    <div class="history-date">{{ selectedCustomer.last_order_date | date:'medium' }}</div>
+                    <div class="history-desc">Pedido #WOX-1001 - Completado</div>
+                </div>
+                <!-- Más items aquí -->
+            </div>
+        </div>
+
+        <div class="no-selection" *ngIf="!selectedCustomer">
+            <div class="placeholder-icon">👥</div>
+            <h3>Selecciona un cliente para ver su perfil</h3>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Campaña -->
+<div class="modal-overlay" *ngIf="showCampaignModal">
+    <div class="modal-content">
+        <h2>🚀 Nueva Campaña de Remarketing</h2>
+        <div class="form-group">
+            <label>Nombre de la Campaña</label>
+            <input type="text" [(ngModel)]="campaign.name" placeholder="Ej: Promo de Viernes">
+        </div>
+        <div class="form-group">
+            <label>Mensaje (Se enviará por el canal preferido)</label>
+            <textarea [(ngModel)]="campaign.message"
+                placeholder="Hola! Hoy tenemos algo especial para ti..."></textarea>
+        </div>
+        <div class="form-group">
+            <label>Segmento</label>
+            <select [(ngModel)]="campaign.segment">
+                <option value="all">Todos los clientes</option>
+                <option value="vip">Solo VIPs ⭐</option>
+                <option value="churn">No compran hace +15 días</option>
+                <option value="happy">Clientes Felices 😊</option>
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button class="cancel-btn" (click)="showCampaignModal = false">Cancelar</button>
+            <button class="save-btn" (click)="sendCampaign()">Enviar Campaña 🚀</button>
+        </div>
+    </div>
+</div>
