@@ -1,12 +1,13 @@
+version: '3.8'
+
 services:
   woox-pro:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: woox-frontend
-    # Solo exponemos el puerto internamente para que el Proxy de Dokploy lo use
-    expose:
-      - "80"
+    ports:
+      - "8099:80"
     restart: always
     deploy:
       resources:
