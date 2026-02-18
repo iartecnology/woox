@@ -1255,42 +1255,123 @@
                 <!-- SECCIÓN DE HABILIDADES (SKILLS) - AGENTE 2.0 -->
                 <div class="skills-config-section" *ngIf="selectedAgent.skills">
                     <label>🛠️ Habilidades del Agente (Skills)</label>
-                    <p class="section-hint">Activa los módulos que este agente dominará. Cada habilidad inyecta reglas
-                        automáticas al cerebro de la IA.</p>
+                    <p class="section-hint">Activa los módulos y configura su comportamiento. Cada habilidad inyecta
+                        reglas automáticas al cerebro de la IA.</p>
                     <div class="skills-grid">
-                        <div class="skill-checkbox-card" [class.active]="selectedAgent.skills.inventory_sales?.enabled">
-                            <input type="checkbox" id="skill_sales"
-                                [(ngModel)]="selectedAgent.skills.inventory_sales.enabled">
-                            <label for="skill_sales">
-                                <span class="skill-icon">🍔</span>
-                                <div class="skill-info">
-                                    <strong>Ventas/Catálogo</strong>
-                                    <span>Precios oficiales y matemáticas.</span>
+
+                        <!-- SKILL: Ventas / Catálogo -->
+                        <div class="skill-card" [class.active]="selectedAgent.skills.inventory_sales?.enabled">
+                            <div class="skill-card-header">
+                                <div class="skill-card-title">
+                                    <input type="checkbox" id="skill_sales"
+                                        [(ngModel)]="selectedAgent.skills.inventory_sales.enabled">
+                                    <label for="skill_sales">
+                                        <span class="skill-icon">🍔</span>
+                                        <div class="skill-info">
+                                            <strong>Ventas / Catálogo</strong>
+                                            <span>Precios oficiales y disponibilidad.</span>
+                                        </div>
+                                    </label>
                                 </div>
-                            </label>
-                        </div>
-                        <div class="skill-checkbox-card" [class.active]="selectedAgent.skills.order_capture?.enabled">
-                            <input type="checkbox" id="skill_orders"
-                                [(ngModel)]="selectedAgent.skills.order_capture.enabled">
-                            <label for="skill_orders">
-                                <span class="skill-icon">🛒</span>
-                                <div class="skill-info">
-                                    <strong>Cierre de Pedidos</strong>
-                                    <span>Flujo de 4 pasos y comando final.</span>
+                            </div>
+                            <div class="skill-card-body" *ngIf="selectedAgent.skills.inventory_sales?.enabled">
+                                <div class="skill-param-row">
+                                    <label>Mostrar disponibilidad</label>
+                                    <input type="checkbox"
+                                        [(ngModel)]="selectedAgent.skills.inventory_sales.show_availability">
                                 </div>
-                            </label>
-                        </div>
-                        <div class="skill-checkbox-card" [class.active]="selectedAgent.skills.knowledge_base?.enabled">
-                            <input type="checkbox" id="skill_knowledge"
-                                [(ngModel)]="selectedAgent.skills.knowledge_base.enabled">
-                            <label for="skill_knowledge">
-                                <span class="skill-icon">📚</span>
-                                <div class="skill-info">
-                                    <strong>Conocimiento</strong>
-                                    <span>Consultas a documentos y PDFs.</span>
+                                <div class="skill-param-row">
+                                    <label>Agrupar por categoría</label>
+                                    <input type="checkbox"
+                                        [(ngModel)]="selectedAgent.skills.inventory_sales.group_by_category">
                                 </div>
-                            </label>
+                                <div class="skill-param-row">
+                                    <label>Máx. productos a mostrar</label>
+                                    <input type="number" min="5" max="100"
+                                        [(ngModel)]="selectedAgent.skills.inventory_sales.max_items_shown"
+                                        placeholder="40">
+                                </div>
+                            </div>
                         </div>
+
+                        <!-- SKILL: Cierre de Pedidos -->
+                        <div class="skill-card" [class.active]="selectedAgent.skills.order_capture?.enabled">
+                            <div class="skill-card-header">
+                                <div class="skill-card-title">
+                                    <input type="checkbox" id="skill_orders"
+                                        [(ngModel)]="selectedAgent.skills.order_capture.enabled">
+                                    <label for="skill_orders">
+                                        <span class="skill-icon">🛒</span>
+                                        <div class="skill-info">
+                                            <strong>Cierre de Pedidos</strong>
+                                            <span>Desglose, datos de envío y confirmación.</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="skill-card-body" *ngIf="selectedAgent.skills.order_capture?.enabled">
+                                <div class="skill-param-row">
+                                    <label>Formato del resumen</label>
+                                    <select [(ngModel)]="selectedAgent.skills.order_capture.order_format">
+                                        <option value="itemized">📋 Detallado (línea por línea)</option>
+                                        <option value="simple">📝 Simple (una línea)</option>
+                                        <option value="compact">💬 Compacto (conversacional)</option>
+                                    </select>
+                                </div>
+                                <div class="skill-param-row">
+                                    <label>Símbolo de moneda</label>
+                                    <input type="text" maxlength="3"
+                                        [(ngModel)]="selectedAgent.skills.order_capture.currency_symbol"
+                                        placeholder="$">
+                                </div>
+                                <div class="skill-param-row">
+                                    <label>Mostrar subtotales</label>
+                                    <input type="checkbox"
+                                        [(ngModel)]="selectedAgent.skills.order_capture.show_subtotals">
+                                </div>
+                                <div class="skill-param-row">
+                                    <label>Pasos de confirmación</label>
+                                    <select [(ngModel)]="selectedAgent.skills.order_capture.confirmation_steps">
+                                        <option [ngValue]="1">1 — Confirmación rápida</option>
+                                        <option [ngValue]="2">2 — Confirmación doble (recomendado)</option>
+                                    </select>
+                                </div>
+                                <p class="skill-subsection-label">📦 Datos requeridos al cliente:</p>
+                                <div class="skill-param-row">
+                                    <label>Nombre</label>
+                                    <input type="checkbox"
+                                        [(ngModel)]="selectedAgent.skills.order_capture.require_name">
+                                </div>
+                                <div class="skill-param-row">
+                                    <label>Dirección</label>
+                                    <input type="checkbox"
+                                        [(ngModel)]="selectedAgent.skills.order_capture.require_address">
+                                </div>
+                                <div class="skill-param-row">
+                                    <label>Teléfono</label>
+                                    <input type="checkbox"
+                                        [(ngModel)]="selectedAgent.skills.order_capture.require_phone">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SKILL: Base de Conocimiento -->
+                        <div class="skill-card" [class.active]="selectedAgent.skills.knowledge_base?.enabled">
+                            <div class="skill-card-header">
+                                <div class="skill-card-title">
+                                    <input type="checkbox" id="skill_knowledge"
+                                        [(ngModel)]="selectedAgent.skills.knowledge_base.enabled">
+                                    <label for="skill_knowledge">
+                                        <span class="skill-icon">📚</span>
+                                        <div class="skill-info">
+                                            <strong>Conocimiento</strong>
+                                            <span>Consultas a documentos y contexto extra.</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 

@@ -198,9 +198,13 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
                     console.log('Realtime Event:', payload.eventType, payload.new?.id);
                     const eventType = payload.eventType;
 
-                    // Notificaciones y Sonido
+                    // Notificaciones, Sonido y REFRESO INMEDIATO
                     if (eventType === 'INSERT' || (eventType === 'UPDATE' && payload.new.last_message_at !== payload.old?.last_message_at)) {
                         this.supabaseService.playSound();
+                        console.log('Realtime: Sonido ejecutado, refrescando lista de inmediato...');
+
+                        // Refrescar lista al mismo tiempo que el sonido para respuesta instantánea
+                        await this.loadConversations(true);
 
                         if (this.selectedConversation?.id !== payload.new.id) {
                             this.supabaseService.sendBrowserNotification('Nuevo mensaje', {
@@ -210,14 +214,22 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
                         }
                     }
 
-                    // Recargar lista silenciosamente para reflejar cambios
-                    // Aumentamos ligeramente el delay para el INSERT para dar tiempo a que los mensajes e hijos se creen
-                    if (eventType === 'INSERT') await new Promise(r => setTimeout(r, 800));
+                    // Lógica de refuerzo para INSERTS (Garantizar visualización ante delays de DB)
+                    if (eventType === 'INSERT') {
+                        console.log('Realtime: Iniciando refuerzo de carga para nuevo chat...');
+                        await new Promise(r => setTimeout(r, 2000));
+                        await this.loadConversations(true);
 
-                    await this.loadConversations(true);
+                        // Reintento final si la sincronización es muy lenta
+                        await new Promise(r => setTimeout(r, 2000));
+                        await this.loadConversations(true);
+                    }
+
                     this.updateGlobalNotificationCount();
+                    this.cdr.markForCheck();
+                    this.cdr.detectChanges();
 
-                    // Encontrar el chat actualizado y marcarlo para animación visual
+                    // Encontrar el chat actualizado y marcarlo para animación visual (opcional)
                     if (payload.new && payload.new.id) {
                         const updatedChat = this.conversations.find(c => c.id === payload.new.id);
                         if (updatedChat) {
@@ -226,7 +238,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
                             setTimeout(() => {
                                 if (updatedChat) updatedChat.justUpdated = false;
                                 this.cdr.detectChanges();
-                            }, 2000);
+                            }, 3000);
                         }
                     }
                 });
@@ -348,6 +360,9 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
                 if (error) throw error;
 
                 this.selectedConversation = null;
+                this.selectedChannel = 'all';
+                this.inboxTab = 'all';
+                this.searchQuery = '';
             }
 
             // Éxito común

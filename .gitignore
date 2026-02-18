@@ -47,3 +47,14 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Angular environments con credenciales reales (NO versionar)
+# Los archivos de placeholder SÍ se versionan (contienen 'SUPABASE_URL_DEV' etc.)
+# Los overrides locales NO se versionan:
+src/environments/environment.local.ts
+
+# Supabase temp files
+supabase/.temp/
+
+# Supabase secrets
+supabase/secrets.env

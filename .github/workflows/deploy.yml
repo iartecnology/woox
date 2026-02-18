@@ -1,0 +1,147 @@
+name: Deploy Woox
+
+on:
+  push:
+    branches:
+      - main       # → Producción
+      - develop    # → Desarrollo
+  workflow_dispatch:  # Permite ejecución manual desde GitHub UI
+
+jobs:
+  # ─────────────────────────────────────────
+  # DEPLOY A DESARROLLO (branch: develop)
+  # ─────────────────────────────────────────
+  deploy-development:
+    name: 🧪 Deploy → Development
+    runs-on: ubuntu-latest
+    environment: development
+    if: github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Instalar dependencias
+        run: npm ci
+
+      # Inyectar credenciales DEV en el archivo de environment
+      - name: 🔑 Configurar credenciales DEV
+        run: |
+          cat > src/environments/environment.ts << EOF
+          export const environment = {
+            production: false,
+            supabaseUrl: '${{ secrets.SUPABASE_URL }}',
+            supabaseAnonKey: '${{ secrets.SUPABASE_ANON_KEY }}',
+            appVersion: '2.0.0-dev',
+            envName: 'development'
+          };
+          EOF
+
+      - name: 🏗️ Build Angular (DEV)
+        run: npm run build -- --configuration=development
+
+      - name: ⚡ Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: 🔗 Link proyecto Supabase DEV
+        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: 🗄️ Aplicar migraciones DB (DEV)
+        run: supabase db push --linked --yes
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: 🚀 Deploy Edge Functions (DEV)
+        run: |
+          supabase functions deploy whatsapp-webhook
+          supabase functions deploy telegram-webhook
+          supabase functions deploy facebook-webhook
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: ✅ Resumen DEV
+        run: |
+          echo "================================"
+          echo "✅ Deploy DEVELOPMENT completado"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "================================"
+
+  # ─────────────────────────────────────────
+  # DEPLOY A PRODUCCIÓN (branch: main)
+  # ─────────────────────────────────────────
+  deploy-production:
+    name: 🚀 Deploy → Production
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Instalar dependencias
+        run: npm ci
+
+      # Inyectar credenciales PROD en el archivo de environment
+      - name: 🔑 Configurar credenciales PROD
+        run: |
+          cat > src/environments/environment.production.ts << EOF
+          export const environment = {
+            production: true,
+            supabaseUrl: '${{ secrets.SUPABASE_URL }}',
+            supabaseAnonKey: '${{ secrets.SUPABASE_ANON_KEY }}',
+            appVersion: '2.0.0',
+            envName: 'production'
+          };
+          EOF
+
+      - name: 🏗️ Build Angular (PROD)
+        run: npm run build -- --configuration=production
+
+      - name: ⚡ Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: 🔗 Link proyecto Supabase PROD
+        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: 🗄️ Aplicar migraciones DB (PROD)
+        run: supabase db push --linked --yes
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: 🚀 Deploy Edge Functions (PROD)
+        run: |
+          supabase functions deploy whatsapp-webhook
+          supabase functions deploy telegram-webhook
+          supabase functions deploy facebook-webhook
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: ✅ Resumen PROD
+        run: |
+          echo "================================"
+          echo "🚀 Deploy PRODUCTION completado"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "================================"

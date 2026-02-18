@@ -3379,3 +3379,134 @@ input:checked+.slider-pill:before {
 .skill-checkbox-card.active .skill-info strong {
     color: var(--accent-color);
 }
+
+/* --- SKILL CARDS EXPANDIBLES (Skills 2.0) --- */
+.skills-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.skill-card {
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.skill-card.active {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+}
+
+.skill-card-header {
+    padding: 14px 16px;
+}
+
+.skill-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.skill-card-title input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.skill-card-title label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    margin-bottom: 0 !important;
+    width: 100%;
+}
+
+.skill-card.active .skill-icon {
+    background: var(--accent-color);
+    color: white;
+}
+
+.skill-card.active .skill-info strong {
+    color: var(--accent-color);
+}
+
+.skill-card-body {
+    border-top: 1px solid var(--border-color);
+    padding: 14px 16px;
+    background: var(--bg-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: fadeInDown 0.2s ease;
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.skill-param-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.skill-param-row label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0 !important;
+    flex: 1;
+}
+
+.skill-param-row input[type="number"],
+.skill-param-row input[type="text"],
+.skill-param-row select {
+    width: 160px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.82rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transition: border-color 0.2s;
+}
+
+.skill-param-row input[type="number"]:focus,
+.skill-param-row input[type="text"]:focus,
+.skill-param-row select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.skill-param-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-color);
+    cursor: pointer;
+}
+
+.skill-subsection-label {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 6px 0 2px 0;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border-color);
+}

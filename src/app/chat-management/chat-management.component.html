@@ -73,6 +73,14 @@
           </button>
         </div>
 
+        <!-- Empty General State -->
+        <div *ngIf="filteredConversations.length === 0 && selectedChannel !== 'simulator'"
+          style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center; color: #94a3b8; gap: 12px;">
+          <div style="font-size: 2.5rem; opacity: 0.5;">💬</div>
+          <p style="font-size: 0.9rem; font-weight: 600; margin: 0;">No se encontraron conversaciones.</p>
+          <p style="font-size: 0.75rem; margin: 0;">Los nuevos mensajes aparecerán aquí automáticamente.</p>
+        </div>
+
         <div *ngFor="let conv of filteredConversations; trackBy: trackByConversationId" class="conversation-item"
           [class.active]="selectedConversation?.id === conv.id" [class.just-updated]="conv.justUpdated"
           (click)="selectConversation(conv)">
