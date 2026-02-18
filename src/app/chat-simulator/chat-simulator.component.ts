@@ -365,6 +365,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
   @Input() aiWelcomeMessage: string = '';
   @Input() context: string = '';
   @Input() merchantId: string = '';
+  @Input() aiEnabled: boolean = true;
   @Output() onClose = new EventEmitter<void>();
 
   private liveOrderService = inject(LiveOrderService);
@@ -390,7 +391,14 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
   ) { }
 
   async ngOnInit() {
-    const greeting = this.aiWelcomeMessage || `¡Hola! Soy el asistente virtual de ${this.merchantName}. ¿En qué puedo ayudarte hoy?`;
+    let greeting = this.aiWelcomeMessage || `¡Hola! Soy el asistente virtual de ${this.merchantName}. ¿En qué puedo ayudarte hoy?`;
+
+    // Reemplazar placeholders dinámicos
+    greeting = greeting.replace(/{{merchantName}}/g, this.merchantName);
+    greeting = greeting.replace(/{{merchant_name}}/g, this.merchantName);
+    greeting = greeting.replace(/{{customerName}}/g, this.customerName);
+    greeting = greeting.replace(/{{customer_name}}/g, this.customerName);
+
     this.messages.push({
       sender: 'ai',
       text: greeting,
@@ -480,6 +488,11 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
     this.isTyping = true;
 
     try {
+      if (!this.aiEnabled) {
+        this.isTyping = false;
+        return;
+      }
+
       if (!this.aiApiKey) {
         throw new Error('No API key configured');
       }
@@ -492,8 +505,12 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
       let systemNudge = '';
       const menuKeywords = ['menú', 'menu', 'carta', 'ofreces', 'ofrecen', 'productos', 'comida'];
+
+      // Regla de saludo y categorías
+      systemNudge += `\n(PROTOCOLO DE SALUDO: Si es el inicio o el usuario saluda, responde amable, menciona brevemente las categorías disponibles y pregunta qué desea. NO listes todos los productos individuales todavía.)`;
+
       if (menuKeywords.some(key => userText.toLowerCase().includes(key))) {
-        systemNudge = '\n(Recordatorio: lístalo en texto plano con **negritas** en los nombres. No uses la tarjeta [PRODUCT] para el menú completo.)';
+        systemNudge += '\n(Recordatorio: lístalo en texto plano con **negritas** en los nombres de productos. No uses la tarjeta [PRODUCT] para el menú completo.)';
       }
 
       // Nudge de precisión técnica

@@ -26,6 +26,7 @@ export class AiConfigComponent implements OnInit {
         agent_id: '',
         ai_restrictions: '',
         ai_use_catalog: true,
+        ai_enabled: true,
         ai_schedule_enabled: false,
         ai_schedule_start: '09:00',
         ai_schedule_end: '18:00',
@@ -184,6 +185,7 @@ export class AiConfigComponent implements OnInit {
             agent_id: this.merchantConfig.agent_id,
             ai_restrictions: this.merchantConfig.ai_restrictions,
             ai_use_catalog: this.merchantConfig.ai_use_catalog,
+            ai_enabled: this.merchantConfig.ai_enabled,
             remarketing_enabled: this.merchantConfig.remarketing_enabled,
             remarketing_delay_minutes: this.merchantConfig.remarketing_delay_minutes,
             remarketing_message: this.merchantConfig.remarketing_message,
@@ -240,14 +242,28 @@ export class AiConfigComponent implements OnInit {
         const catalogContext = this.catalogContext;
 
         if (!agent) {
-            return `ERES UN ASISTENTE DE VENTAS PARA ${this.merchantConfig.name}.
+            return `Eres el asistente virtual de ${this.merchantConfig.name}. 
+Personalidad: ${this.merchantConfig.ai_personality || 'amable, servicial y eficiente'}.
+
+INSTRUCCIONES DE IDENTIDAD:
+${this.merchantConfig.ai_system_prompt || 'Tu objetivo es ayudar al cliente a realizar un pedido de forma fluida.'}
+
+RESTRICCIONES:
+${this.merchantConfig.ai_restrictions || 'No inventes productos que no estén en el catálogo.'}
+
+REGLAS DE INTERACCIÓN:
+- Flujo Natural: NO uses etiquetas como "Ticket:", "Datos:" o "Validación:". Habla de forma humana.
+- Saludo: Saluda amablemente y pregunta qué desea el cliente.
+- Cálculos: Realiza los cálculos de forma precisa.
+
+PROTOCOLO DE CIERRE (PASO A PASO):
+- PASO A: Presenta un resumen del pedido con el total y pregunta si es correcto.
+- PASO B: Solicita Nombre, Dirección y Teléfono de forma natural.
+- PASO C: Repite los datos para confirmación final.
+- PASO D: Genera: [ORDER_CONFIRMED: {"customer_name":"...","address":"...","phone":"...","total":0}]
+
 MENÚ DISPONIBLE:
-${catalogContext}
-
-### INSTRUCCIONES ESPECÍFICAS
-${this.merchantConfig.ai_system_prompt || ''}
-
-AYUDA AL CLIENTE A ELEGIR Y CIERRA LA VENTA.`;
+${catalogContext}`;
         }
 
         const combinedMenu = [

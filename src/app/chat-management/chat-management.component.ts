@@ -1,8 +1,8 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked, ChangeDetectorRef, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked, ChangeDetectorRef, inject, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { marked } from 'marked';
 import { SupabaseService } from '../supabase.service';
 import { ChatSimulatorComponent } from '../chat-simulator/chat-simulator.component';
@@ -20,6 +20,7 @@ interface Conversation {
     id: string;
     customer_id?: string;
     customer_name: string;
+    platform: string;
     channel: string;
     last_message: string;
     last_message_at: Date;
@@ -40,6 +41,8 @@ interface Conversation {
 })
 export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChecked {
     @ViewChild('chatBody') private chatBody!: ElementRef;
+    @ViewChild('scrollAnchor') private scrollAnchor!: ElementRef;
+    private mutationObserver?: MutationObserver;
 
     conversations: Conversation[] = [];
     selectedConversation: Conversation | null = null;
@@ -90,6 +93,8 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     private catalogService = inject(CatalogService);
     private sanitizer = inject(DomSanitizer);
     private route = inject(ActivatedRoute);
+    private router = inject(Router);
+    private ngZone = inject(NgZone);
 
     agentStatus = this.supabaseService.agentStatus;
 
@@ -157,19 +162,29 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     async ngOnInit() {
         this.merchantId = localStorage.getItem('active_merchant_id') || localStorage.getItem('merchant_id') || '';
 
-        // Check for query params to open simulator
         this.route.queryParams.subscribe(params => {
-            if (params['action'] === 'simulator') {
-                this.openSimulator();
+            if (params['action'] === 'simulator' && !this.showSimulator) {
+                this.openSimulator(true);
+                // Limpiar parámetros para evitar que se abra al refrescar
+                this.router.navigate([], {
+                    relativeTo: this.route,
+                    queryParams: { action: null, t: null },
+                    queryParamsHandling: 'merge',
+                    replaceUrl: true
+                });
             }
         });
 
         if (this.merchantId) {
             // Load merchant name for labels
-            const { data: m } = await this.supabaseService.getMerchantById(this.merchantId);
+            const { data: m } = await this.supabaseService.getMerchantByAnyId(this.merchantId);
             if (m) {
                 this.merchantName = m.name;
                 this.merchantData = m;
+                // Si venía por código, lo actualizamos al UUID real para consistencia interna
+                if (m.id !== this.merchantId) {
+                    this.merchantId = m.id;
+                }
             }
 
             await this.loadConversations();
@@ -178,45 +193,70 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
             // Suscribirse a cambios en tiempo real para opciones de lista
             console.log('Suscribiendo a cambios del merchant:', this.merchantId);
-            this.merchantSubscription = this.supabaseService.subscribeToMerchantConversations(this.merchantId, async (payload) => {
-                console.log('Realtime Event:', payload.eventType, payload.new?.id);
-                const eventType = payload.eventType;
+            this.merchantSubscription = this.supabaseService.subscribeToMerchantConversations(this.merchantId, (payload) => {
+                this.ngZone.run(async () => {
+                    console.log('Realtime Event:', payload.eventType, payload.new?.id);
+                    const eventType = payload.eventType;
 
-                // Notificaciones y Sonido
-                if (eventType === 'INSERT' || (eventType === 'UPDATE' && payload.new.last_message_at !== payload.old?.last_message_at)) {
-                    // Solo si no somos nosotros los que enviamos (aunque aquí mayormente son clientes)
-                    this.supabaseService.playSound();
+                    // Notificaciones y Sonido
+                    if (eventType === 'INSERT' || (eventType === 'UPDATE' && payload.new.last_message_at !== payload.old?.last_message_at)) {
+                        this.supabaseService.playSound();
 
-                    if (this.selectedConversation?.id !== payload.new.id) {
-                        this.supabaseService.sendBrowserNotification('Nuevo mensaje', {
-                            body: payload.new.last_message || 'Nuevo chat iniciado',
-                            icon: '/assets/icons/chat-icon.png'
-                        });
+                        if (this.selectedConversation?.id !== payload.new.id) {
+                            this.supabaseService.sendBrowserNotification('Nuevo mensaje', {
+                                body: payload.new.last_message || 'Nuevo chat iniciado',
+                                icon: '/assets/icons/chat-icon.png'
+                            });
+                        }
                     }
-                }
 
-                // Recargar lista silenciosamente para reflejar cambios (nuevos chats, unread_count, etc)
-                if (eventType === 'INSERT') await new Promise(r => setTimeout(r, 500));
-                await this.loadConversations(true);
-                this.updateGlobalNotificationCount();
+                    // Recargar lista silenciosamente para reflejar cambios
+                    // Aumentamos ligeramente el delay para el INSERT para dar tiempo a que los mensajes e hijos se creen
+                    if (eventType === 'INSERT') await new Promise(r => setTimeout(r, 800));
 
-                // Encontrar el chat actualizado y marcarlo para animación visual
-                if (payload.new && payload.new.id) {
-                    const updatedChat = this.conversations.find(c => c.id === payload.new.id);
-                    if (updatedChat) {
-                        updatedChat.justUpdated = true;
-                        this.cdr.detectChanges();
-                        setTimeout(() => {
-                            if (updatedChat) updatedChat.justUpdated = false;
+                    await this.loadConversations(true);
+                    this.updateGlobalNotificationCount();
+
+                    // Encontrar el chat actualizado y marcarlo para animación visual
+                    if (payload.new && payload.new.id) {
+                        const updatedChat = this.conversations.find(c => c.id === payload.new.id);
+                        if (updatedChat) {
+                            updatedChat.justUpdated = true;
                             this.cdr.detectChanges();
-                        }, 2000);
+                            setTimeout(() => {
+                                if (updatedChat) updatedChat.justUpdated = false;
+                                this.cdr.detectChanges();
+                            }, 2000);
+                        }
                     }
-                }
+                });
             });
+
+        }
+    }
+
+    private setupMutationObserver() {
+        if (this.mutationObserver) {
+            this.mutationObserver.disconnect();
+        }
+
+        if (this.chatBody && this.chatBody.nativeElement) {
+            this.mutationObserver = new MutationObserver(() => {
+                this.scrollToBottom();
+            });
+            this.mutationObserver.observe(this.chatBody.nativeElement, {
+                childList: true,
+                subtree: true
+            });
+            // Scroll inicial al abrir
+            this.scrollToBottom();
         }
     }
 
     ngOnDestroy() {
+        if (this.mutationObserver) {
+            this.mutationObserver.disconnect();
+        }
         if (this.activeSubscription) {
             this.supabaseService.unsubscribe(this.activeSubscription);
         }
@@ -227,6 +267,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
     ngAfterViewChecked() {
         if (this.shouldScrollToBottom) {
+            console.log('ngAfterViewChecked: triggering scroll');
             this.scrollToBottom();
             this.shouldScrollToBottom = false;
         }
@@ -241,8 +282,11 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     }
 
     async loadMerchantData() {
-        const { data } = await this.supabaseService.getMerchantById(this.merchantId);
-        if (data) this.merchantData = data;
+        const { data } = await this.supabaseService.getMerchantByAnyId(this.merchantId);
+        if (data) {
+            this.merchantData = data;
+            this.merchantId = data.id; // Asegurar que usamos el UUID
+        }
     }
 
     async loadAvailableTags() {
@@ -336,14 +380,16 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     }
 
 
-    async openSimulator() {
+    async openSimulator(forceOpen: boolean = false) {
         if (this.isPreparingSimulator) return;
 
-        if (this.showSimulator) {
+        if (this.showSimulator && !forceOpen) {
             this.showSimulator = false;
             this.cdr.detectChanges();
             return;
         }
+
+        if (this.showSimulator && forceOpen) return;
 
         this.isPreparingSimulator = true;
         this.cdr.detectChanges();
@@ -352,9 +398,16 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             if (!this.merchantData) {
                 await this.loadMerchantData();
             }
+
+            if (!this.merchantData) {
+                this.notificationService.show('No se pudieron cargar los datos del comercio. Verifica tu sesión.', 'error');
+                return;
+            }
+
             this.showSimulator = true;
         } catch (error) {
             console.error('Error opening simulator:', error);
+            this.notificationService.show('Error al abrir el simulador.', 'error');
         } finally {
             this.isPreparingSimulator = false;
             this.cdr.detectChanges();
@@ -375,6 +428,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
                     id: c.id,
                     customer_id: c.customer_id,
                     customer_name: c.platform === 'simulator' ? 'Simulador' : (c.customers?.full_name || c.customers?.name || c.customer_identifier || 'Cliente de Telegram'),
+                    platform: c.platform || 'whatsapp',
                     channel: c.channel || c.platform || 'whatsapp',
                     last_message: c.last_message || 'Sin mensajes aún',
                     last_message_at: c.last_message_at ? new Date(c.last_message_at) : new Date(c.created_at),
@@ -468,7 +522,6 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
         }
 
         this.selectedConversation = conv;
-        this.shouldScrollToBottom = true;
         this.isLoadingDetails = true;
         this.cdr.detectChanges();
 
@@ -488,38 +541,47 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             }
         } finally {
             this.isLoadingDetails = false;
+            this.shouldScrollToBottom = true;
             this.cdr.detectChanges();
         }
 
         // Subscribe Real-time
         console.log('Suscribiendo a mensajes del chat:', conv.id);
         this.activeSubscription = this.supabaseService.subscribeToMessages(conv.id, (payload) => {
-            console.log('Message Payload:', payload);
-            const newMsg = payload.new;
-            if (this.selectedConversation && this.selectedConversation.id === newMsg.conversation_id) {
-                this.selectedConversation.messages.push({
-                    id: newMsg.id,
-                    sender_type: newMsg.sender_type,
-                    content: newMsg.content,
-                    created_at: new Date(newMsg.created_at)
-                });
-                this.shouldScrollToBottom = true;
-                this.cdr.detectChanges();
-            }
+            this.ngZone.run(() => {
+                console.log('Message Payload:', payload);
+                const newMsg = payload.new;
+                if (this.selectedConversation && this.selectedConversation.id === newMsg.conversation_id) {
+                    // Evitar duplicados si por algún motivo llega doble
+                    const exists = this.selectedConversation.messages.find(m => m.id === newMsg.id);
+                    if (!exists) {
+                        this.selectedConversation.messages.push({
+                            id: newMsg.id,
+                            sender_type: newMsg.sender_type,
+                            content: newMsg.content,
+                            created_at: new Date(newMsg.created_at)
+                        });
+                        this.shouldScrollToBottom = true;
+                        this.cdr.detectChanges();
+                    }
+                }
+            });
         });
 
         // Suscribirse a Typing
         const typingChannel = this.supabaseService.channel(`typing:${conv.id}`);
         typingChannel.on('broadcast', { event: 'typing' }, (payload: any) => {
-            if (payload.payload.agentName !== localStorage.getItem('user_name')) {
-                this.isAgentTyping = payload.payload.isTyping;
-                this.typingAgentName = payload.payload.agentName;
-                this.cdr.detectChanges();
+            this.ngZone.run(() => {
+                if (payload.payload.agentName !== localStorage.getItem('user_name')) {
+                    this.isAgentTyping = payload.payload.isTyping;
+                    this.typingAgentName = payload.payload.agentName;
+                    this.cdr.detectChanges();
 
-                if (this.isAgentTyping) {
-                    setTimeout(() => { this.isAgentTyping = false; this.cdr.detectChanges(); }, 5000);
+                    if (this.isAgentTyping) {
+                        setTimeout(() => { this.isAgentTyping = false; this.cdr.detectChanges(); }, 5000);
+                    }
                 }
-            }
+            });
         }).subscribe();
 
         // Mark as Read
@@ -531,6 +593,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
         }
 
         this.cdr.detectChanges();
+        this.setupMutationObserver();
     }
 
     async loadFullDeepDetails(convId: string) {
@@ -584,7 +647,17 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
     async toggleAI() {
         if (!this.selectedConversation) return;
-        const newState = !this.selectedConversation.ai_active;
+
+        // Si la IA está apagada globalmente para el comercio, avisar
+        if (this.merchantData && this.merchantData.ai_enabled === false) {
+            alert('La IA está desactivada globalmente en la configuración del comercio. Debes activarla allá primero.');
+            return;
+        }
+
+        // Manejar null como true (activo por defecto)
+        const currentState = this.selectedConversation.ai_active !== false;
+        const newState = !currentState;
+
         await this.supabaseService.toggleAI(this.selectedConversation.id, newState);
         this.selectedConversation.ai_active = newState;
     }
@@ -605,13 +678,18 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             const { error } = await this.supabaseService.sendHumanMessage(this.selectedConversation.id, content);
             if (error) {
                 console.error('Error sending message:', error);
+                // Mostrar notificación visual
+                if (error.message?.includes('expired') || error.message?.includes('OAuthException')) {
+                    this.notificationService.show('⚠️ Error: Tu conexión con WhatsApp ha expirado. Por favor actualiza el Token en Super Admin.', 'error');
+                } else {
+                    this.notificationService.show(`❌ Error al entregar el mensaje: ${error.message || 'Error desconocido'}`, 'error');
+                }
             } else {
                 this.shouldScrollToBottom = true;
                 this.cdr.detectChanges();
             }
         }
     }
-
 
     // --- GESTIÓN DE PEDIDO ---
     async openOrderModal() {
@@ -712,8 +790,24 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     }
 
     private scrollToBottom(): void {
-        try {
-            this.chatBody.nativeElement.scrollTop = this.chatBody.nativeElement.scrollHeight;
-        } catch (err) { }
+        const el = this.chatBody?.nativeElement;
+        if (!el) return;
+
+        const performScroll = () => {
+            try {
+                // Forzar scroll al fondo inmediatamente
+                el.scrollTop = el.scrollHeight;
+
+                // Intento smooth con el ancla
+                if (this.scrollAnchor && this.scrollAnchor.nativeElement) {
+                    this.scrollAnchor.nativeElement.scrollIntoView({ behavior: 'auto', block: 'end' });
+                }
+            } catch (err) { }
+        };
+
+        // Doble intento: uno inmediato y uno micro-tarea
+        performScroll();
+        requestAnimationFrame(() => performScroll());
+        setTimeout(() => performScroll(), 100);
     }
 }

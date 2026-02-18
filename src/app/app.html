@@ -53,10 +53,10 @@
                     <option value="offline">⚪ Offline</option>
                 </select>
 
-                <!-- Botón Simulador (Nuevo Ubicación) -->
-                <button class="icon-btn primary" routerLink="/chats" [queryParams]="{ action: 'simulator' }"
+                <!-- Botón Simulador (Barra Superior) -->
+                <button class="icon-btn primary" (click)="openGlobalSimulator()"
                     style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
-                    title="Nuevo Simulacro">
+                    title="Abrir Simulador">
                     🚀
                 </button>
 

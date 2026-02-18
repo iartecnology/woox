@@ -55,6 +55,12 @@ export class App {
     }, 1500);
   }
 
+  openGlobalSimulator() {
+    this.router.navigate(['/chats'], {
+      queryParams: { action: 'simulator', t: Date.now() }
+    });
+  }
+
   toggleSound() {
     this.supabaseService.toggleSound();
   }

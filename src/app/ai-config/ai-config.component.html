@@ -62,6 +62,23 @@
         </div>
         <!-- Pestaña General -->
         <div *ngIf="activeTab === 'general'" class="tab-pane">
+            <section class="config-section master-toggle">
+                <div class="section-header">
+                    <div class="title-with-badge">
+                        <h3>Estado del Asistente IA</h3>
+                        <span class="badge" [class.active]="merchantConfig.ai_enabled">
+                            {{ merchantConfig.ai_enabled ? 'ACTIVO' : 'INACTIVO' }}
+                        </span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" [(ngModel)]="merchantConfig.ai_enabled">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <p class="desc">Interruptor maestro. Si se apaga, la IA dejará de responder automáticamente en todos los
+                    canales (WhatsApp, Telegram, etc.).</p>
+            </section>
+
             <section class="config-section">
                 <h3>Agente Maestro</h3>
                 <div class="form-group">
@@ -250,5 +267,6 @@
 <!-- Simulador de Chat -->
 <app-chat-simulator *ngIf="showSimulator" [merchantName]="merchantConfig.name" [logoUrl]="merchantConfig.logo_url"
     [primaryColor]="merchantConfig.primary_color" [aiApiKey]="merchantConfig.ai_api_key"
-    [aiModel]="merchantConfig.ai_model" [context]="fullContext" (onClose)="toggleSimulator()">
+    [aiModel]="merchantConfig.ai_model" [aiEnabled]="merchantConfig.ai_enabled" [context]="fullContext"
+    (onClose)="toggleSimulator()">
 </app-chat-simulator>

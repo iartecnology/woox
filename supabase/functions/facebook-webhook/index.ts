@@ -81,7 +81,6 @@ Deno.serve(async (req: Request) => {
         const { data: existing } = await supabase.from("messages").select("id").eq("metadata->>fb_message_id", fbMessageId).maybeSingle();
         if (existing) return new Response("ok", { headers: corsHeaders });
 
-        if (m.ai_enabled === false) return new Response("ok", { headers: corsHeaders });
 
         // Obtener o crear cliente
         let { data: customer } = await supabase.from("customers")
@@ -128,6 +127,22 @@ Deno.serve(async (req: Request) => {
             metadata: { fb_message_id: fbMessageId }
         });
 
+        // Actualizar conversación (último mensaje y contador de no leídos)
+        await supabase.from("conversations").update({
+            last_message: messageText,
+            last_message_at: new Date().toISOString(),
+            unread_count: (conversation.unread_count || 0) + 1
+        }).eq("id", conversation.id);
+
+        // VERIFICAR ESTADO DE IA (GLOBAL O POR CONVERSACIÓN)
+        const isGlobalDisabled = m.ai_enabled === false || String(m.ai_enabled) === 'false';
+        const isConvDisabled = conversation.ai_active === false || String(conversation.ai_active) === 'false';
+
+        if (isGlobalDisabled || isConvDisabled) {
+            console.log(`[Webhook] IA Silenciada para ${conversation.id} (Global disabled: ${isGlobalDisabled}, Conv disabled: ${isConvDisabled})`);
+            return new Response("ok", { headers: corsHeaders });
+        }
+
         // 1. Catálogo
         const { data: products } = await supabase.from("products").select("name, price, is_available, category:categories(name)").eq("merchant_id", merchantIdInternal).eq("is_available", true).limit(40);
         let menu = "";
@@ -154,14 +169,31 @@ Deno.serve(async (req: Request) => {
         }
         if (chatMessages.length > 0 && chatMessages[0].role === "model") chatMessages.shift();
 
-        // 3. IA Logic
-        const systemPrompt = `Eres el asistente de ${m.name}. Personalidad: ${m.ai_personality || 'profesional'}.
-Catálogo:
+        // Obtener categorías únicas para el saludo
+        const categoriesList = [...new Set(products?.map((p: any) => p.category?.name || "Otros"))].join(", ");
+
+        // 3. Prompt de Sistema (Natural y Dinámico)
+        const systemPrompt = `Eres el asistente virtual de ${m.name}. 
+Personalidad: ${m.ai_personality || 'amable, servicial y eficiente'}.
+
+INSTRUCCIONES DE IDENTIDAD:
+${m.ai_system_prompt || 'Tu objetivo es ayudar al cliente a realizar un pedido de forma fluida.'}
+
+RESTRICCIONES:
+${m.ai_restrictions || 'No inventes productos que no estén en el catálogo.'}
+
+REGLAS DE INTERACCIÓN:
+1. **Flujo Natural**: NO uses etiquetas como "Ticket:", "Datos:" o "Validación:". Habla de forma humana.
+2. **Saludo**: En el primer mensaje, saluda, menciona brevemente las categorías (${categoriesList}) y pregunta qué desea el cliente.
+3. **Catálogo**: Muestra el menú completo SOLO si el cliente lo solicita:
 ${menu}
-Protocolo de Cierre:
-1. Muestra Ticket.
-2. Pide Nombre, Dirección y Teléfono.
-3. Finalizar: [ORDER_CONFIRMED: {"customer_name":"...","address":"...","phone":"...","total":0}]`;
+4. **Cálculos**: Realiza los cálculos de forma precisa. Usa **negrita** para resaltar productos.
+
+PROTOCOLO DE CIERRE (PASO A PASO):
+- PASO A: Presenta un resumen del pedido con el total y pregunta si es correcto.
+- PASO B: Una vez confirmado el pedido, solicita Nombre, Dirección y Teléfono (de forma natural).
+- PASO C: Repite los datos al cliente para una confirmación final.
+- PASO D: Tras el "Sí" final, genera el código: [ORDER_CONFIRMED: {"customer_name":"...","address":"...","phone":"...","total":0}] e indica al cliente que su pedido ha sido registrado con éxito.`;
 
         chatMessages.push({ role: "user", parts: [{ text: messageText }] });
 

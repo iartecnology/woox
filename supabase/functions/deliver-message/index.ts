@@ -20,32 +20,47 @@ Deno.serve(async (req) => {
         );
 
         // 1. Obtener detalles de la conversación, el cliente y el comercio
-        const { data: conv, error: convErr } = await supabase
+        const { data: rawConv, error: convErr } = await supabase
             .from('conversations')
             .select(`
-        id,
-        channel,
-        merchant_id,
-        customers (
-          telegram_chat_id
-        ),
-        merchants (
-          telegram_bot_token
-        )
-      `)
+                id,
+                channel,
+                merchant_id,
+                customer:customers (
+                    telegram_chat_id,
+                    whatsapp_phone,
+                    facebook_user_id
+                ),
+                merchant:merchants (
+                    telegram_bot_token,
+                    whatsapp_token,
+                    whatsapp_phone_number_id,
+                    facebook_page_token
+                )
+            `)
             .eq('id', conversation_id)
             .single();
 
-        if (convErr || !conv) {
-            throw new Error("Conversation not found");
+        if (convErr || !rawConv) {
+            console.error("[Deliver Error] Conversation not found or error:", convErr);
+            throw new Error(`Conversation not found: ${conversation_id}`);
         }
 
+        // Supabase sometimes returns joins as an object or as a single-item array
+        const conv: any = rawConv;
+        const merchant = Array.isArray(conv.merchant) ? conv.merchant[0] : conv.merchant;
+        const customer = Array.isArray(conv.customer) ? conv.customer[0] : conv.customer;
+
         const channel = conv.channel;
-        const botToken = conv.merchants?.telegram_bot_token;
-        const chatId = conv.customers?.telegram_chat_id;
-        const waToken = conv.merchants?.whatsapp_token;
-        const waPhoneId = conv.merchants?.whatsapp_phone_number_id;
-        const waCustomerPhone = conv.customers?.whatsapp_phone;
+        const botToken = merchant?.telegram_bot_token;
+        const chatId = customer?.telegram_chat_id;
+        const waToken = merchant?.whatsapp_token;
+        const waPhoneId = merchant?.whatsapp_phone_number_id;
+        const waCustomerPhone = customer?.whatsapp_phone;
+        const fbToken = merchant?.facebook_page_token;
+        const fbUserId = customer?.facebook_user_id;
+
+        console.log(`[Deliver] Channel: ${channel}, WA_Phone: ${waCustomerPhone}, Has_Token: ${!!waToken}, Has_PhoneID: ${!!waPhoneId}`);
 
         if (channel === 'telegram') {
             if (!botToken || !chatId) {
@@ -97,10 +112,40 @@ Deno.serve(async (req) => {
 
             const waData = await waRes.json();
             if (!waRes.ok) {
-                throw new Error(`WhatsApp API Error: ${JSON.stringify(waData)}`);
+                const errMsg = waData.error?.message || JSON.stringify(waData);
+                console.error(`[Deliver] WhatsApp API Error: ${errMsg}`);
+                throw new Error(`WhatsApp: ${errMsg}`);
             }
 
             return new Response(JSON.stringify({ ok: true, provider_response: waData }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+        }
+
+        if (channel === 'facebook') {
+            if (!fbToken || !fbUserId) {
+                throw new Error("Facebook configuration missing (page token or user id)");
+            }
+
+            console.log(`[Deliver] Enviando a Facebook Messenger (${fbUserId})`);
+
+            const fbRes = await fetch(`https://graph.facebook.com/v22.0/me/messages?access_token=${fbToken}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    recipient: { id: fbUserId },
+                    message: { text: content }
+                })
+            });
+
+            const fbData = await fbRes.json();
+            if (!fbRes.ok) {
+                const errMsg = fbData.error?.message || JSON.stringify(fbData);
+                console.error(`[Deliver] Facebook API Error: ${errMsg}`);
+                throw new Error(`Facebook: ${errMsg}`);
+            }
+
+            return new Response(JSON.stringify({ ok: true, provider_response: fbData }), {
                 headers: { ...corsHeaders, "Content-Type": "application/json" }
             });
         }

@@ -47,11 +47,6 @@ Deno.serve(async (req: Request) => {
         const { data: m } = await supabase.from("merchants").select("*").eq("id", merchantId).single();
         if (!m) throw new Error("Merchant not found");
 
-        // Verificar si AI está habilitada
-        if (m.ai_enabled === false) {
-            console.log(`[Webhook] IA desactivada para ${merchantId}`);
-            return new Response("ok", { headers: corsHeaders });
-        }
 
         // Obtener o crear cliente
         let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", merchantId).eq("telegram_user_id", telegramUserId).maybeSingle();
@@ -126,28 +121,46 @@ Deno.serve(async (req: Request) => {
             messages.shift();
         }
 
-        // Prompt simple
-        const systemPrompt = `Eres el asistente de ${m.name}. Personalidad: ${m.ai_personality || 'profesional'}.
+        // Obtener categorías únicas para el saludo
+        const categoriesList = [...new Set(products?.map((p: any) => p.category?.name || "Otros"))].join(", ");
 
-Reglas:
-- Usa precios exactos del catálogo
-- Haz sumas paso a paso
-- Usa **negrita** en nombres de productos
+        // Prompt de Sistema (Natural y Dinámico)
+        const systemPrompt = `Eres el asistente virtual de ${m.name}. 
+Personalidad: ${m.ai_personality || 'amable, servicial y eficiente'}.
 
-Catálogo:
+INSTRUCCIONES DE IDENTIDAD:
+${m.ai_system_prompt || 'Tu objetivo es ayudar al cliente a realizar un pedido de forma fluida.'}
+
+RESTRICCIONES:
+${m.ai_restrictions || 'No inventes productos que no estén en el catálogo.'}
+
+REGLAS DE INTERACCIÓN:
+1. **Flujo Natural**: NO uses etiquetas como "Ticket:", "Datos:" o "Validación:". Habla de forma humana y cercana.
+2. **Saludo**: En el primer mensaje, saluda, menciona brevemente las categorías (${categoriesList}) y pregunta qué desea el cliente.
+3. **Catálogo**: Muestra el menú completo SOLO si el cliente lo solicita:
 ${menu}
+4. **Cálculos**: Realiza los cálculos de forma precisa. Usa **negrita** para resaltar productos.
 
-Protocolo de Cierre (ESTRICTO):
-1. **Ticket**: Muestra el total y pregunta si es correcto.
-2. **Datos**: Pide Nombre, Dirección completa y Teléfono. (Obligatorios los 3).
-3. **Validación**: Repite los datos al cliente y pregunta "¿Esta información de envío es correcta?".
-4. **Finalizar**: SOLO tras el "Sí" del cliente, genera: [ORDER_CONFIRMED: {"customer_name":"...","address":"...","phone":"...","total":0}]`;
+PROTOCOLO DE CIERRE (PASO A PASO):
+- PASO A: Presenta un resumen del pedido con el total y pregunta si es correcto.
+- PASO B: Una vez confirmado el pedido, solicita Nombre, Dirección y Teléfono (de forma natural).
+- PASO C: Repite los datos al cliente para una confirmación final.
+- PASO D: Tras el "Sí" final, genera el código: [ORDER_CONFIRMED: {"customer_name":"...","address":"...","phone":"...","total":0}] e indica al cliente que su pedido ha sido registrado con éxito.`;
 
         // Agregar el mensaje actual
         messages.push({
             role: "user",
             parts: [{ text: messageText }]
         });
+
+        // VERIFICAR ESTADO DE IA (GLOBAL O POR CONVERSACIÓN)
+        const isGlobalDisabled = m.ai_enabled === false || String(m.ai_enabled) === 'false';
+        const isConvDisabled = conversation!.ai_active === false || String(conversation!.ai_active) === 'false';
+
+        if (isGlobalDisabled || isConvDisabled) {
+            console.log(`[Webhook] IA Silenciada para ${conversation!.id} (Global disabled: ${isGlobalDisabled}, Conv disabled: ${isConvDisabled})`);
+            return new Response("ok", { headers: corsHeaders });
+        }
 
         // Llamar a la IA (Gemini o OpenAI)
         let aiResponse = "";

@@ -519,3 +519,35 @@ input:checked+.slider:before {
 .mt-15 {
     margin-top: 15px;
 }
+
+/* New Master Toggle Style */
+.master-toggle {
+    border-top: 5px solid #10b981;
+}
+
+.master-toggle.inactive {
+    border-top: 5px solid #6b7280;
+}
+
+.title-with-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.badge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: #f3f4f6;
+    color: #6b7280;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    border: 1px solid #e5e7eb;
+}
+
+.badge.active {
+    background: #ecfdf5;
+    color: #059669;
+    border-color: #a7f3d0;
+}

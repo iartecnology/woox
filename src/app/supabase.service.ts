@@ -122,6 +122,30 @@ export class SupabaseService {
         return { data, error };
     }
 
+    async getMerchantByAnyId(idOrCode: string) {
+        if (!idOrCode) return { data: null, error: new Error('ID missing') };
+
+        // 1. Intentar por ID (UUID)
+        let { data, error } = await supabase
+            .from('merchants')
+            .select('*')
+            .eq('id', idOrCode)
+            .maybeSingle();
+
+        if (!data) {
+            // 2. Intentar por merchant_code
+            const { data: mc, error: mcErr } = await supabase
+                .from('merchants')
+                .select('*')
+                .eq('merchant_code', idOrCode)
+                .maybeSingle();
+            data = mc;
+            error = mcErr;
+        }
+
+        return { data, error };
+    }
+
     // --- COMERCIOS (MERCHANTS) ---
     async getMerchants() {
         const { data, error } = await supabase
@@ -279,6 +303,7 @@ export class SupabaseService {
                 merchant_id: merchantId,
                 customer_id: customerId,
                 platform: platform,
+                channel: platform, // Sincronizar channel con platform
                 status: 'open',
                 ai_active: true
             };
@@ -385,6 +410,8 @@ export class SupabaseService {
 
                     if (fetchErr) {
                         console.error('Error in deliver-message function:', fetchErr);
+                        // Retornamos el error de entrega para que el UI pueda reaccionar
+                        return { data: null, error: fetchErr };
                     } else {
                         console.log('Delivery result:', fetchRes);
                     }

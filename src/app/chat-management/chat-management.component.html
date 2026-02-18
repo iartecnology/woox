@@ -62,6 +62,17 @@
       </div>
 
       <div *ngIf="!isLoadingList">
+        <!-- Empty Simulator State -->
+        <div *ngIf="filteredConversations.length === 0 && selectedChannel === 'simulator'"
+          style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; color: #64748b; gap: 16px;">
+          <span style="font-size: 2rem;">🚀</span>
+          <p style="font-size: 0.85rem; font-weight: 600;">No hay chats de simulación activos.</p>
+          <button (click)="openSimulator()"
+            style="background: #7c3aed; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 700; cursor: pointer;">
+            Iniciar Nueva Prueba
+          </button>
+        </div>
+
         <div *ngFor="let conv of filteredConversations; trackBy: trackByConversationId" class="conversation-item"
           [class.active]="selectedConversation?.id === conv.id" [class.just-updated]="conv.justUpdated"
           (click)="selectConversation(conv)">
@@ -82,7 +93,8 @@
 
           <div style="display: flex; align-items: center; gap: 6px;">
             <span class="platform-indicator" [ngClass]="conv.channel">
-              {{ conv.channel }}
+              {{ (conv.channel === 'simulator' || conv.platform === 'simulator') ? 'Simulador' : (conv.channel |
+              titlecase) }}
             </span>
             <p
               style="margin: 0; font-size: 0.85rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;">
@@ -115,7 +127,9 @@
           <div class="customer-details">
             <h3 class="customer-name">{{ selectedConversation.customer_name }}</h3>
             <span class="customer-status">
-              {{ selectedConversation.channel | titlecase }} • {{ selectedConversation.status | uppercase }}
+              {{ (selectedConversation.channel === 'simulator' || selectedConversation.platform === 'simulator') ?
+              'Simulador' : (selectedConversation.channel | titlecase) }} • {{ selectedConversation.status | uppercase
+              }}
               <button *ngIf="!selectedConversation.assigned_agent_id" (click)="claimConversation()"
                 style="margin-left: 8px; font-size: 0.65rem; background: #7c3aed; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: 700;">
                 Tomar control
@@ -128,7 +142,7 @@
           <div class="ai-banner">
             <span class="ai-label">🤖 IA Activa</span>
             <label class="switch">
-              <input type="checkbox" [checked]="selectedConversation.ai_active" (change)="toggleAI()">
+              <input type="checkbox" [checked]="selectedConversation.ai_active !== false" (change)="toggleAI()">
               <span class="slider"></span>
             </label>
           </div>
@@ -151,6 +165,9 @@
         <div *ngIf="isAgentTyping" style="font-size: 0.75rem; color: #64748b; padding: 10px; font-style: italic;">
           {{ typingAgentName }} está escribiendo... ✍️
         </div>
+
+        <!-- Ancla para scroll automático -->
+        <div #scrollAnchor style="height: 1px; width: 100%;"></div>
       </div>
 
       <footer class="chat-footer" [class.internal-mode]="isInternalNote">
@@ -181,10 +198,10 @@
 
     <ng-template #noChat>
       <div
-        style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f0fdf4; color: #059669;">
-        <div style="font-size: 5rem; margin-bottom: 24px; opacity: 0.3;">💬</div>
-        <h2 style="font-weight: 800;">Selecciona un chat</h2>
-        <p>Tu centro de atención omnicanal está listo.</p>
+        style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffffff; color: #000000;">
+        <div style="font-size: 5rem; margin-bottom: 24px; opacity: 0.1;">💬</div>
+        <h2 style="font-weight: 800; color: #000000; margin-bottom: 8px;">Selecciona un chat</h2>
+        <p style="color: #000000; font-weight: 500;">Tu centro de atención omnicanal está listo.</p>
         <button (click)="openSimulator()" class="btn-primary"
           style="margin-top: 16px; padding: 12px 24px; border-radius: 12px; border: none; color: white; font-weight: 700; cursor: pointer;">Abrir
           Simulador</button>
@@ -273,7 +290,8 @@
   [logoUrl]="merchantData.logo_url || ''" [primaryColor]="merchantData.primary_color || '#10b981'"
   [aiProvider]="merchantData.ai_provider || 'google_gemini'" [aiApiKey]="merchantData.ai_api_key || ''"
   [aiModel]="merchantData.ai_model || ''" [aiWelcomeMessage]="merchantData.ai_welcome_message || ''"
-  [context]="getConsolidatedPrompt()" (onClose)="showSimulator = false; loadConversations()">
+  [aiEnabled]="merchantData.ai_enabled" [context]="getConsolidatedPrompt()"
+  (onClose)="showSimulator = false; loadConversations()">
 </app-chat-simulator>
 
 <!-- MODAL DE CREACIÓN DE PEDIDO -->
