@@ -118,8 +118,14 @@ export class OrderManagementComponent implements OnInit {
     constructor() { }
 
     async ngOnInit() {
-        this.merchantId = localStorage.getItem('active_merchant_id') || '';
+        this.merchantId = localStorage.getItem('active_merchant_id') || localStorage.getItem('merchant_id') || '';
         if (this.merchantId) {
+            // Normalizar ID
+            const { data: m } = await this.supabaseService.getMerchantByAnyId(this.merchantId);
+            if (m && m.id !== this.merchantId) {
+                console.log('🔄 [OrderManagement] Normalizando Merchant ID de', this.merchantId, 'a', m.id);
+                this.merchantId = m.id;
+            }
             await this.loadOrders();
         }
     }
@@ -136,14 +142,14 @@ export class OrderManagementComponent implements OnInit {
                 this.orders = data.map((o: any) => ({
                     uuid: o.id,
                     id: '#' + String(o.order_number || 0).padStart(3, '0'),
-                    customer_name: o.customers?.full_name || 'Cliente sin nombre',
+                    customer_name: o.customers?.full_name || o.customer_name || 'Cliente sin nombre',
                     channel: o.channel || 'web',
                     total: o.total,
                     status: o.status,
                     created_at: new Date(o.created_at),
                     delivery_address: o.delivery_address || 'Sin dirección',
                     items: o.order_items.map((item: any) => ({
-                        product_name: item.products?.name || 'Producto eliminado',
+                        product_name: item.product_name || item.products?.name || 'Producto',
                         quantity: item.quantity,
                         unit_price: item.unit_price
                     }))

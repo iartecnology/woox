@@ -690,7 +690,37 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
         }
       }
 
-      // 3. DETERMINAR TIPO DE MENSAJE Y LIMPIEZA
+      // 3. DETECTAR CIERRE DE PEDIDO (IA -> Sistema)
+      const orderConfirmedRegex = /\[ORDER_CONFIRMED:\s*(\{[\s\S]*?\})\s*\]/gi;
+      let orderMatch;
+      while ((orderMatch = orderConfirmedRegex.exec(aiText)) !== null) {
+        try {
+          const orderDataStr = orderMatch[1];
+          let orderData: any;
+          try {
+            orderData = JSON.parse(orderDataStr);
+          } catch (e) {
+            // Fallback simple por si el JSON está mal formado
+            const nameMatch = orderDataStr.match(/"customer_name":\s*"(.*?)"/i);
+            const addrMatch = orderDataStr.match(/"address":\s*"(.*?)"/i);
+            const phoneMatch = orderDataStr.match(/"phone":\s*"(.*?)"/i);
+            const totalMatch = orderDataStr.match(/"total":\s*(\d+(\.\d+)?)/i);
+            orderData = {
+              customer_name: nameMatch ? nameMatch[1] : null,
+              address: addrMatch ? addrMatch[1] : null,
+              phone: phoneMatch ? phoneMatch[1] : null,
+              total: totalMatch ? parseFloat(totalMatch[1]) : 0
+            };
+          }
+          console.log('🏁 Pedido confirmado por IA con metadatos:', orderData);
+          await this.confirmOrder(true, orderData);
+          aiText = aiText.replace(orderMatch[0], '');
+        } catch (e) {
+          console.error("Error procesando ORDER_CONFIRMED:", e);
+        }
+      }
+
+      // 4. DETERMINAR TIPO DE MENSAJE Y LIMPIEZA
       let messageType: 'text' | 'order_summary' = 'text';
 
       // Si hubo cambios en el carrito O la IA lo pide explícitamente, mostrar resumen
@@ -810,14 +840,90 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  confirmOrder() {
-    this.messages.push({
-      sender: 'ai',
-      text: '✅ ¡Excelente elección! Tu pedido ha sido confirmado y enviado a cocina. El tiempo estimado de entrega es de 30-45 minutos.',
-      time: new Date()
-    });
+  async confirmOrder(fromAI: boolean = false, aiMetadata?: any) {
+    // Escenario de seguridad: Si no tenemos UUID, intentar normalizarlo localmente
+    if (this.merchantId && !this.merchantId.includes('-')) {
+      console.log('🔄 [Simulator] Detectado Merchant ID tipo slug, normalizando...');
+      const { data: m } = await this.supabaseService.getMerchantByAnyId(this.merchantId);
+      if (m) this.merchantId = m.id;
+    }
 
-    // Marcar como confirmado en el monitor
+    console.log('📝 Intentando confirmar pedido. FromAI:', fromAI, 'MerchantId:', this.merchantId);
+
+    // Si el carrito está vacío pero la IA confirmó un total, crear un ítem virtual
+    if (this.cart.length === 0 && aiMetadata?.total > 0) {
+      console.log('📦 [Simulator] Carrito vacío pero hay total de IA, creando ítem genérico');
+      this.cart.push({
+        id: 'gen-' + Date.now().toString(),
+        name: 'Pedido Confirmado via Chat',
+        price: Number(aiMetadata.total),
+        quantity: 1
+      });
+    }
+
+    if (!fromAI) {
+      this.messages.push({
+        sender: 'ai',
+        text: '✅ ¡Excelente elección! Tu pedido ha sido confirmado y enviado a cocina. El tiempo estimado de entrega es de 30-45 minutos.',
+        time: new Date()
+      });
+    }
+
+    // 1. Crear el pedido en Supabase para que aparezca en el Order Management
+    if (this.cart.length > 0) {
+      if (!this.merchantId) {
+        console.error('❌ Error: No se puede crear el pedido porque MerchantId está vacío.');
+        return;
+      }
+
+      try {
+        const orderData = {
+          merchant_id: this.merchantId,
+          customer_id: null,
+          conversation_id: this.dbConversationId,
+          total: Number(aiMetadata?.total) || this.cartTotal,
+          status: 'pending',
+          channel: 'simulator',
+          closing_agent_type: fromAI ? 'ai' : 'human',
+          // Usar datos del AI si vienen, si no usar valores por defecto del simulador
+          customer_name: aiMetadata?.customer_name || this.customerName,
+          delivery_address: aiMetadata?.address || 'Recogida en local (Simulador)',
+          customer_phone: aiMetadata?.phone || null
+        };
+
+        const { data: newOrder, error } = await this.supabaseService.createOrder(orderData);
+        if (error) {
+          console.error('❌ Error al crear pedido:', error);
+          throw error;
+        }
+
+        if (newOrder) {
+          const orderNum = newOrder.order_number ? '#' + String(newOrder.order_number).padStart(3, '0') : newOrder.id.substring(0, 8);
+          this.messages.push({
+            sender: 'ai',
+            text: `✅ ¡Pedido confirmado! Tu número de pedido es **${orderNum}**. Ya lo puedes ver en la sección de gestión.`,
+            time: new Date()
+          });
+          console.log('✅ Pedido creado con ID:', newOrder.id);
+
+          const items = this.cart.map(item => ({
+            order_id: newOrder.id,
+            product_id: (item.id && item.id.length > 20) ? item.id : null, // Solo si es UUID
+            product_name: item.name, // Guardar el nombre para que el detalle sea visible
+            quantity: item.quantity,
+            unit_price: item.price,
+            subtotal: item.price * item.quantity
+          }));
+
+          const { error: itemsError } = await this.supabaseService.createOrderItems(items);
+          if (itemsError) console.error('❌ Error al crear items:', itemsError);
+        }
+      } catch (err) {
+        console.error('❌ Excepción en confirmOrder:', err);
+      }
+    }
+
+    // Marcar como confirmado en el monitor (Legacy/Live)
     this.liveOrderService.updateLiveCart({
       id: this.sessionId,
       merchantId: this.merchantId,
@@ -830,6 +936,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
     this.cart = [];
     this.cdr.detectChanges();
+    this.scrollToBottom();
   }
 
   quickAction(text: string) {
@@ -867,6 +974,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
     // 5. Limpieza agresiva de etiquetas técnicas e internas (Case Insensitive)
     formatted = formatted.replace(/\[UPDATE_CART:.*?\]/gi, '');
     formatted = formatted.replace(/\[PRODUCT:.*?\]/gi, '');
+    formatted = formatted.replace(/\[ORDER_CONFIRMED:[\s\S]*?\}\s*\]/gi, '');
     formatted = formatted.replace(/\[SHOW_SUMMARY\]/gi, '');
     formatted = formatted.replace(/\[IMAGE_URL:.*?\]/gi, '');
     formatted = formatted.replace(/\(INTERNO:.*?\)/gi, "");

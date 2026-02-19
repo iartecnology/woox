@@ -156,9 +156,14 @@ export class AiConfigComponent implements OnInit {
     }
 
     async loadConfig() {
-        const { data, error } = await this.supabaseService.getMerchantById(this.merchantId);
-        if (data) {
-            this.merchantConfig = data;
+        const { data: m, error } = await this.supabaseService.getMerchantByAnyId(this.merchantId);
+        if (m) {
+            this.merchantConfig = m;
+            // Normalizar el ID a UUID si era un código
+            if (m.id !== this.merchantId) {
+                console.log('🔄 [AiConfig] Normalizando Merchant ID de', this.merchantId, 'a', m.id);
+                this.merchantId = m.id;
+            }
         }
     }
 
