@@ -86,8 +86,15 @@ export class SupabaseService {
         localStorage.setItem('notification_sound', String(newValue));
     }
 
+    private lastSoundPlayedAt = 0;
+
     playSound() {
         if (!this.isSoundEnabled()) return;
+
+        const now = Date.now();
+        if (now - this.lastSoundPlayedAt < 1000) return; // Cooldown de 1 segundo
+
+        this.lastSoundPlayedAt = now;
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
         audio.play().catch(err => console.warn('Error playing notification sound:', err));
     }

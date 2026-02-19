@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, inject, ChangeDetectorRef } from '@angula
 import { CommonModule } from '@angular/common';
 import { SupabaseService } from '../supabase.service';
 import { NotificationService } from '../notification.service';
-import { Subscription } from 'rxjs';
+import { FormsModule } from '@angular/forms';
 import {
     DragDropModule,
     CdkDragDrop,
@@ -32,7 +32,7 @@ interface Order {
 @Component({
     selector: 'app-order-management',
     standalone: true,
-    imports: [CommonModule, DragDropModule],
+    imports: [CommonModule, DragDropModule, FormsModule],
     templateUrl: './order-management.component.html',
     styleUrl: './order-management.component.css'
 })
@@ -41,31 +41,65 @@ export class OrderManagementComponent implements OnInit {
     selectedOrder: Order | null = null;
     merchantId: string = '';
     isLoading: boolean = false;
-    viewMode: 'kanban' | 'list' = 'kanban';
+    viewMode: 'kanban' | 'list' = (localStorage.getItem('order_view_mode') as 'kanban' | 'list') || 'list';
+
+    // Búsqueda y Filtros
+    searchTerm: string = '';
+    selectedStatus: string = 'all';
 
     // Paginación
     currentPage: number = 1;
     itemsPerPage: number = 10;
 
+    get filteredOrders() {
+        let filtered = this.orders;
+
+        if (this.selectedStatus !== 'all') {
+            filtered = filtered.filter(o => o.status === this.selectedStatus);
+        }
+
+        if (this.searchTerm) {
+            const query = this.searchTerm.toLowerCase();
+            filtered = filtered.filter(o =>
+                o.id.toLowerCase().includes(query) ||
+                o.customer_name.toLowerCase().includes(query)
+            );
+        }
+
+        return filtered;
+    }
+
     get paginatedOrders() {
         const start = (this.currentPage - 1) * this.itemsPerPage;
-        return this.orders.slice(start, start + this.itemsPerPage);
+        return this.filteredOrders.slice(start, start + this.itemsPerPage);
     }
 
     get totalPages() {
-        return Math.ceil(this.orders.length / this.itemsPerPage);
+        return Math.ceil(this.filteredOrders.length / this.itemsPerPage);
     }
 
-    nextPage() {
-        if (this.currentPage < this.totalPages) {
-            this.currentPage++;
-        }
+    get statusCounts() {
+        return {
+            all: this.orders.length,
+            pending: this.orders.filter(o => o.status === 'pending').length,
+            cooking: this.orders.filter(o => o.status === 'cooking').length,
+            ready: this.orders.filter(o => o.status === 'ready').length,
+            delivered: this.orders.filter(o => o.status === 'delivered').length,
+            cancelled: this.orders.filter(o => o.status === 'cancelled').length
+        };
     }
 
-    prevPage() {
-        if (this.currentPage > 1) {
-            this.currentPage--;
-        }
+    onSearch() {
+        this.currentPage = 1;
+    }
+
+    setStatusFilter(status: string) {
+        this.selectedStatus = status;
+        this.currentPage = 1;
+    }
+
+    get pagesArray(): number[] {
+        return Array.from({ length: this.totalPages }, (_, i) => i + 1);
     }
 
     setPage(page: number) {
@@ -73,6 +107,8 @@ export class OrderManagementComponent implements OnInit {
             this.currentPage = page;
         }
     }
+
+    Math = Math;
 
     private cdr = inject(ChangeDetectorRef);
 
@@ -99,7 +135,7 @@ export class OrderManagementComponent implements OnInit {
 
                 this.orders = data.map((o: any) => ({
                     uuid: o.id,
-                    id: o.id.substring(0, 8).toUpperCase(),
+                    id: '#' + String(o.order_number || 0).padStart(3, '0'),
                     customer_name: o.customers?.full_name || 'Cliente sin nombre',
                     channel: o.channel || 'web',
                     total: o.total,
@@ -126,12 +162,24 @@ export class OrderManagementComponent implements OnInit {
         }
     }
 
+    get ordersBySearch() {
+        if (!this.searchTerm) return this.orders;
+        const query = this.searchTerm.toLowerCase();
+        return this.orders.filter(o =>
+            o.id.toLowerCase().includes(query) ||
+            o.customer_name.toLowerCase().includes(query)
+        );
+    }
+
     get ordersByStatus() {
+        const source = this.ordersBySearch;
         return {
-            pending: this.orders.filter(o => o.status === 'pending'),
-            cooking: this.orders.filter(o => o.status === 'cooking'),
-            ready: this.orders.filter(o => o.status === 'ready'),
-            delivered: this.orders.filter(o => o.status === 'delivered')
+            all: source.length,
+            pending: source.filter(o => o.status === 'pending'),
+            cooking: source.filter(o => o.status === 'cooking'),
+            ready: source.filter(o => o.status === 'ready'),
+            delivered: source.filter(o => o.status === 'delivered'),
+            cancelled: source.filter(o => o.status === 'cancelled')
         };
     }
 
@@ -228,5 +276,6 @@ export class OrderManagementComponent implements OnInit {
 
     toggleView(mode: 'kanban' | 'list') {
         this.viewMode = mode;
+        localStorage.setItem('order_view_mode', mode);
     }
 }

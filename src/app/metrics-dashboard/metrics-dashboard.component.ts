@@ -179,7 +179,7 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
         const { data } = await this.supabaseService.getOrders(this.merchantId);
         if (data) {
             this.allOrders = data.map((o: any) => ({
-                id: o.id.substring(0, 8).toUpperCase(),
+                id: '#' + String(o.order_number || 0).padStart(3, '0'),
                 customer: o.customers?.full_name || 'Cliente Anon',
                 total: o.total,
                 status: o.status,

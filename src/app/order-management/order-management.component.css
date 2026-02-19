@@ -608,3 +608,110 @@
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+.quick-action-btn:hover:not(:disabled) {
+    background: #10b981 !important;
+    color: white !important;
+    transform: scale(1.05);
+}
+
+.quick-action-btn:active {
+    transform: scale(0.95);
+}
+
+/* Styled Header & Tabs */
+.status-tab-styled {
+    border: none;
+    background: transparent;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #6B7280;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-tab-styled:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.status-tab-styled.active {
+    background: #4F46E5;
+    color: white;
+}
+
+.tab-count-styled {
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.status-tab-styled.active .tab-count-styled {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.status-tab-styled:not(.active) .tab-count-styled {
+    background: #f3f4f6;
+    color: #6B7280;
+}
+
+/* Toggle Buttons Styled */
+.toggle-btn-styled {
+    border: none;
+    background: transparent;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #6B7280;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.toggle-btn-styled.active {
+    background: white;
+    color: #4F46E5;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Search Box Styled */
+.search-box-styled input:focus {
+    border-color: #4F46E5 !important;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* Pagination Buttons Styled */
+.page-btn-styled.num-btn-styled.active {
+    background: #4F46E5 !important;
+    color: white !important;
+    border-color: #4F46E5 !important;
+}
+
+.page-btn-styled:hover:not(:disabled):not(.active) {
+    background: #f9fafb !important;
+    border-color: #d1d5db !important;
+}
+
+/* Mini Spinner */
+.mini-spinner-styled {
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f4f6;
+    border-top: 3px solid #10b981;
+    border-radius: 50%;
+    animation: spin-styled 1s linear infinite;
+}
+
+@keyframes spin-styled {
+    to {
+        transform: rotate(360deg);
+    }
+}

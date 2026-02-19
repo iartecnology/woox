@@ -77,9 +77,10 @@ export class App {
       this.merchantSubscription = this.supabaseService.subscribeToMerchantConversations(merchantId, async (payload) => {
         await this.supabaseService.refreshGlobalUnreadCount(merchantId);
 
-        // Play sound ONLY if unread_count increased (indicates a new customer message)
-        const isNewCustomerMessage = payload.eventType === 'UPDATE' &&
-          payload.new.unread_count > (payload.old?.unread_count || 0);
+        // Play sound if unread_count increased OR it's a NEW conversation with unread messages
+        const isNewCustomerMessage =
+          (payload.eventType === 'UPDATE' && payload.new.unread_count > (payload.old?.unread_count || 0)) ||
+          (payload.eventType === 'INSERT' && payload.new.unread_count > 0);
 
         if (isNewCustomerMessage) {
           this.supabaseService.playSound();

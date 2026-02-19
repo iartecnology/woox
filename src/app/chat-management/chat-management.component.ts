@@ -200,8 +200,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
                     // Notificaciones, Sonido y REFRESO INMEDIATO
                     if (eventType === 'INSERT' || (eventType === 'UPDATE' && payload.new.last_message_at !== payload.old?.last_message_at)) {
-                        this.supabaseService.playSound();
-                        console.log('Realtime: Sonido ejecutado, refrescando lista de inmediato...');
+                        console.log('Realtime: Evento de mensaje detectado, refrescando lista...');
 
                         // Refrescar lista al mismo tiempo que el sonido para respuesta instantánea
                         await this.loadConversations(true);
