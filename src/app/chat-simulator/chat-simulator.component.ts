@@ -5,6 +5,7 @@ import { SupabaseService } from '../supabase.service';
 import { LiveOrderService } from '../live-order.service';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { inject } from '@angular/core';
+import { NotificationService } from '../notification.service';
 
 interface Message {
   sender: 'user' | 'ai';
@@ -369,6 +370,11 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
   @Output() onClose = new EventEmitter<void>();
 
   private liveOrderService = inject(LiveOrderService);
+  private supabaseService = inject(SupabaseService);
+  private notificationService = inject(NotificationService);
+  private cdr = inject(ChangeDetectorRef);
+  private sanitizer = inject(DomSanitizer);
+
   sessionId: string = 'W-' + Math.random().toString(36).substring(2, 9).toUpperCase();
   customerName: string = 'Simulador';
   dbConversationId: string | null = null;
@@ -384,11 +390,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
     return this.cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   }
 
-  constructor(
-    private supabaseService: SupabaseService,
-    private cdr: ChangeDetectorRef,
-    private sanitizer: DomSanitizer
-  ) { }
+  constructor() { }
 
   async ngOnInit() {
     let greeting = this.aiWelcomeMessage || `¡Hola! Soy el asistente virtual de ${this.merchantName}. ¿En qué puedo ayudarte hoy?`;
@@ -515,13 +517,15 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
       // Nudge de precisión técnica
       systemNudge += `
-(PROTOCOLO TÉCNICO CRÍTICO: 
-1. Si el usuario PIDE EXPLÍCITAMENTE (ej: "Añade eso", "Quiero uno", "Pide una...") un producto, incluye [UPDATE_CART:{"name":"...","price":0,"quantity":1}] al final. 
-2. Si SOLO RECOMIENDAS o el usuario PREGUNTA por algo, usa [PRODUCT:{"name":"...","price":0,"description":"..."}] para mostrar una tarjeta visual, pero NUNCA uses [UPDATE_CART] a menos que el cliente lo confirme.
-3. Si el usuario termina o pide el resumen, incluye [SHOW_SUMMARY].
-4. El total actual del carrito es $${this.cartTotal.toFixed(2)}. 
-   - SI EL TOTAL ES $0.00, ¡NO LO MENCIONES! en el saludo ni en respuestas iniciales.
-   - Si el total es mayor a 0 y lo mencionas, ¡NO CALCULES!, usa ese valor exacto.)`;
+(PROTOCOLO TÉCNICO CRÍTICO - INSTRUCCIONES OBLIGATORIAS: 
+1. Si el usuario PIDE EXPLÍCITAMENTE un producto, usa [UPDATE_CART:{"name":"...","price":0,"quantity":1}]. 
+2. Si SOLO RECOMIENDAS o el usuario PREGUNTA, usa [PRODUCT:{"name":"...","price":0,"description":"..."}].
+3. Si el usuario termina o pide el resumen, usa [SHOW_SUMMARY].
+4. CUANDO EL USUARIO CONFIRME QUE TODO ESTÁ CORRECTO y ya tengas su Nombre, Dirección y Teléfono, DEBES incluir al final de tu respuesta el comando: [ORDER_CONFIRMED:{"customer_name":"...","address":"...","phone":"...","total":...}]
+   - Ejemplo: "¡Excelente! Tu pedido ha sido registrado. [ORDER_CONFIRMED:{\"customer_name\":\"Juan\",\"address\":\"Calle 123\",\"phone\":\"300123\",\"total\":15000}]"
+5. El total actual del carrito es $${this.cartTotal.toFixed(2)}. 
+   - SI EL TOTAL ES $0.00, NO LO MENCIONES.
+   - Si es mayor a 0, usa ese valor exacto, no inventes otro.)`;
 
       // 1. OBTENER PROMPT MAESTRO (Cerebro Central Agente 2.0)
       const { data: compiledPrompt } = await this.supabaseService.rpc('get_compiled_prompt', {
@@ -691,20 +695,23 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       }
 
       // 3. DETECTAR CIERRE DE PEDIDO (IA -> Sistema)
-      const orderConfirmedRegex = /\[ORDER_CONFIRMED:\s*(\{[\s\S]*?\})\s*\]/gi;
+      const orderConfirmedRegex = /\[ORDER_CONFIRMED\s*:\s*(\{[\s\S]*?\})\s*\]/gi;
       let orderMatch;
       while ((orderMatch = orderConfirmedRegex.exec(aiText)) !== null) {
         try {
           const orderDataStr = orderMatch[1];
           let orderData: any;
+
           try {
-            orderData = JSON.parse(orderDataStr);
+            // Limpieza previa del JSON por si la IA añade comentarios o basura
+            const cleanJson = orderDataStr.trim().replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+            orderData = JSON.parse(cleanJson);
           } catch (e) {
-            // Fallback simple por si el JSON está mal formado
-            const nameMatch = orderDataStr.match(/"customer_name":\s*"(.*?)"/i);
-            const addrMatch = orderDataStr.match(/"address":\s*"(.*?)"/i);
-            const phoneMatch = orderDataStr.match(/"phone":\s*"(.*?)"/i);
-            const totalMatch = orderDataStr.match(/"total":\s*(\d+(\.\d+)?)/i);
+            console.warn('⚠️ Fallback de extracción manual para ORDER_CONFIRMED');
+            const nameMatch = orderDataStr.match(/"?customer_name"?\s*:\s*"(.*?)"/i);
+            const addrMatch = orderDataStr.match(/"?address"?\s*:\s*"(.*?)"/i);
+            const phoneMatch = orderDataStr.match(/"?phone"?\s*:\s*"(.*?)"/i);
+            const totalMatch = orderDataStr.match(/"?total"?\s*:\s*(\d+(\.\d+)?)/i);
             orderData = {
               customer_name: nameMatch ? nameMatch[1] : null,
               address: addrMatch ? addrMatch[1] : null,
@@ -712,9 +719,12 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
               total: totalMatch ? parseFloat(totalMatch[1]) : 0
             };
           }
-          console.log('🏁 Pedido confirmado por IA con metadatos:', orderData);
-          await this.confirmOrder(true, orderData);
-          aiText = aiText.replace(orderMatch[0], '');
+
+          if (orderData.customer_name || orderData.address) {
+            console.log('🏁 Pedido Detectado:', orderData);
+            await this.confirmOrder(true, orderData);
+            aiText = aiText.replace(orderMatch[0], '');
+          }
         } catch (e) {
           console.error("Error procesando ORDER_CONFIRMED:", e);
         }
@@ -908,18 +918,27 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
           const items = this.cart.map(item => ({
             order_id: newOrder.id,
-            product_id: (item.id && item.id.length > 20) ? item.id : null, // Solo si es UUID
-            product_name: item.name, // Guardar el nombre para que el detalle sea visible
-            quantity: item.quantity,
-            unit_price: item.price,
-            subtotal: item.price * item.quantity
+            product_id: (item.id && String(item.id).length > 20) ? item.id : null,
+            product_name: String(item.name || 'Sin nombre'),
+            quantity: Number(item.quantity) || 1,
+            unit_price: Number(item.price) || 0,
+            subtotal: Number(Number(item.price) * Number(item.quantity)) || 0
           }));
 
+          console.log('📦 Guardando ítems del pedido:', items);
           const { error: itemsError } = await this.supabaseService.createOrderItems(items);
-          if (itemsError) console.error('❌ Error al crear items:', itemsError);
+
+          if (itemsError) {
+            console.error('❌ Error fatal al crear ítems:', itemsError);
+            this.notificationService.show('Advertencia: Pedido creado pero falló el registro de productos: ' + (itemsError.message || 'Error de DB'), 'error');
+          } else {
+            console.log('✅ Pedido e ítems registrados correctamente');
+            this.notificationService.show('¡Pedido y productos registrados con éxito!', 'success');
+          }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('❌ Excepción en confirmOrder:', err);
+        this.notificationService.show('Fallo crítico al crear pedido: ' + err.message, 'error');
       }
     }
 

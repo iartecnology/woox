@@ -150,6 +150,13 @@
                                         (click)="goToCatalog(m)">🍔</button>
                                     <button class="config-icon-btn biolink" title="Configurar BioLink (Linktree)"
                                         (click)="openBiolinkConfig(m)">🔗</button>
+                                    <div class="btn-divider"></div>
+                                    <button class="config-icon-btn purge"
+                                        title="Limpiar todos los pedidos de este comercio"
+                                        (click)="clearMerchantOrders(m)">🧹</button>
+                                    <button class="config-icon-btn delete-merchant"
+                                        title="ELIMINAR ESTE COMERCIO PERMANENTEMENTE"
+                                        (click)="confirmDeleteMerchant(m)">🗑️</button>
                                 </div>
                             </td>
                         </tr>
@@ -365,23 +372,33 @@
                 <small *ngIf="supabaseStatus === 'none'">La clave pública (anon key) de tu proyecto.</small>
             </div>
 
-            <!-- Alerta de Inicialización (Base de datos vacía) -->
-            <div class="init-alert-box full-width" *ngIf="dbNeedsInitialization"
-                style="background: #fffbeb; border: 1px solid #fde68a; padding: 20px; border-radius: 16px; margin-top: 10px; animation: slideDown 0.3s ease-out;">
+            <!-- Alerta de Inicialización / Actualización -->
+            <div class="init-alert-box full-width" *ngIf="supabaseStatus === 'success'"
+                style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 16px; margin-top: 10px; animation: slideDown 0.3s ease-out;">
                 <div style="display: flex; gap: 16px; align-items: flex-start;">
-                    <div style="font-size: 2rem;">🚧</div>
+                    <div style="font-size: 2rem;">{{ dbNeedsInitialization ? '🚧' : '🆙' }}</div>
                     <div style="flex: 1;">
-                        <div style="font-weight: 800; color: #92400e; font-size: 1.1rem; margin-bottom: 6px;">
-                            ¡Conexión OK, pero Base de Datos Vacía!
+                        <div style="font-weight: 800; color: #166534; font-size: 1.1rem; margin-bottom: 6px;">
+                            {{ dbNeedsInitialization ? '¡Conexión OK, pero Base de Datos Vacía!' : 'Actualizar Base de
+                            Datos' }}
                         </div>
-                        <p style="font-size: 0.9rem; color: #b45309; line-height: 1.5; margin: 0;">
-                            Hemos detectado que tu proyecto en Supabase no tiene las tablas de Woox.
-                            ¿Deseas inicializarla ahora con el esquema oficial?
+                        <p style="font-size: 0.9rem; color: #15803d; line-height: 1.5; margin: 0;">
+                            {{ dbNeedsInitialization ?
+                            'Hemos detectado que tu proyecto en Supabase no tiene las tablas de Woox. ¿Deseas
+                            inicializarla ahora?' :
+                            '¿Has realizado cambios en el código o necesitas aplicar la última actualización de tablas?
+                            Pulsa aquí para obtener el script.' }}
                         </p>
-                        <button (click)="copyInitSql()"
-                            style="margin-top: 16px; background: #d97706; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3); transition: all 0.2s;">
-                            🚀 Copiar Script SQL & Abrir Editor
-                        </button>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button (click)="copyInitSql()"
+                                style="margin-top: 16px; background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); transition: all 0.2s;">
+                                🚀 Copiar Script SQL & Abrir Editor
+                            </button>
+                            <button (click)="runTestOrderInsertion()"
+                                style="margin-top: 16px; background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); transition: all 0.2s;">
+                                🧪 Prueba Técnica: Insertar Pedido
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1592,6 +1609,29 @@
 
         <div class="modal-actions" style="margin-top: 24px;">
             <button class="cancel-btn" (click)="showTeamManager = false" style="width: 100%;">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE CONFIRMACIÓN DE ACCIONES CRÍTICAS (ESTILO PREMIUM) -->
+<div class="delete-modal-overlay" *ngIf="showDeleteConfirmModal" (click)="cancelDeleteAction()">
+    <div class="delete-confirmation-dialog" (click)="$event.stopPropagation()">
+        <div class="delete-icon-wrapper" [class.danger]="deleteModalConfig.icon === '🚨'">
+            {{ deleteModalConfig.icon }}
+        </div>
+        <h3>{{ deleteModalConfig.title }}</h3>
+        <p>{{ deleteModalConfig.message }}</p>
+
+        <div class="delete-dialog-actions">
+            <button class="dialog-cancel-btn" (click)="cancelDeleteAction()"
+                [disabled]="deleteModalConfig.isProcessing">
+                Cancelar
+            </button>
+            <button class="dialog-confirm-btn" (click)="deleteModalConfig.action()"
+                [disabled]="deleteModalConfig.isProcessing">
+                <span *ngIf="!deleteModalConfig.isProcessing">{{ deleteModalConfig.confirmLabel }}</span>
+                <span *ngIf="deleteModalConfig.isProcessing">⌛ Procesando...</span>
+            </button>
         </div>
     </div>
 </div>

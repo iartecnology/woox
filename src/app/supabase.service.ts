@@ -179,6 +179,10 @@ export class SupabaseService {
         return { data, error };
     }
 
+    async deleteMerchant(id: string) {
+        return await supabase.from('merchants').delete().eq('id', id);
+    }
+
     async checkMerchantCodeAvailability(code: string, excludeId?: string) {
         let query = supabase
             .from('merchants')
@@ -244,7 +248,7 @@ export class SupabaseService {
     async getOrders(merchantId: string) {
         const { data, error } = await supabase
             .from('orders')
-            .select('*, customers(full_name), order_items(*, products(name))')
+            .select('*, customers(full_name), items:order_items(*, products(name, id))')
             .eq('merchant_id', merchantId)
             .order('created_at', { ascending: false });
         return { data, error };
@@ -255,19 +259,55 @@ export class SupabaseService {
     }
 
     async createOrder(orderData: any) {
+        console.log('🚀 [SupabaseService] Creando pedido en DB...', orderData);
         const { data, error } = await supabase
             .from('orders')
             .insert(orderData)
-            .select()
-            .single();
-        return { data, error };
+            .select();
+
+        if (error) {
+            console.error('❌ [SupabaseService] Error creando pedido:', error);
+            return { data: null, error };
+        }
+
+        const newOrder = data && data.length > 0 ? data[0] : null;
+        console.log('✅ [SupabaseService] Pedido maestro creado:', newOrder?.id);
+        return { data: newOrder, error: null };
+    }
+
+    async deleteOrder(orderId: string) {
+        return await supabase.from('orders').delete().eq('id', orderId);
+    }
+
+    async deleteAllOrders(merchantId: string) {
+        return await supabase.from('orders').delete().eq('merchant_id', merchantId);
     }
 
     async createOrderItems(items: any[]) {
-        const { data, error } = await supabase
-            .from('order_items')
-            .insert(items);
-        return { data, error };
+        try {
+            const cleanItems = items.map(it => ({
+                order_id: it.order_id,
+                product_id: it.product_id,
+                product_name: String(it.product_name || 'Producto'),
+                quantity: Number(it.quantity) || 0,
+                unit_price: Number(it.unit_price) || 0,
+                subtotal: Number(it.subtotal) || 0
+            }));
+
+            const { data, error } = await supabase
+                .from('order_items')
+                .insert(cleanItems)
+                .select();
+
+            if (error) {
+                console.error('❌ Error de Supabase al insertar ítems:', error);
+                return { data: null, error };
+            }
+            return { data, error: null };
+        } catch (e: any) {
+            console.error('❌ Excepción crítica al insertar ítems:', e);
+            return { data: null, error: e };
+        }
     }
 
     // --- MÉTRICAS ---
@@ -597,6 +637,26 @@ export class SupabaseService {
             .from('orders')
             .update({ conversation_id: null })
             .eq('merchant_id', merchantId);
+    }
+
+    subscribeToOrders(merchantId: string, callback: () => void) {
+        console.log('📡 [SupabaseService] Suscribiendo a cambios de pedidos para:', merchantId);
+        return supabase
+            .channel(`public:orders:merchant:${merchantId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'orders',
+                    filter: `merchant_id=eq.${merchantId}`
+                },
+                (payload) => {
+                    console.log('🔔 [SupabaseService] Cambio en tabla orders detectado:', payload.eventType);
+                    callback();
+                }
+            )
+            .subscribe();
     }
 
     async unsubscribeChannel(channel: any) {

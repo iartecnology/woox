@@ -17,14 +17,19 @@ EXCEPTION
         RAISE NOTICE 'La publicación ya podría existir';
 END $$;
 
-BEGIN;
+DO $$
+BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE orders;
 EXCEPTION
   WHEN OTHERS THEN
     RAISE NOTICE 'La tabla orders ya podría estar en la publicación';
-END;
+END $$;
 
--- 4. RLS para order_items (Lectura pública para el panel de gestión)
+-- 4. RLS y Permisos (Lectura pública para el panel de gestión)
+ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE categories DISABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "Permitir lectura de ítems" ON order_items;
 CREATE POLICY "Permitir lectura de ítems" ON order_items FOR SELECT USING (true);

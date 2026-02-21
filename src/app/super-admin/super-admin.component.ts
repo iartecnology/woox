@@ -320,6 +320,17 @@ export class SuperAdminComponent implements OnInit {
         is_active: true
     };
 
+    // --- MODALES DE CONFIRMACIÓN ---
+    showDeleteConfirmModal: boolean = false;
+    deleteModalConfig = {
+        title: '',
+        message: '',
+        confirmLabel: 'Confirmar',
+        icon: '🗑️',
+        isProcessing: false,
+        action: async () => { }
+    };
+
     private supabaseService = inject(SupabaseService);
     private notificationService = inject(NotificationService);
     private catalogService = inject(CatalogService);
@@ -620,6 +631,12 @@ export class SuperAdminComponent implements OnInit {
 
         const updates = { ...this.selectedMerchant };
         delete (updates as any).id;
+
+        // --- FIXED: Asegurar que agent_id sea un UUID válido o null ---
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (updates.agent_id && !uuidRegex.test(updates.agent_id)) {
+            updates.agent_id = undefined; // O null, dependiendo de la DB
+        }
 
         const { error } = await this.supabaseService.updateMerchant(this.currentManagingMerchant.id, updates);
         if (!error) {
@@ -1243,10 +1260,15 @@ export class SuperAdminComponent implements OnInit {
 
     copyInitSql() {
         const sql = WOOX_DB_INIT_SQL;
+        const projectRef = this.platformConfig.supabase_url?.split('//')[1].split('.')[0];
 
         navigator.clipboard.writeText(sql).then(() => {
             this.notificationService.show('Script de inicialización copiado al portapapeles. Pégalo en el SQL Editor de Supabase.', 'success');
-            window.open(this.platformConfig.supabase_url?.split('.co')[0] + '.co/project/' + this.platformConfig.supabase_url?.split('//')[1].split('.')[0] + '/sql', '_blank');
+            if (projectRef) {
+                window.open(`https://supabase.com/dashboard/project/${projectRef}/sql/new`, '_blank');
+            } else {
+                window.open('https://supabase.com/dashboard', '_blank');
+            }
         });
     }
 
@@ -1378,6 +1400,59 @@ export class SuperAdminComponent implements OnInit {
         }
     }
 
+    async clearMerchantOrders(merchant: any) {
+        this.deleteModalConfig = {
+            title: '¿Limpiar historial de pedidos?',
+            message: `Esta acción eliminará permanentemente todos los pedidos e ítems del comercio "${merchant.name}". No se puede deshacer.`,
+            confirmLabel: 'Limpiar Pedidos',
+            icon: '🧹',
+            isProcessing: false,
+            action: async () => {
+                this.deleteModalConfig.isProcessing = true;
+                try {
+                    const { error } = await this.supabaseService.deleteAllOrders(merchant.id);
+                    if (error) throw error;
+                    this.notificationService.show('Pedidos eliminados correctamente.', 'success');
+                    this.showDeleteConfirmModal = false;
+                } catch (err: any) {
+                    this.notificationService.show('Error: ' + err.message, 'error');
+                } finally {
+                    this.deleteModalConfig.isProcessing = false;
+                }
+            }
+        };
+        this.showDeleteConfirmModal = true;
+    }
+
+    async confirmDeleteMerchant(merchant: any) {
+        this.deleteModalConfig = {
+            title: '¿ELIMINAR COMERCIO PERMANENTEMENTE?',
+            message: `🚨 ADVERTENCIA: Estás a punto de borrar "${merchant.name}". Se perderán agentes, configuraciones y todos los datos asociados. Esta acción es IRREVERSIBLE.`,
+            confirmLabel: 'Eliminar Comercio',
+            icon: '🚨',
+            isProcessing: false,
+            action: async () => {
+                this.deleteModalConfig.isProcessing = true;
+                try {
+                    const { error } = await this.supabaseService.deleteMerchant(merchant.id);
+                    if (error) throw error;
+                    this.notificationService.show('Comercio eliminado por completo.', 'success');
+                    await this.loadInitialData();
+                    this.showDeleteConfirmModal = false;
+                } catch (err: any) {
+                    this.notificationService.show('Error: ' + err.message, 'error');
+                } finally {
+                    this.deleteModalConfig.isProcessing = false;
+                }
+            }
+        };
+        this.showDeleteConfirmModal = true;
+    }
+
+    cancelDeleteAction() {
+        this.showDeleteConfirmModal = false;
+    }
+
     resetSelectedAgent() {
         this.selectedAgent = {
             id: '',
@@ -1424,6 +1499,18 @@ export class SuperAdminComponent implements OnInit {
         // Limpiar metadatos que Supabase no permite actualizar manualmente en upsert si son automáticos
         const agentToSave = { ...this.selectedAgent };
         delete (agentToSave as any).created_at;
+
+        // --- FIXED: Validar UUID para evitar error "invalid input syntax for type uuid: '1'" ---
+        // Si el ID no tiene formato de UUID (36 caracteres con guiones) o está vacío, lo eliminamos
+        // para que Supabase genere uno nuevo.
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!agentToSave.id || !uuidRegex.test(agentToSave.id)) {
+            console.log('ℹ️ Generando nuevo UUID para el agente (ID actual inválido o vacío)');
+            delete (agentToSave as any).id;
+        }
+
+        // Limpiar campos que no existen en la tabla 'agents' de la DB (se manejan en tablas vinculadas o son UI only)
+        delete (agentToSave as any).context_blocks;
 
         // Asegurar valores por defecto si faltan
         if (!agentToSave.personality) agentToSave.personality = 'friendly';
@@ -1957,5 +2044,46 @@ Tenemos Hamburguesas, Pizzas, Sushi, Opciones Saludables y Bebidas.
         } else {
             this.notificationService.show('Error al eliminar usuario', 'error');
         }
+    async runTestOrderInsertion() {
+            if (this.merchants.length === 0) {
+                this.notificationService.show('No hay comercios para probar.', 'error');
+                return;
+            }
+
+            const merchant = this.merchants[0];
+            console.log('🧪 Iniciando inserción de prueba para:', merchant.name);
+
+            const testOrder = {
+                merchant_id: merchant.id,
+                total: 25000,
+                status: 'pending',
+                channel: 'test-direct',
+                customer_name: 'Test Debugger',
+                delivery_address: 'Calle de Prueba 123',
+                customer_phone: '123456789'
+            };
+
+            try {
+                const { data: newOrder, error: orderError } = await this.supabaseService.createOrder(testOrder);
+                if (orderError) throw orderError;
+
+                if (newOrder) {
+                    console.log('✅ Pedido maestro insertado:', newOrder.id);
+
+                    const testItems = [
+                        { order_id: newOrder.id, product_name: 'Pizza Test', quantity: 2, unit_price: 10000, subtotal: 20000 },
+                        { order_id: newOrder.id, product_name: 'Soda Test', quantity: 1, unit_price: 5000, subtotal: 5000 }
+                    ];
+
+                    const { error: itemsError } = await this.supabaseService.createOrderItems(testItems);
+                    if (itemsError) throw itemsError;
+
+                    this.notificationService.show('✅ Inserción de prueba exitosa (Pedido + 2 ítems)', 'success');
+                    console.log('🎉 Prueba completada con éxito.');
+                }
+            } catch (err: any) {
+                console.error('❌ Fallo en inserción de prueba:', err);
+                this.notificationService.show('Error en prueba: ' + err.message, 'error');
+            }
+        }
     }
-}

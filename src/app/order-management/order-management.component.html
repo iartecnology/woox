@@ -188,7 +188,19 @@
                             <div>{{ order.created_at | date:'dd/MM/yyyy' }}</div>
                             <div style="font-weight: 600;">{{ order.created_at | date:'shortTime' }}</div>
                         </td>
-                        <td>{{ order.customer_name }}</td>
+                        <td>
+                            <div><strong>{{ order.customer_name }}</strong></div>
+                            <div style="display: flex; gap: 4px; margin-top: 4px;">
+                                <span *ngIf="order.items && order.items.length > 0"
+                                    style="background: #eef2ff; color: #4f46e5; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 800;">
+                                    📦 {{ order.items.length }} prod.
+                                </span>
+                                <span *ngIf="!order.items || order.items.length === 0"
+                                    style="background: #fff1f2; color: #e11d48; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 800;">
+                                    ⚠️ Sin items
+                                </span>
+                            </div>
+                        </td>
                         <td><strong>${{ order.total.toFixed(2) }}</strong></td>
                         <td>
                             <span class="status-badge-compact" [class]="order.status">
@@ -272,12 +284,16 @@
 
     <div class="items-list" *ngIf="selectedOrder">
         <h3>Productos</h3>
+        <div *ngIf="!selectedOrder.items || selectedOrder.items.length === 0"
+            style="padding: 12px; text-align: center; color: #6b7280; font-style: italic; background: #f9fafb; border-radius: 8px;">
+            No hay productos registrados en este pedido.
+        </div>
         <div class="item-row" *ngFor="let item of selectedOrder.items">
             <span class="qty">{{ item.quantity }}x</span>
             <span class="name">{{ item.product_name }}</span>
             <span class="price">${{ (item.unit_price * item.quantity).toFixed(2) }}</span>
         </div>
-        <div class="total-row">
+        <div class="total-row" *ngIf="selectedOrder.items && selectedOrder.items.length > 0">
             <span>Total</span>
             <span class="final-price">${{ selectedOrder.total.toFixed(2) }}</span>
         </div>
@@ -312,5 +328,33 @@
             <span *ngIf="!selectedOrder.processing">Cancelar Pedido</span>
             <span *ngIf="selectedOrder.processing">⌛ Cancelando...</span>
         </button>
+
+        <!-- Botón secreto solo para Super Admins -->
+        <button *ngIf="isSuperAdmin" class="delete-permanent-btn"
+            style="margin-top: 10px; width: 100%; padding: 12px; border: 1px solid #ef4444; border-radius: 12px; background: #fef2f2; color: #ef4444; font-weight: 700; cursor: pointer; transition: all 0.2s;"
+            [disabled]="selectedOrder.processing" (click)="deleteOrder(selectedOrder)">
+            <span *ngIf="!selectedOrder.processing">🗑️ Eliminar Permanente (Solo SuperAdmin)</span>
+            <span *ngIf="selectedOrder.processing">⌛ Eliminando...</span>
+        </button>
     </div>
 </ng-template>
+
+<!-- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN (ESTILO CHAT) -->
+<div class="delete-modal-overlay" *ngIf="showDeleteOrderModal" (click)="cancelDeleteOrder()">
+    <div class="delete-confirmation-dialog" (click)="$event.stopPropagation()">
+        <div class="delete-icon-wrapper">
+            🗑️
+        </div>
+        <h3>¿Eliminar pedido permanentemente?</h3>
+        <p>
+            Esta acción no se puede deshacer. Se borrará toda la información del pedido
+            <strong>{{ orderToDelete?.id }}</strong> y su historial de productos.
+        </p>
+        <div class="modal-actions-confirm">
+            <button class="btn-cancel-modal" (click)="cancelDeleteOrder()" [disabled]="isLoading">Cancelar</button>
+            <button class="btn-confirm-delete" (click)="confirmDeleteOrder()" [disabled]="isLoading">
+                {{ isLoading ? 'Eliminando...' : 'Sí, eliminar' }}
+            </button>
+        </div>
+    </div>
+</div>

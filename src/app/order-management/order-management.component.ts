@@ -41,6 +41,9 @@ export class OrderManagementComponent implements OnInit {
     selectedOrder: Order | null = null;
     merchantId: string = '';
     isLoading: boolean = false;
+    isSuperAdmin: boolean = false;
+    showDeleteOrderModal: boolean = false;
+    orderToDelete: Order | null = null;
     viewMode: 'kanban' | 'list' = (localStorage.getItem('order_view_mode') as 'kanban' | 'list') || 'list';
 
     // Búsqueda y Filtros
@@ -108,6 +111,18 @@ export class OrderManagementComponent implements OnInit {
         }
     }
 
+    get ordersByStatus() {
+        const source = this.filteredOrders;
+        return {
+            all: source.length,
+            pending: source.filter(o => o.status === 'pending'),
+            cooking: source.filter(o => o.status === 'cooking'),
+            ready: source.filter(o => o.status === 'ready'),
+            delivered: source.filter(o => o.status === 'delivered'),
+            cancelled: source.filter(o => o.status === 'cancelled')
+        };
+    }
+
     Math = Math;
 
     private cdr = inject(ChangeDetectorRef);
@@ -117,8 +132,12 @@ export class OrderManagementComponent implements OnInit {
 
     constructor() { }
 
+    private orderSubscription: any;
+
     async ngOnInit() {
         this.merchantId = localStorage.getItem('active_merchant_id') || localStorage.getItem('merchant_id') || '';
+        this.isSuperAdmin = localStorage.getItem('user_role') === 'superadmin';
+
         if (this.merchantId) {
             // Normalizar ID
             const { data: m } = await this.supabaseService.getMerchantByAnyId(this.merchantId);
@@ -127,6 +146,22 @@ export class OrderManagementComponent implements OnInit {
                 this.merchantId = m.id;
             }
             await this.loadOrders();
+            this.setupRealtime();
+        }
+    }
+
+    setupRealtime() {
+        console.log('📡 [OrderManagement] Configurando Realtime para merchant:', this.merchantId);
+        this.orderSubscription = this.supabaseService.subscribeToOrders(this.merchantId, () => {
+            console.log('🔔 [OrderManagement] Cambio detectado en pedidos, recargando...');
+            this.loadOrders();
+        });
+    }
+
+    ngOnDestroy() {
+        if (this.orderSubscription) {
+            console.log('🔌 [OrderManagement] Desconectando Realtime');
+            this.orderSubscription.unsubscribe();
         }
     }
 
@@ -136,24 +171,66 @@ export class OrderManagementComponent implements OnInit {
 
         try {
             const { data, error } = await this.supabaseService.getOrders(this.merchantId);
+
+            if (error) {
+                console.error('❌ Error de Supabase al cargar pedidos:', error);
+                this.notificationService.show('Error al cargar pedidos: ' + error.message, 'error');
+            }
+
             if (data) {
+                console.log(`📊 [OrderManagement] Recibidos ${data.length} pedidos de Supabase.`);
                 const oldSelectedUuid = this.selectedOrder?.uuid;
 
-                this.orders = data.map((o: any) => ({
-                    uuid: o.id,
-                    id: '#' + String(o.order_number || 0).padStart(3, '0'),
-                    customer_name: o.customers?.full_name || o.customer_name || 'Cliente sin nombre',
-                    channel: o.channel || 'web',
-                    total: o.total,
-                    status: o.status,
-                    created_at: new Date(o.created_at),
-                    delivery_address: o.delivery_address || 'Sin dirección',
-                    items: o.order_items.map((item: any) => ({
-                        product_name: item.product_name || item.products?.name || 'Producto',
-                        quantity: item.quantity,
-                        unit_price: item.unit_price
-                    }))
-                }));
+                this.orders = data.map((o: any) => {
+                    // Depuración extrema: Ver todas las claves del objeto
+                    console.log(`🔍 [Order ${o.id}] Keys:`, Object.keys(o));
+
+                    // Búsqueda exhaustiva de ítems (joins de Supabase)
+                    let rawItems: any[] = [];
+                    if (o.items && Array.isArray(o.items) && o.items.length > 0) rawItems = o.items;
+                    else if (o.order_items && Array.isArray(o.order_items) && o.order_items.length > 0) rawItems = o.order_items;
+                    else {
+                        // Búsqueda ciega de cualquier array que parezca contener ítems de pedido
+                        const possibleKey = Object.keys(o).find(key =>
+                            Array.isArray(o[key]) &&
+                            o[key].length > 0 &&
+                            (o[key][0].product_name || o[key][0].quantity || o[key][0].product_id || o[key][0].unit_price)
+                        );
+                        if (possibleKey) {
+                            console.log(`💡 [Order ${o.id}] Detectados ítems en clave alternativa: ${possibleKey}`);
+                            rawItems = o[possibleKey];
+                        }
+                    }
+
+                    console.log(`📦 [Order ${o.id}] items final:`, rawItems.length);
+
+                    return {
+                        uuid: o.id,
+                        id: o.order_number ? '#' + String(o.order_number).padStart(3, '0') : o.id.substring(0, 8).toUpperCase(),
+                        customer_name: o.customers?.full_name || o.customer_name || 'Cliente sin nombre',
+                        channel: o.channel || 'web',
+                        total: Number(o.total || 0),
+                        status: o.status || 'pending',
+                        created_at: new Date(o.created_at),
+                        delivery_address: o.delivery_address || 'Sin dirección',
+                        items: (rawItems || []).map((item: any) => {
+                            let pName = item.product_name || '';
+
+                            if (!pName) {
+                                pName = item.products?.name ||
+                                    (item.products && Array.isArray(item.products) ? item.products[0]?.name : null) ||
+                                    item.product?.name ||
+                                    'Producto';
+                            }
+
+                            return {
+                                product_name: pName,
+                                quantity: Number(item.quantity || 1),
+                                unit_price: Number(item.unit_price || item.price || 0)
+                            };
+                        })
+                    };
+                });
 
                 // Re-sincronizar el pedido seleccionado con el objeto fresco de la lista
                 if (oldSelectedUuid) {
@@ -166,27 +243,6 @@ export class OrderManagementComponent implements OnInit {
             this.isLoading = false;
             this.cdr.detectChanges();
         }
-    }
-
-    get ordersBySearch() {
-        if (!this.searchTerm) return this.orders;
-        const query = this.searchTerm.toLowerCase();
-        return this.orders.filter(o =>
-            o.id.toLowerCase().includes(query) ||
-            o.customer_name.toLowerCase().includes(query)
-        );
-    }
-
-    get ordersByStatus() {
-        const source = this.ordersBySearch;
-        return {
-            all: source.length,
-            pending: source.filter(o => o.status === 'pending'),
-            cooking: source.filter(o => o.status === 'cooking'),
-            ready: source.filter(o => o.status === 'ready'),
-            delivered: source.filter(o => o.status === 'delivered'),
-            cancelled: source.filter(o => o.status === 'cancelled')
-        };
     }
 
     selectOrder(order: Order) {
@@ -240,6 +296,42 @@ export class OrderManagementComponent implements OnInit {
             const order = event.previousContainer.data[event.previousIndex];
             await this.updateStatus(order, newStatus);
         }
+    }
+
+    async deleteOrder(order: Order) {
+        if (!this.isSuperAdmin) return;
+        this.orderToDelete = order;
+        this.showDeleteOrderModal = true;
+    }
+
+    async confirmDeleteOrder() {
+        if (!this.orderToDelete) return;
+
+        this.isLoading = true;
+        this.cdr.detectChanges();
+
+        try {
+            const { error } = await this.supabaseService.deleteOrder(this.orderToDelete.uuid);
+            if (error) throw error;
+
+            this.notificationService.show('Pedido eliminado correctamente', 'success');
+            this.selectedOrder = null;
+            this.showDeleteOrderModal = false;
+            this.orderToDelete = null;
+            await this.loadOrders();
+        } catch (err: any) {
+            console.error('Error al eliminar pedido:', err);
+            this.notificationService.show('No se pudo eliminar el pedido: ' + err.message, 'error');
+        } finally {
+            this.isLoading = false;
+            this.showDeleteOrderModal = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    cancelDeleteOrder() {
+        this.showDeleteOrderModal = false;
+        this.orderToDelete = null;
     }
 
     async moveBack(order: Order) {

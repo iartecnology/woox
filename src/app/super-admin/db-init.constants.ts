@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
     product_id UUID REFERENCES products(id) ON DELETE SET NULL,
+    product_name TEXT,
     quantity INTEGER NOT NULL,
     unit_price DECIMAL(10,2) NOT NULL,
     subtotal DECIMAL(10,2) NOT NULL
@@ -221,6 +222,15 @@ ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_menu_context TEXT;
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS remarketing_enabled BOOLEAN DEFAULT FALSE;
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS remarketing_delay_minutes INTEGER DEFAULT 60;
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS remarketing_message TEXT;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS product_name TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+
+-- SEGURIDAD: Desactivar RLS para que el panel pueda leer los datos
+ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE order_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE categories DISABLE ROW LEVEL SECURITY;
 
 -- INITIAL SEED
 INSERT INTO agents (id, name, description, system_prompt, personality) VALUES

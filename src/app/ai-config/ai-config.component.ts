@@ -200,6 +200,12 @@ export class AiConfigComponent implements OnInit {
             ai_schedule_message: this.merchantConfig.ai_schedule_message
         };
 
+        // --- FIXED: Validar UUID para agent_id ---
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (updates.agent_id && !uuidRegex.test(updates.agent_id)) {
+            updates.agent_id = null;
+        }
+
         const { error } = await this.supabaseService.updateMerchant(this.merchantId, updates);
 
         this.isSaving = false;
