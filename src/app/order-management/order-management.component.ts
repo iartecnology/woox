@@ -36,7 +36,7 @@ interface Order {
     templateUrl: './order-management.component.html',
     styleUrl: './order-management.component.css'
 })
-export class OrderManagementComponent implements OnInit {
+export class OrderManagementComponent implements OnInit, OnDestroy {
     orders: Order[] = [];
     selectedOrder: Order | null = null;
     merchantId: string = '';

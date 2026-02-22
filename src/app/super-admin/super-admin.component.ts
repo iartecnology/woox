@@ -2044,46 +2044,48 @@ Tenemos Hamburguesas, Pizzas, Sushi, Opciones Saludables y Bebidas.
         } else {
             this.notificationService.show('Error al eliminar usuario', 'error');
         }
+    }
+
     async runTestOrderInsertion() {
-            if (this.merchants.length === 0) {
-                this.notificationService.show('No hay comercios para probar.', 'error');
-                return;
+        if (this.merchants.length === 0) {
+            this.notificationService.show('No hay comercios para probar.', 'error');
+            return;
+        }
+
+        const merchant = this.merchants[0];
+        console.log('🧪 Iniciando inserción de prueba para:', merchant.name);
+
+        const testOrder = {
+            merchant_id: merchant.id,
+            total: 25000,
+            status: 'pending',
+            channel: 'test-direct',
+            customer_name: 'Test Debugger',
+            delivery_address: 'Calle de Prueba 123',
+            customer_phone: '123456789'
+        };
+
+        try {
+            const { data: newOrder, error: orderError } = await this.supabaseService.createOrder(testOrder);
+            if (orderError) throw orderError;
+
+            if (newOrder) {
+                console.log('✅ Pedido maestro insertado:', newOrder.id);
+
+                const testItems = [
+                    { order_id: newOrder.id, product_name: 'Pizza Test', quantity: 2, unit_price: 10000, subtotal: 20000 },
+                    { order_id: newOrder.id, product_name: 'Soda Test', quantity: 1, unit_price: 5000, subtotal: 5000 }
+                ];
+
+                const { error: itemsError } = await this.supabaseService.createOrderItems(testItems);
+                if (itemsError) throw itemsError;
+
+                this.notificationService.show('✅ Inserción de prueba exitosa (Pedido + 2 ítems)', 'success');
+                console.log('🎉 Prueba completada con éxito.');
             }
-
-            const merchant = this.merchants[0];
-            console.log('🧪 Iniciando inserción de prueba para:', merchant.name);
-
-            const testOrder = {
-                merchant_id: merchant.id,
-                total: 25000,
-                status: 'pending',
-                channel: 'test-direct',
-                customer_name: 'Test Debugger',
-                delivery_address: 'Calle de Prueba 123',
-                customer_phone: '123456789'
-            };
-
-            try {
-                const { data: newOrder, error: orderError } = await this.supabaseService.createOrder(testOrder);
-                if (orderError) throw orderError;
-
-                if (newOrder) {
-                    console.log('✅ Pedido maestro insertado:', newOrder.id);
-
-                    const testItems = [
-                        { order_id: newOrder.id, product_name: 'Pizza Test', quantity: 2, unit_price: 10000, subtotal: 20000 },
-                        { order_id: newOrder.id, product_name: 'Soda Test', quantity: 1, unit_price: 5000, subtotal: 5000 }
-                    ];
-
-                    const { error: itemsError } = await this.supabaseService.createOrderItems(testItems);
-                    if (itemsError) throw itemsError;
-
-                    this.notificationService.show('✅ Inserción de prueba exitosa (Pedido + 2 ítems)', 'success');
-                    console.log('🎉 Prueba completada con éxito.');
-                }
-            } catch (err: any) {
-                console.error('❌ Fallo en inserción de prueba:', err);
-                this.notificationService.show('Error en prueba: ' + err.message, 'error');
-            }
+        } catch (err: any) {
+            console.error('❌ Fallo en inserción de prueba:', err);
+            this.notificationService.show('Error en prueba: ' + err.message, 'error');
         }
     }
+}
