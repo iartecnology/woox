@@ -82,8 +82,11 @@
             <section class="config-section">
                 <h3>Agente Maestro</h3>
                 <div class="form-group">
-                    <label>Agente Seleccionado</label>
-                    <select [(ngModel)]="merchantConfig.agent_id">
+                    <div class="flex-header-label">
+                        <label>Agente Seleccionado</label>
+                        <button class="link-btn" routerLink="/agents">⚙️ Gestionar Agentes Maestros</button>
+                    </div>
+                    <select [(ngModel)]="merchantConfig.agent_id" (change)="loadAgentSkills()">
                         <option value="">Seleccionar agente...</option>
                         <option *ngFor="let agent of agents" [value]="agent.id">
                             🤖 {{ agent.name }}
@@ -104,6 +107,31 @@
 
                 <div class="warning-text mt-15" *ngIf="!merchantConfig.ai_api_key">
                     ⚠️ IA Desactivada: Contacta al administrador para configurar tu API Key y activar el asistente.
+                </div>
+            </section>
+
+            <!-- SECCIÓN: SKILLS HEREDADAS (READ-ONLY) -->
+            <section class="config-section highlight" *ngIf="merchantConfig.agent_id && agentSkills.length > 0">
+                <div class="section-header">
+                    <h3>🚀 Super Habilidades del Agente</h3>
+                    <span class="badge active">{{ agentSkills.length }} Activas</span>
+                </div>
+                <p class="desc">Estas son las capacidades avanzadas que heredas automáticamente del Agente Mestro
+                    seleccionado. No necesitas configurarlas, ya están integradas en su cerebro.</p>
+
+                <div class="skills-grid">
+                    <div class="skill-card active" *ngFor="let askill of agentSkills">
+                        <div class="skill-status">
+                            <span class="status-dot"></span> Integrada
+                        </div>
+                        <div class="skill-info">
+                            <h4>{{ askill.skills_catalog?.name || 'Habilidad' }}</h4>
+                            <p>{{ askill.skills_catalog?.description }}</p>
+                        </div>
+                        <div class="skill-footer">
+                            <span class="category-tag">{{ askill.skills_catalog?.category }}</span>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -137,28 +165,29 @@
             </section>
 
             <section class="config-section">
-                <h3>Instrucciones Base del Agente</h3>
-                <p class="desc">Estas instrucciones son heredadas del agente seleccionado y no pueden ser modificadas
-                    aquí.</p>
+                <h3>Estructura Lógica (Agente Maestro)</h3>
+                <p class="desc">Estas reglas y comandos estructurados son inyectados por el Agente Maestro para darle el
+                    comportamiento funcional (Ventas, Reservas, etc). Son intocables.</p>
                 <div class="form-group" *ngIf="selectedAgent">
-                    <label>Lógica de Venta Maestro</label>
                     <div class="agent-instructions-preview">
                         {{ selectedAgent.system_prompt }}
                     </div>
                 </div>
                 <div class="form-group" *ngIf="!selectedAgent">
-                    <p class="warning-text">⚠️ Selecciona un agente arriba para ver sus instrucciones.</p>
+                    <p class="warning-text">⚠️ No has seleccionado un Agente. El cerebro carece de su lógica
+                        fundacional.</p>
                 </div>
             </section>
 
             <section class="config-section">
-                <h3>Instrucciones Específicas del Comercio</h3>
-                <p class="desc">Define reglas o historia única de tu negocio. Se sumarán a la lógica del agente.</p>
+                <h3>Identidad Única de tu Negocio</h3>
+                <p class="desc">Personaliza el tono, las reglas de ventas y formatos visuales. Toca los chips para
+                    inyectar reglas expertas, o escribe las tuyas propias.</p>
                 <div class="form-group">
                     <!-- SMART RULE BUILDER UI -->
                     <div class="smart-rules-container">
                         <div class="rules-intro">
-                            <span>⚡ Constructor de Reglas (Clic para activar)</span>
+                            <span>⚡ Estudio de Personalidad (Constructor)</span>
                         </div>
 
                         <!-- NUEVA ESTRUCTURA DE SECCIONES -->

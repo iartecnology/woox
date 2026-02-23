@@ -340,24 +340,36 @@ export class SuperAdminComponent implements OnInit {
     constructor() { }
 
     async ngOnInit() {
+        // Limpiar rastro de comercio si estamos en Super Admin para evitar conflictos visuales en el layout global
+        if (localStorage.getItem('user_role') === 'superadmin') {
+            localStorage.removeItem('active_merchant_id');
+            localStorage.removeItem('merchant_name');
+            localStorage.removeItem('merchant_slug');
+        }
         await this.loadInitialData();
     }
 
     async loadInitialData() {
         try {
-            const [merchantsResult, agentsResult, profilesResult] = await Promise.all([
+            const [merchantsResult, agentsResult, profilesResult, platformResult] = await Promise.all([
                 this.supabaseService.getMerchants(),
                 this.supabaseService.getAgents(),
-                this.supabaseService.getProfiles()
+                this.supabaseService.getProfiles(),
+                this.supabaseService.getPlatformSettings()
             ]);
 
             if (merchantsResult.error) throw merchantsResult.error;
             if (agentsResult.error) throw agentsResult.error;
             if (profilesResult.error) throw profilesResult.error;
+            if (platformResult.error) throw platformResult.error;
 
             this.merchants = merchantsResult.data || [];
             this.agents = agentsResult.data || [];
             this.merchantUsers = (profilesResult.data || []) as any; // Usar perfiles como usuarios
+
+            if (platformResult.data) {
+                this.platformAiSettings = { ...this.platformAiSettings, ...platformResult.data };
+            }
 
             this.cdr.detectChanges(); // Forzar renderizado inicial
 
@@ -367,8 +379,9 @@ export class SuperAdminComponent implements OnInit {
                 this.cdr.detectChanges();
             }
         } catch (error: any) {
-            console.error('Error cargando datos de Supabase:', error);
-            this.notificationService.show('Error al conectar con la base de datos. Usando datos locales.', 'warning');
+            console.error('CRITICAL: Supabase connection failed:', error);
+            const detail = error.message || error.error_description || 'Desconocido';
+            this.notificationService.show(`Error de base de datos: ${detail}. Usando datos locales.`, 'warning');
             this.loadFallbacks();
         } finally {
             this.isLoading = false;
@@ -543,6 +556,15 @@ export class SuperAdminComponent implements OnInit {
         facebook: 'idle'
     };
 
+    platformAiSettings: any = {
+        ai_provider: 'google_gemini',
+        ai_api_key: '',
+        ai_model: '',
+        support_ai_enabled: false
+    };
+
+    platformFeatures: any = {};
+
     tokenVisibility: { [key: string]: boolean } = {
         whatsapp: false,
         telegram: false,
@@ -705,7 +727,7 @@ export class SuperAdminComponent implements OnInit {
 
     copyCode() {
         navigator.clipboard.writeText(this.generatedCode);
-        alert('Código copiado al portapapeles');
+        this.notificationService.show('📋 Código copiado al portapapeles', 'success');
     }
 
 
@@ -1207,7 +1229,56 @@ export class SuperAdminComponent implements OnInit {
         this.showOmniConfig = true;
     }
 
-    savePlatformConfig() {
+    async testPlatformAIConnection() {
+        if (!this.platformAiSettings.ai_api_key) {
+            this.notificationService.show('Ingresa una Master API Key para probar', 'warning');
+            return;
+        }
+
+        this.isTestingAI = true;
+        this.aiConnectionStatus = 'none';
+        this.aiConnectionMessage = '';
+
+        try {
+            const provider = this.platformAiSettings.ai_provider || 'google_gemini';
+
+            if (provider === 'google_gemini') {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${this.platformAiSettings.ai_api_key}`;
+                const resp = await fetch(url);
+                if (resp.ok) {
+                    this.aiConnectionStatus = 'success';
+                    this.aiConnectionMessage = '✅ Master Key válida (Google Gemini)';
+                } else {
+                    const error = await resp.json();
+                    throw new Error(error.error?.message || 'Key de Gemini inválida');
+                }
+            } else {
+                // Simulación para otros proveedores por ahora
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                this.aiConnectionStatus = 'success';
+                this.aiConnectionMessage = 'Conexión exitosa (Simulada)';
+            }
+        } catch (error: any) {
+            this.aiConnectionStatus = 'error';
+            this.aiConnectionMessage = error.message || 'Error de conexión';
+            this.notificationService.show('Error al validar la Master Key', 'error');
+        } finally {
+            this.isTestingAI = false;
+        }
+    }
+
+    async savePlatformConfig() {
+        // Guardar en la base de datos (Persistencia real)
+        const { error } = await this.supabaseService.updatePlatformSettings({
+            ...this.platformAiSettings
+        });
+
+        if (error) {
+            this.notificationService.show('Error al guardar configuración global en DB: ' + error.message, 'error');
+            return;
+        }
+
+        // Guardar branding en localStorage (Detección inmediata en UI)
         localStorage.setItem('platform_name', this.platformConfig.platform_name);
         localStorage.setItem('platform_logo_url', this.platformConfig.platform_logo_url || '');
         localStorage.setItem('use_logo_image', this.platformConfig.use_logo_image.toString());
@@ -1217,9 +1288,11 @@ export class SuperAdminComponent implements OnInit {
         if (this.platformConfig.supabase_url) localStorage.setItem('supabase_url', this.platformConfig.supabase_url);
         if (this.platformConfig.supabase_key) localStorage.setItem('supabase_key', this.platformConfig.supabase_key);
 
+        this.notificationService.show('Configuración global actualizada correctamente', 'success');
         this.showPlatformConfig = false;
-        // Recargar para aplicar cambios
-        window.location.reload();
+
+        // Recargar para aplicar cambios de branding que dependan de localStorage
+        setTimeout(() => window.location.reload(), 1000);
     }
 
     async testSupabaseConnection() {
@@ -1256,6 +1329,13 @@ export class SuperAdminComponent implements OnInit {
         } finally {
             this.isValidatingSupabase = false;
         }
+    }
+
+    resetSupabaseConfig() {
+        localStorage.removeItem('supabase_url');
+        localStorage.removeItem('supabase_key');
+        this.notificationService.show('Recuperando conexión original...', 'info');
+        setTimeout(() => window.location.reload(), 1000);
     }
 
     copyInitSql() {
@@ -1390,14 +1470,7 @@ export class SuperAdminComponent implements OnInit {
     }
 
     openAgentManager() {
-        this.showAgentManager = true;
-        this.resetSelectedAgent();
-
-        // Solo si no hay agentes, dejamos el formulario vacío. 
-        // Si hay, seleccionamos el primero pero permitimos el botón de "Crear Nuevo".
-        if (this.agents.length > 0 && !this.selectedAgent.id) {
-            this.editAgent(this.agents[0]);
-        }
+        this.router.navigate(['/agents']);
     }
 
     async clearMerchantOrders(merchant: any) {
@@ -1536,7 +1609,7 @@ export class SuperAdminComponent implements OnInit {
     }
 
     deleteAgent(id: string) {
-        if (confirm('¿Estás seguro de eliminar este agente?')) {
+        if (confirm('¿Eliminar este agente? Esta acción no se puede deshacer.')) {
             this.agents = this.agents.filter(a => a.id !== id);
             this.saveAgentsToLocalStorage();
         }
@@ -2035,7 +2108,7 @@ Tenemos Hamburguesas, Pizzas, Sushi, Opciones Saludables y Bebidas.
     }
 
     async deleteGlobalUser(userId: string) {
-        if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
+        if (!confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.')) return;
 
         const { error } = await this.supabaseService.deleteProfile(userId);
         if (!error) {

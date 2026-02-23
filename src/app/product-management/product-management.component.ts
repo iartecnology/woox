@@ -24,6 +24,8 @@ export class ProductManagementComponent implements OnInit {
     selectedCategoryId: string = '';
     showProductModal: boolean = false;
     showCategoryModal: boolean = false;
+    showDeleteConfirm: boolean = false;
+    productToDeleteId: string | null = null;
     isLoading: boolean = true;
 
     filteredCategories: Category[] = [];
@@ -42,35 +44,69 @@ export class ProductManagementComponent implements OnInit {
 
     async ngOnInit() {
         this.route.queryParams.subscribe(async params => {
-            this.merchantId = params['merchantId'] || localStorage.getItem('active_merchant_id') || '';
+            const rawId = params['merchantId'] || localStorage.getItem('active_merchant_id') || '';
+
+            // Validar que el ID sea un UUID real para evitar errores de Postgres
+            if (this.supabaseService.isValidUUID(rawId)) {
+                this.merchantId = rawId;
+            } else {
+                console.warn('[ProductMgmt] ID de comercio detectado no es UUID válido:', rawId);
+                this.merchantId = '';
+                // Opcional: Limpiar el localStorage si estaba corrupto
+                if (rawId) localStorage.removeItem('active_merchant_id');
+            }
+
             await this.loadData();
         });
     }
 
     async loadData() {
         if (!this.merchantId) {
-            console.log('No merchantId found');
+            console.warn('[ProductMgmt] No merchantId found');
+            this.isLoading = false;
             return;
         }
 
-        console.log('Loading data for merchant:', this.merchantId);
-        this.filteredCategories = await this.catalogService.getCategoriesFromServer(this.merchantId);
-        this.products = await this.catalogService.getProductsFromServer(this.merchantId);
+        this.isLoading = true;
+        console.log('[ProductMgmt] Loading data for merchant:', this.merchantId);
 
-        console.log('Categories loaded:', this.filteredCategories);
-        console.log('Products loaded:', this.products);
+        try {
+            // Cargar datos en paralelo
+            const [categories, products] = await Promise.all([
+                this.catalogService.getCategoriesFromServer(this.merchantId),
+                this.catalogService.getProductsFromServer(this.merchantId)
+            ]);
 
-        if (this.filteredCategories.length > 0 && !this.selectedCategoryId) {
-            this.selectedCategoryId = this.filteredCategories[0].id;
+            this.filteredCategories = categories;
+            this.products = products;
+
+            console.log(`[ProductMgmt] Success: ${categories.length} categories and ${products.length} products loaded.`);
+
+            // Validar o resetar la categoría seleccionada
+            const categoryExists = this.filteredCategories.some(c => c.id === this.selectedCategoryId);
+            if (this.selectedCategoryId && !categoryExists) {
+                console.log('[ProductMgmt] Category no longer exists, resetting filter.');
+                this.selectedCategoryId = '';
+            }
+
+            this.newProduct.category_id = this.selectedCategoryId || (this.filteredCategories.length > 0 ? this.filteredCategories[0].id : '');
+            this.newProduct.merchant_id = this.merchantId;
+
+        } catch (error: any) {
+            console.error('[ProductMgmt] ERROR FATAL al cargar catálogo:', error);
+            this.notificationService.show(
+                `Error al cargar el catálogo: ${error.message || 'Error técnico'}.`,
+                'error'
+            );
+        } finally {
+            console.log(`[ProductMgmt] Finalizando carga. Categorías: ${this.filteredCategories.length}, Productos: ${this.products.length}`);
+            this.isLoading = false;
+            this.cdr.detectChanges();
         }
-        this.newProduct.category_id = this.selectedCategoryId;
-        this.newProduct.merchant_id = this.merchantId;
-
-        this.isLoading = false;
-        this.cdr.detectChanges(); // Forzar actualización de la vista
     }
 
     get filteredProducts() {
+        if (!this.selectedCategoryId) return this.products;
         return this.products.filter(p => p.category_id === this.selectedCategoryId);
     }
 
@@ -126,11 +162,23 @@ export class ProductManagementComponent implements OnInit {
         }
     }
 
-    async deleteProduct(id: string) {
-        if (confirm('¿Estás seguro de eliminar este producto?')) {
-            await this.supabaseService.deleteProduct(id);
-            await this.loadData();
-        }
+    requestDeleteProduct(id: string) {
+        this.productToDeleteId = id;
+        this.showDeleteConfirm = true;
+    }
+
+    async confirmDeleteProduct() {
+        if (!this.productToDeleteId) return;
+        await this.supabaseService.deleteProduct(this.productToDeleteId);
+        this.notificationService.show('Producto eliminado', 'warning');
+        this.showDeleteConfirm = false;
+        this.productToDeleteId = null;
+        await this.loadData();
+    }
+
+    cancelDeleteProduct() {
+        this.showDeleteConfirm = false;
+        this.productToDeleteId = null;
     }
 
     openCategoryModal() {

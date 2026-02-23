@@ -26,12 +26,14 @@ export class CatalogService {
 
     // Métodos asíncronos para cargar datos reales
     async getCategoriesFromServer(merchantId: string) {
-        const { data } = await this.supabaseService.getCategories(merchantId);
+        const { data, error } = await this.supabaseService.getCategories(merchantId);
+        if (error) throw error;
         return data || [];
     }
 
     async getProductsFromServer(merchantId: string) {
-        const { data } = await this.supabaseService.getProducts(merchantId);
+        const { data, error } = await this.supabaseService.getProducts(merchantId);
+        if (error) throw error;
         return data || [];
     }
 

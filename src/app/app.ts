@@ -67,25 +67,32 @@ export class App {
 
   async ngOnInit() {
     this.userData.full_name = localStorage.getItem('user_name') || 'Usuario';
-    const merchantId = localStorage.getItem('active_merchant_id');
+    const rawMerchantId = localStorage.getItem('active_merchant_id');
 
-    if (merchantId) {
-      // Carga inicial
-      await this.supabaseService.refreshGlobalUnreadCount(merchantId);
-
-      // Suscripción a cambios
-      this.merchantSubscription = this.supabaseService.subscribeToMerchantConversations(merchantId, async (payload) => {
+    if (rawMerchantId) {
+      if (this.supabaseService.isValidUUID(rawMerchantId)) {
+        const merchantId = rawMerchantId;
+        // Carga inicial 
         await this.supabaseService.refreshGlobalUnreadCount(merchantId);
 
-        // Play sound if unread_count increased OR it's a NEW conversation with unread messages
-        const isNewCustomerMessage =
-          (payload.eventType === 'UPDATE' && payload.new.unread_count > (payload.old?.unread_count || 0)) ||
-          (payload.eventType === 'INSERT' && payload.new.unread_count > 0);
+        // Suscripción a cambios
+        this.merchantSubscription = this.supabaseService.subscribeToMerchantConversations(merchantId, async (payload) => {
+          await this.supabaseService.refreshGlobalUnreadCount(merchantId);
 
-        if (isNewCustomerMessage) {
-          this.supabaseService.playSound();
-        }
-      });
+          const isNewCustomerMessage =
+            (payload.eventType === 'UPDATE' && payload.new.unread_count > (payload.old?.unread_count || 0)) ||
+            (payload.eventType === 'INSERT' && payload.new.unread_count > 0);
+
+          if (isNewCustomerMessage) {
+            this.supabaseService.playSound();
+          }
+        });
+      } else {
+        console.warn('[App] Limpiando active_merchant_id inválido (no UUID):', rawMerchantId);
+        localStorage.removeItem('active_merchant_id');
+        localStorage.removeItem('merchant_name');
+        localStorage.removeItem('merchant_slug');
+      }
     }
   }
 

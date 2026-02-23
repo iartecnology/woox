@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ChatSimulatorComponent } from '../chat-simulator/chat-simulator.component';
 import { CatalogService } from '../catalog.service';
 import { SupabaseService } from '../supabase.service';
+import { NotificationService } from '../notification.service';
 
 @Component({
     selector: 'app-ai-config',
@@ -138,10 +139,13 @@ export class AiConfigComponent implements OnInit {
     ];
 
     availablePromptRules: any[] = [];
+    skillsCatalog: any[] = [];
+    agentSkills: any[] = [];
 
     isSaving: boolean = false;
     private catalogService = inject(CatalogService);
     private supabaseService = inject(SupabaseService);
+    private notificationService = inject(NotificationService);
 
     constructor() { }
 
@@ -151,8 +155,14 @@ export class AiConfigComponent implements OnInit {
         if (this.merchantId) {
             await this.loadConfig();
             await this.loadAgents();
+            await this.loadSkillsCatalog();
             this.catalogContext = await this.catalogService.getAIContextForMerchant(this.merchantId);
         }
+    }
+
+    async loadSkillsCatalog() {
+        const { data } = await this.supabaseService.getSkillsCatalog();
+        if (data) this.skillsCatalog = data;
     }
 
     async loadConfig() {
@@ -171,7 +181,17 @@ export class AiConfigComponent implements OnInit {
         const { data } = await this.supabaseService.getAgents();
         if (data) {
             this.agents = data;
+            // Si hay un agente seleccionado, cargar sus skills
+            if (this.merchantConfig.agent_id) {
+                this.loadAgentSkills();
+            }
         }
+    }
+
+    async loadAgentSkills() {
+        if (!this.merchantConfig.agent_id) return;
+        const { data } = await this.supabaseService.getAgentSkills(this.merchantConfig.agent_id);
+        if (data) this.agentSkills = data;
     }
 
     setTab(tab: 'general' | 'training' | 'remarketing' | 'schedule') {
@@ -210,19 +230,19 @@ export class AiConfigComponent implements OnInit {
 
         this.isSaving = false;
         if (!error) {
-            alert('Configuración guardada correctamente en la nube.');
+            this.notificationService.show('✅ Configuración guardada correctamente.', 'success');
         } else {
-            alert('Error al guardar: ' + error.message);
+            this.notificationService.show('Error al guardar: ' + error.message, 'error');
         }
     }
 
     onFileUpload(event: any) {
-        alert('Simulando procesamiento de PDF de Menú... ¡Sincronizado con la IA!');
+        this.notificationService.show('📄 Procesando documento... La IA lo tendrá en cuenta.', 'info');
     }
 
     toggleSimulator() {
         if (!this.merchantConfig.ai_api_key) {
-            alert('Debes configurar una API Key primero.');
+            this.notificationService.show('⚠️ Configura una API Key antes de probar el chat.', 'error');
             return;
         }
         this.showSimulator = !this.showSimulator;

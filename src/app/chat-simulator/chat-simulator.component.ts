@@ -517,15 +517,14 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
       // Nudge de precisión técnica
       systemNudge += `
-(PROTOCOLO TÉCNICO CRÍTICO - INSTRUCCIONES OBLIGATORIAS: 
-1. Si el usuario PIDE EXPLÍCITAMENTE un producto, usa [UPDATE_CART:{"name":"...","price":0,"quantity":1}]. 
-2. Si SOLO RECOMIENDAS o el usuario PREGUNTA, usa [PRODUCT:{"name":"...","price":0,"description":"..."}].
-3. Si el usuario termina o pide el resumen, usa [SHOW_SUMMARY].
-4. CUANDO EL USUARIO CONFIRME QUE TODO ESTÁ CORRECTO y ya tengas su Nombre, Dirección y Teléfono, DEBES incluir al final de tu respuesta el comando: [ORDER_CONFIRMED:{"customer_name":"...","address":"...","phone":"...","total":...}]
-   - Ejemplo: "¡Excelente! Tu pedido ha sido registrado. [ORDER_CONFIRMED:{\"customer_name\":\"Juan\",\"address\":\"Calle 123\",\"phone\":\"300123\",\"total\":15000}]"
-5. El total actual del carrito es $${this.cartTotal.toFixed(2)}. 
-   - SI EL TOTAL ES $0.00, NO LO MENCIONES.
-   - Si es mayor a 0, usa ese valor exacto, no inventes otro.)`;
+(PROTOCOLO TÉCNICO DE CIERRE - INSTRUCCIONES OBRIGATORIAS: 
+1. **REGLA DE ORO DE LOS COMANDOS**: Solo puedes emitir el comando [ORDER_CONFIRMED] cuando el usuario te haya dado su NOMBRE, DIRECCIÓN y TELÉFONO reales.
+2. Si te falta alguno de esos datos, NO envíes el comando. Pregunta primero de forma amable.
+3. Cada vez que el usuario agregue un producto: DEBES usar [UPDATE_CART:{"name":"...","price":0,"quantity":1}].
+4. Si el usuario pide el resumen, usa [SHOW_SUMMARY].
+5. **PROHIBIDO EL USO DE PUNTOS SUSPENSIVOS**: NUNCA pongas "..." o placeholders en los campos del JSON. Si no tienes el dato, no envíes el comando.
+6. El total actual del carrito es $${this.cartTotal.toFixed(2)}. 
+7. **SEGURIDAD DE PRECIOS**: Tus precios son FIJOS e INNEGOCIABLES.)`;
 
       // 1. OBTENER PROMPT MAESTRO (Cerebro Central Agente 2.0)
       const { data: compiledPrompt } = await this.supabaseService.rpc('get_compiled_prompt', {
@@ -541,6 +540,10 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       }
 
       fullSystemInstruction += `${systemNudge}\n\nESTADO ACTUAL DEL CARRITO (TOTAL: $${this.cartTotal.toFixed(2)}):\n${JSON.stringify(this.cart)}`;
+
+      console.log('--- SYSTEM PROMPT SENT TO AI ---');
+      console.log(fullSystemInstruction);
+      console.log('-------------------------------');
 
       // 2. CONSTRUIR HISTORIAL VÁLIDO (Alternancia estricta para Gemini 1.5)
       let chatContents: any[] = [];
@@ -651,7 +654,9 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       let aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Lo siento, no pude generar una respuesta.';
 
       // 2. DETECTAR ACTUALIZACIONES DE CARRITO (IA -> Sistema)
-      const cartUpdateRegex = /\[UPDATE_CART:(\{.*?\})\]/gi;
+      // 2. DETECTAR ACTUALIZACIONES DE CARRITO (IA -> Sistema)
+      // Regex flexible: acepta [UPDATE_CART:...], UPDATE CART:..., etc.
+      const cartUpdateRegex = /(?:\[)?UPDATE[ _]CART:?\s*(\{[\s\S]*?\})(?:\])?/gi;
       let cartMatch;
       let itemsAdded = 0;
 
@@ -695,7 +700,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       }
 
       // 3. DETECTAR CIERRE DE PEDIDO (IA -> Sistema)
-      const orderConfirmedRegex = /\[ORDER_CONFIRMED\s*:\s*(\{[\s\S]*?\})\s*\]/gi;
+      const orderConfirmedRegex = /(?:\[)?ORDER[ _]CONFIRMED:?\s*(\{[\s\S]*\})(?:\])?/gi;
       let orderMatch;
       while ((orderMatch = orderConfirmedRegex.exec(aiText)) !== null) {
         try {
@@ -703,7 +708,6 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
           let orderData: any;
 
           try {
-            // Limpieza previa del JSON por si la IA añade comentarios o basura
             const cleanJson = orderDataStr.trim().replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
             orderData = JSON.parse(cleanJson);
           } catch (e) {
@@ -720,8 +724,18 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
             };
           }
 
-          if (orderData.customer_name || orderData.address) {
-            console.log('🏁 Pedido Detectado:', orderData);
+          // VALIDACIÓN DE SEGURIDAD: Evitar placeholders "..." o datos vacíos
+          const hasPlaceholders = (val: any) => typeof val === 'string' && (val.includes('...') || val.trim() === '');
+
+          if (hasPlaceholders(orderData.customer_name) || hasPlaceholders(orderData.address) || hasPlaceholders(orderData.phone)) {
+            console.warn('⚠️ La IA intentó confirmar un pedido con datos incompletos o placeholders. Ignorando comando.', orderData);
+            // Si detectamos esto, podemos inyectar un nudge de sistema para la IA
+            aiText = aiText.replace(orderMatch[0], '');
+            continue;
+          }
+
+          if (orderData.customer_name && orderData.address && orderData.phone) {
+            console.log('🏁 Pedido Realizado con éxito:', orderData);
             await this.confirmOrder(true, orderData);
             aiText = aiText.replace(orderMatch[0], '');
           }
@@ -750,6 +764,14 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
         } catch (e) { }
       }
 
+      aiText = aiText.trim();
+
+      // Limpieza final preventiva: borrar rastros de comandos técnicos mal formados
+      aiText = aiText.replace(/\[\w+:[^\]]*\]/gi, ''); // Borra [TAG:...]
+      aiText = aiText.replace(/UPDATE[ _]CART:?\s*\{[\s\S]*?\}/gi, ''); // Borra variaciones de UPDATE CART
+      aiText = aiText.replace(/ORDER[ _]CONFIRMED:?\s*\{[\s\S]*?\}/gi, ''); // Borra confirmaciones huérfanas
+      aiText = aiText.replace(/\{"customer_name":[\s\S]*?\}/gi, ''); // Borra cualquier JSON de pedido suelto
+      aiText = aiText.replace(/\{"name":[\s\S]*?\}/gi, ''); // Borra cualquier JSON de producto suelto
       aiText = aiText.trim();
 
       this.messages.push({
@@ -829,8 +851,14 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
     if (existing) {
       existing.quantity = update.quantity;
+      // BLOQUEO DE SEGURIDAD: Solo permitir asignar precio si el actual es 0 o nulo.
+      // Esto evita que la IA cambie precios establecidos por el catálogo.
       if (update.price !== undefined && update.price > 0) {
-        existing.price = update.price;
+        if (!existing.price || existing.price === 0) {
+          existing.price = update.price;
+        } else if (existing.price !== update.price) {
+          console.warn(`🛡️ [Security] Intento de cambio de precio bloqueado para ${existing.name}. Original: ${existing.price}, Requerido por IA: ${update.price}`);
+        }
       }
       if (update.image_url) existing.image_url = update.image_url;
 

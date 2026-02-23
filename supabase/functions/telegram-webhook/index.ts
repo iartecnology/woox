@@ -7,11 +7,18 @@ const corsHeaders = {
 
 function sanitizeMarkdown(text: string): string {
     let sanitized = text;
+    // Borrar bloques técnicos conocidos
     sanitized = sanitized.replace(/\(INTERNO:.*?\)/gi, "");
     sanitized = sanitized.replace(/\(DESCRIPCIÓN REAL:.*?\)/gi, "");
     sanitized = sanitized.replace(/\[DISPONIBLE\]/gi, "");
     sanitized = sanitized.replace(/\[AGOTADO\]/gi, "");
-    sanitized = sanitized.replace(/\[ORDER_CONFIRMED:.*?\]/gi, "");
+
+    // Nueva limpieza agresiva de comandos y JSON
+    sanitized = sanitized.replace(/\[\w+:[^\]]*\]/gi, "");
+    sanitized = sanitized.replace(/UPDATE[ _]CART:?\s*\{[\s\S]*?\}/gi, "");
+    sanitized = sanitized.replace(/ORDER[ _]CONFIRMED:?\s*\{[\s\S]*?\}/gi, "");
+    sanitized = sanitized.replace(/\{"customer_name":[\s\S]*?\}/gi, "");
+    sanitized = sanitized.replace(/\{"name":[\s\S]*?\}/gi, "");
 
     const asterisks = (sanitized.match(/\*/g) || []).length;
     const underscores = (sanitized.match(/_/g) || []).length;
@@ -87,7 +94,7 @@ Deno.serve(async (req: Request) => {
         }).eq("id", conversation!.id);
 
         // Obtener catálogo más detallado
-        const { data: products } = await supabase.from("products").select("name, price, is_available, category:categories(name)").eq("merchant_id", merchantId).eq("is_available", true).limit(40);
+        const { data: products } = await supabase.from("products").select("id, name, price, is_available, category:categories(name)").eq("merchant_id", merchantId).eq("is_available", true).limit(50);
 
         let menu = "";
         if (products && products.length > 0) {
@@ -267,16 +274,18 @@ Deno.serve(async (req: Request) => {
             aiResponse = "Disculpa, hay un problema con el modelo de IA seleccionado (" + (m.ai_model || 'Gemma/Gemini') + "). Por favor verifica tu API Key o intenta con el modelo 'gemini-1.5-flash'.";
         }
 
-        // Procesar ORDER_CONFIRMED (regex flexible con espacios opcionales)
+        // Procesar ORDER_CONFIRMED (regex robusta para JSON anidado con ítems)
         let orderConfirmationText = "";
-        const orderMatch = aiResponse.match(/\[ORDER_CONFIRMED:\s*({.*?})\]/s);
+        const orderMatch = aiResponse.match(/\[ORDER_CONFIRMED:\s*(\{.*\})\s*\]/s);
 
         if (orderMatch) {
             try {
                 const jsonContent = orderMatch[1].trim();
                 const info = JSON.parse(jsonContent);
-                // Limpiar el tag de la respuesta final
-                aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:.*?\]/s, "").trim();
+                // Limpiar el tag de la respuesta final (con regex global para borrar posibles duplicados o fragmentos)
+                aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:[\s\S]*?\]/g, "").trim();
+                // Limpiar fragmentos huérfanos que a veces deja la IA por error de delimitación
+                aiResponse = aiResponse.replace(/Código de Confirmación:?\s*\}?\]?/gi, "").trim();
 
                 const customerUpdates: any = {};
                 if (info.customer_name) customerUpdates.full_name = info.customer_name;
@@ -298,6 +307,32 @@ Deno.serve(async (req: Request) => {
 
                 if (order) {
                     orderConfirmationText = `\n\n🚀 *¡Pedido registrado!*\n🆔 *Orden #${order.id.split('-')[0].toUpperCase()}*`;
+
+                    // NUEVO: Guardar productos del pedido si vienen en el JSON
+                    if (info.items && Array.isArray(info.items) && info.items.length > 0) {
+                        const itemsToInsert = info.items.map((it: any) => {
+                            const qty = Number(it.qty || it.quantity || 1);
+                            const price = Number(it.price || 0);
+
+                            // Intentar encontrar el product_id por nombre
+                            const matchedProduct = products?.find((p: any) =>
+                                p.name.toLowerCase().trim() === String(it.name).toLowerCase().trim()
+                            );
+
+                            return {
+                                order_id: order.id,
+                                product_id: matchedProduct?.id || null,
+                                product_name: String(it.name || 'Producto'),
+                                quantity: qty,
+                                unit_price: price,
+                                subtotal: qty * price
+                            };
+                        });
+
+                        const { error: itemsError } = await supabase.from("order_items").insert(itemsToInsert);
+                        if (itemsError) console.error("❌ [Webhook] Error insertando items:", itemsError);
+                        else console.log(`✅ [Webhook] ${itemsToInsert.length} items guardados para orden ${order.id}`);
+                    }
                 }
             } catch (e) {
                 console.error("Order JSON Error", e);

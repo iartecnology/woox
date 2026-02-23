@@ -13,6 +13,7 @@ import { AuditLogsComponent } from './audit-logs/audit-logs.component';
 import { CampaignsComponent } from './marketing/campaigns.component';
 import { BiolinkPageComponent } from './biolink-page/biolink-page.component';
 import { BiolinkAdminComponent } from './biolink-admin/biolink-admin';
+import { AgentManagementComponent } from './agent-management/agent-management.component';
 
 export const routes: Routes = [
     { path: 'login', component: LoginComponent },
@@ -24,6 +25,7 @@ export const routes: Routes = [
     { path: 'delivery', component: DeliveryPortalComponent },
     { path: 'chats', component: ChatManagementComponent },
     { path: 'ai-config', component: AiConfigComponent },
+    { path: 'agents', component: AgentManagementComponent },
     { path: 'biolink-admin', component: BiolinkAdminComponent },
     { path: 'metrics', component: MetricsDashboardComponent },
     { path: 'products', component: ProductManagementComponent },

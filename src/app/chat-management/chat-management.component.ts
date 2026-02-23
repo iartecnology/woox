@@ -664,7 +664,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
         // Si la IA está apagada globalmente para el comercio, avisar
         if (this.merchantData && this.merchantData.ai_enabled === false) {
-            alert('La IA está desactivada globalmente en la configuración del comercio. Debes activarla allá primero.');
+            this.notificationService.show('⚠️ La IA está desactivada globalmente. Actívala primero en IA Config.', 'error');
             return;
         }
 
@@ -674,6 +674,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
         await this.supabaseService.toggleAI(this.selectedConversation.id, newState);
         this.selectedConversation.ai_active = newState;
+        this.notificationService.show(newState ? '🤖 IA activada para esta conversación' : '🤚 IA pausada — control manual', 'info');
     }
 
     async sendMessage() {

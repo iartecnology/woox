@@ -1,6 +1,7 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { NotificationService } from '../notification.service';
 
 interface Campaign {
     id: string;
@@ -22,6 +23,7 @@ interface Campaign {
     styleUrl: './campaigns.component.css'
 })
 export class CampaignsComponent implements OnInit {
+    private notificationService = inject(NotificationService);
     campaignsList: Campaign[] = [
         { id: '1', name: 'Promoción Fin de Semana', type: 'whatsapp', status: 'completed', audience: 'Clientes VIP', sent_count: 542, open_rate: 85, click_rate: 12, created_at: new Date('2024-03-20') },
         { id: '2', name: 'Recuperación de Carritos', type: 'whatsapp', status: 'running', audience: 'Abandono 24h', sent_count: 125, created_at: new Date('2024-03-25') },
@@ -104,7 +106,7 @@ export class CampaignsComponent implements OnInit {
     }
 
     createCampaign() {
-        alert('Campaña creada con éxito');
+        this.notificationService.show('🚀 Campaña creada con éxito', 'success');
         this.showCreateModal = false;
     }
 }

@@ -1,0 +1,581 @@
+<div class="page-container">
+    <!-- Sidebar: Lista de Agentes -->
+    <aside class="agents-sidebar">
+        <div class="sidebar-header">
+            <h2>🤖 Agentes IA</h2>
+            <button class="add-btn" (click)="createNewAgent()" title="Crear Nuevo Agente">+</button>
+        </div>
+        <div class="agents-list">
+            <div *ngFor="let agent of agents" class="agent-item" [class.active]="selectedAgent?.id === agent.id"
+                (click)="selectAgent(agent)">
+                <div class="agent-avatar">🤖</div>
+                <div class="agent-info">
+                    <span class="agent-name">{{ agent.name }}</span>
+                    <span class="agent-personality">{{ agent.personality || 'Sin personalidad' }}</span>
+                </div>
+            </div>
+            <div *ngIf="agents.length === 0" class="empty-sidebar">
+                <p>Aún no hay agentes. Crea el primero.</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="management-content">
+        <header class="content-header" *ngIf="selectedAgent && !showWizard; else noSelection">
+            <div class="title-section">
+                <h1>{{ selectedAgent.name || 'Nuevo Agente' }}</h1>
+                <p>{{ selectedAgent.description || 'Configura las capacidades de este arquetipo de IA.' }}</p>
+            </div>
+            <div class="header-right">
+                <div class="tabs-nav">
+                    <button [class.active]="activeTab === 'general'" (click)="activeTab = 'general'">🛠️
+                        General</button>
+                    <button [class.active]="activeTab === 'skills'" (click)="activeTab = 'skills'; loadAgentSkills()">🚀
+                        Habilidades</button>
+                    <button [class.active]="activeTab === 'designer'"
+                        (click)="activeTab = 'designer'; loadSkillsCatalog()">🎨
+                        Diseñador</button>
+                </div>
+            </div>
+        </header>
+
+        <ng-template #noSelection>
+            <div class="empty-state">
+                <div class="empty-icon">🤖</div>
+                <h3>Gestiona tus Agentes de IA</h3>
+                <p>Selecciona un agente de la lista o crea uno nuevo para configurar su inteligencia.</p>
+                <button class="primary-btn" (click)="createNewAgent()">✨ Crear Primer Agente</button>
+                <button class="secondary-btn" style="margin-top: 10px;"
+                    (click)="activeTab = 'designer'; loadSkillsCatalog()" *ngIf="agents.length > 0">
+                    🎨 Gestionar Catálogo de Skills
+                </button>
+            </div>
+        </ng-template>
+
+        <!-- El cuerpo de las pestañas se muestra si hay un agente seleccionado o si estamos en el Diseñador global -->
+        <div class="tab-body" *ngIf="(selectedAgent && !showWizard) || activeTab === 'designer'">
+
+            <!-- Guard para cuando no hay agente seleccionado y no estamos en el diseñador -->
+            <div *ngIf="!selectedAgent && activeTab !== 'designer'" class="empty-state">
+                <p>Favor seleccionar un agente del sidebar para ver esta pestaña.</p>
+            </div>
+
+            <!-- ===================== PESTAÑA: GENERAL ===================== -->
+            <div *ngIf="activeTab === 'general'" class="fade-in">
+                <div class="agent-form-header">
+                    <h3>🎭 Identidad y Lógica Base del Agente</h3>
+                    <p class="desc">Define el rol central, sistema de instrucciones y personalidad de este arquetipo.
+                    </p>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Nombre del Agente</label>
+                        <input type="text" [(ngModel)]="selectedAgent.name" placeholder="Ej: Agente de Ventas Estándar">
+                    </div>
+                    <div class="form-group">
+                        <label>Descripción Corta</label>
+                        <input type="text" [(ngModel)]="selectedAgent.description"
+                            placeholder="Para qué sirve este agente...">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Personalidad Base</label>
+                    <select [(ngModel)]="selectedAgent.personality">
+                        <option value="friendly">😊 Amigable y Cercano</option>
+                        <option value="professional">💼 Profesional y Ejecutivo</option>
+                        <option value="funny">🤣 Divertido y Ocurrente</option>
+                        <option value="formal">🎩 Formal y Corporativo</option>
+                        <option value="expert">🧐 Experto y Consultor</option>
+                    </select>
+                </div>
+
+                <!-- Mensaje de Bienvenida -->
+                <div class="form-group mt-15">
+                    <div class="label-with-action">
+                        <label>Mensaje de Bienvenida Predeterminado</label>
+                        <button class="help-action-btn" (click)="fillAgentExample('welcome')">✨ Cargar Ejemplo</button>
+                    </div>
+                    <textarea [(ngModel)]="selectedAgent.welcome_message" rows="2"
+                        placeholder="¡Hola! Soy tu asistente..."></textarea>
+                </div>
+
+                <!-- Prompt Maestro -->
+                <div class="form-group mt-15">
+                    <div class="label-with-variables">
+                        <div class="label-with-action">
+                            <label>Prompt Maestro (Reglas de Oro del Agente)</label>
+                            <button class="help-action-btn" (click)="fillAgentExample('prompt')">✨ Cargar
+                                Ejemplo</button>
+                        </div>
+                        <div class="variable-pills">
+                            <span class="v-pill">{{ '{{' }}merchantName{{ '}}' }}</span>
+                            <span class="v-pill">{{ '{{' }}personality{{ '}}' }}</span>
+                            <span class="v-pill">{{ '{{' }}welcomeMessage{{ '}}' }}</span>
+                            <span class="v-pill">{{ '{{' }}catalogContext{{ '}}' }}</span>
+                            <span class="v-pill">{{ '{{' }}knowledgeContext{{ '}}' }}</span>
+                        </div>
+                    </div>
+                    <textarea [(ngModel)]="selectedAgent.system_prompt" rows="10" class="code-area"
+                        placeholder="Define aquí la lógica principal del agente..."></textarea>
+                </div>
+
+                <!-- Restricciones -->
+                <div class="form-group highlight-restrictions mt-15">
+                    <div class="label-with-action">
+                        <label>🚫 Restricciones Globales (Prohibiciones del Agente)</label>
+                        <button class="help-action-btn" (click)="fillAgentExample('restrictions')">✨ Cargar
+                            Ejemplo</button>
+                    </div>
+                    <textarea [(ngModel)]="selectedAgent.restrictions" rows="4"
+                        placeholder="Ej: NUNCA dar descuentos, PROHIBIDO hablar de política..."></textarea>
+                    <small>Estas reglas se **heredan automáticamente** a todos los comercios que usen este
+                        agente.</small>
+                </div>
+
+                <!-- Acciones -->
+                <div class="footer-actions mt-15">
+                    <button class="danger-outline-btn" (click)="deleteAgent(selectedAgent)">🗑️ Eliminar Agente</button>
+                    <div class="footer-right-actions">
+                        <button class="preview-btn" (click)="showPromptPreview = true; loadAgentSkills()">
+                            👁️ Ver Prompt Compilado
+                        </button>
+                        <button class="save-btn" (click)="saveAgent()" [disabled]="isSaving">
+                            {{ isSaving ? 'Guardando...' : '💾 Guardar Cambios' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===================== PESTAÑA: HABILIDADES (RELACIONAL) ===================== -->
+            <div *ngIf="activeTab === 'skills'" class="fade-in">
+                <div class="section-header">
+                    <div>
+                        <h3>🚀 Habilidades del Agente</h3>
+                        <p class="desc">Activa o desactiva las capacidades del catálogo maestro. Cada habilidad inyecta
+                            instrucciones técnicas automáticas al cerebro de la IA.</p>
+                    </div>
+                    <div class="section-header-right">
+                        <button class="ai-wizard-btn" (click)="startSkillWizard()">
+                            🪄 Diseñar Nueva con IA
+                        </button>
+                        <span class="badge-count">{{ agentSkills.length }} activa(s)</span>
+                    </div>
+                </div>
+
+                <div *ngIf="skillsCatalog.length === 0" class="empty-skills">
+                    <p>No hay habilidades en el catálogo. Ve al <strong>Diseñador</strong> para crear la primera.</p>
+                </div>
+
+                <div class="skills-grid-cards">
+                    <div *ngFor="let skill of skillsCatalog" class="skill-toggle-card"
+                        [class.enabled]="isSkillEnabled(skill.id)" (click)="toggleSkill(skill)">
+                        <div class="skill-toggle-header">
+                            <div class="skill-left">
+                                <span class="skill-cat-icon">{{ getCategoryIcon(skill.category) }}</span>
+                                <div>
+                                    <strong>{{ skill.name }}</strong>
+                                    <span class="skill-category-label">{{ getCategoryLabel(skill.category) }}</span>
+                                </div>
+                            </div>
+                            <!-- Switch con Spinner si está cargando -->
+                            <div class="toggle-switch" [class.on]="isSkillEnabled(skill.id)"
+                                [class.loading]="togglingSkills.has(skill.id)">
+                                <div class="toggle-knob" *ngIf="!togglingSkills.has(skill.id)"></div>
+                                <div class="mini-spinner" *ngIf="togglingSkills.has(skill.id)"></div>
+                            </div>
+                        </div>
+                        <p class="skill-desc">{{ skill.description }}</p>
+                        <div class="skill-prompt-preview" *ngIf="skill.system_prompt_fragment">
+                            <code>{{ skill.system_prompt_fragment | slice:0:80 }}...</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===================== PESTAÑA: DISEÑADOR DE SKILLS ===================== -->
+            <div *ngIf="activeTab === 'designer'" class="fade-in">
+                <div class="designer-layout">
+                    <!-- Formulario de Edición -->
+                    <div class="designer-form">
+                        <div class="designer-form-header">
+                            <h3>{{ editingSkill.id ? '✏️ Editar' : '➕ Nueva' }} Habilidad Maestra</h3>
+                            <button class="ai-copilot-btn" (click)="generateSkillWithAI()" [disabled]="isGeneratingAI">
+                                {{ isGeneratingAI ? '🤖 Pensando...' : '🪄 Copiloto IA' }}
+                            </button>
+                        </div>
+                        <p class="desc">Usa el Copiloto IA (varita) para que la IA redacte las instrucciones técnicas
+                            basándose en tu descripción.</p>
+
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Nombre de la Habilidad</label>
+                                <input type="text" [(ngModel)]="editingSkill.name" (blur)="generateSlug()"
+                                    placeholder="Ej: Reserva de Citas">
+                            </div>
+                            <div class="form-group">
+                                <label>Slug (ID único)</label>
+                                <input type="text" [(ngModel)]="editingSkill.slug" placeholder="reserva_citas">
+                            </div>
+                        </div>
+
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Categoría</label>
+                                <select [(ngModel)]="editingSkill.category">
+                                    <option *ngFor="let cat of skillCategories" [value]="cat.value">
+                                        {{ getCategoryIcon(cat.value) }} {{ cat.label }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Descripción corta</label>
+                                <input type="text" [(ngModel)]="editingSkill.description"
+                                    placeholder="¿Qué hace esta habilidad?">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Instrucciones Técnicas (Prompt Fragment)</label>
+                            <small class="field-hint">Este texto se inyectará directamente en el System Prompt cuando el
+                                agente tenga la habilidad activa.</small>
+                            <textarea [(ngModel)]="editingSkill.system_prompt_fragment" rows="10" class="code-area"
+                                placeholder="### HABILIDAD: ..."></textarea>
+                        </div>
+
+                        <div class="designer-actions">
+                            <button class="secondary-btn" (click)="newSkill()" *ngIf="editingSkill.id">+ Nueva</button>
+                            <button *ngIf="selectedAgent?.id" class="secondary-btn"
+                                (click)="assignSkillToCurrentAgent(editingSkill)" [disabled]="!editingSkill.id">
+                                ⚡ Asignar a "{{ selectedAgent.name }}"
+                            </button>
+                            <button class="save-btn" (click)="saveSkill()">💾 Guardar en Catálogo</button>
+                        </div>
+                    </div>
+
+                    <!-- Panel derecho: Ejemplos + Catálogo actual -->
+                    <div class="designer-resources">
+                        <h3>💡 Ejemplos de Inspiración</h3>
+                        <div class="examples-list">
+                            <div *ngFor="let ex of skillExamples" class="example-box" (click)="useExample(ex)">
+                                <strong>{{ ex.name }}</strong>
+                                <p>{{ ex.description }}</p>
+                                <span class="use-hint">↑ Clic para cargar</span>
+                            </div>
+                        </div>
+
+                        <h3 class="mt-30">📦 Catálogo Actual ({{ skillsCatalog.length }})</h3>
+                        <div class="catalog-list">
+                            <div *ngFor="let s of skillsCatalog" class="catalog-item">
+                                <div class="catalog-item-info">
+                                    <span class="cat-icon">{{ getCategoryIcon(s.category) }}</span>
+                                    <div>
+                                        <span class="catalog-name">{{ s.name }}</span>
+                                        <span class="catalog-slug">{{ s.slug }}</span>
+                                    </div>
+                                </div>
+                                <div class="item-actions">
+                                    <button (click)="editCatalogSkill(s)" title="Editar">✏️</button>
+                                    <button (click)="deleteSkill(s.id)" class="danger" title="Eliminar">🗑️</button>
+                                </div>
+                            </div>
+                            <div *ngIf="skillsCatalog.length === 0" class="empty-catalog">
+                                <p>El catálogo está vacío. Crea la primera habilidad.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== WIZARD DE CREACIÓN ===================== -->
+        <div class="wizard-overlay" *ngIf="showWizard">
+            <div class="wizard-card">
+
+                <!-- Progress Bar -->
+                <div class="wizard-progress">
+                    <div *ngFor="let step of [1,2,3,4]; let i = index" class="wizard-step-wrapper">
+                        <div class="progress-step" [class.active]="wizardStep >= step" [class.done]="wizardStep > step">
+                            <span *ngIf="wizardStep <= step">{{ step }}</span>
+                            <span *ngIf="wizardStep > step">✓</span>
+                        </div>
+                        <div class="progress-line" *ngIf="i < 3" [class.filled]="wizardStep > step"></div>
+                    </div>
+                </div>
+
+                <!-- Contenido por paso -->
+                <div class="wizard-content">
+
+                    <!-- PASO 1: Identidad -->
+                    <div *ngIf="wizardStep === 1" class="fade-in">
+                        <h2>🎭 Identidad del Agente</h2>
+                        <p class="wizard-subtitle">Dale un nombre y una personalidad única a este arquetipo.</p>
+                        <div class="form-group">
+                            <label>Nombre del Agente *</label>
+                            <input type="text" [(ngModel)]="selectedAgent.name"
+                                placeholder="Ej: Asistente de Ventas Pro">
+                        </div>
+                        <div class="form-group">
+                            <label>Personalidad Base</label>
+                            <select [(ngModel)]="selectedAgent.personality">
+                                <option value="friendly">😊 Amigable y Cercano</option>
+                                <option value="professional">💼 Profesional</option>
+                                <option value="funny">🤣 Divertido</option>
+                                <option value="formal">🎩 Formal</option>
+                                <option value="expert">🧐 Experto</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Descripción Corta</label>
+                            <input type="text" [(ngModel)]="selectedAgent.description"
+                                placeholder="¿Para qué tipo de negocio está diseñado?">
+                        </div>
+                    </div>
+
+                    <!-- PASO 2: Misión / Prompt -->
+                    <div *ngIf="wizardStep === 2" class="fade-in">
+                        <h2>🎯 Misión del Agente</h2>
+                        <p class="wizard-subtitle">Define las instrucciones base que guiarán su comportamiento.</p>
+                        <div class="form-group">
+                            <div class="label-with-action">
+                                <label>Prompt Maestro *</label>
+                                <button class="help-action-btn" (click)="fillAgentExample('prompt')">✨ Cargar
+                                    Ejemplo</button>
+                            </div>
+                            <textarea [(ngModel)]="selectedAgent.system_prompt" rows="8" class="code-area"
+                                placeholder="Eres un asistente de..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- PASO 3: Skills -->
+                    <div *ngIf="wizardStep === 3" class="fade-in">
+                        <h2>🚀 Añadir Habilidades</h2>
+                        <p class="wizard-subtitle">Activa las capacidades que tendrá este agente por defecto.</p>
+                        <div *ngIf="skillsCatalog.length === 0" class="wizard-empty-skills">
+                            <p>No hay habilidades en el catálogo aún. Puedes asignarlas después desde la pestaña
+                                "Habilidades".</p>
+                        </div>
+                        <div class="wizard-skills-grid">
+                            <div *ngFor="let skill of skillsCatalog" class="wizard-skill-box"
+                                [class.selected]="isSkillEnabled(skill.id)" (click)="toggleSkill(skill)">
+                                <span class="ws-icon">{{ getCategoryIcon(skill.category) }}</span>
+                                <strong>{{ skill.name }}</strong>
+                                <small>{{ skill.category }}</small>
+                                <div class="ws-check" *ngIf="isSkillEnabled(skill.id)">✓</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 4: Confirmación -->
+                    <div *ngIf="wizardStep === 4" class="fade-in">
+                        <h2>✅ Confirmar y Crear</h2>
+                        <p class="wizard-subtitle">Revisa los datos de tu nuevo agente antes de crearlo.</p>
+                        <div class="summary-card">
+                            <div class="summary-row">
+                                <span class="summary-label">Nombre</span>
+                                <span class="summary-value">{{ selectedAgent.name }}</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Personalidad</span>
+                                <span class="summary-value">{{ selectedAgent.personality }}</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Habilidades</span>
+                                <span class="summary-value">{{ pendingSkillIds.size }} seleccionadas</span>
+                            </div>
+                            <div class="summary-row" *ngIf="selectedAgent.system_prompt">
+                                <span class="summary-label">Prompt</span>
+                                <span class="summary-value prompt-preview">{{ selectedAgent.system_prompt | slice:0:60
+                                    }}...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pie del Wizard -->
+                <div class="wizard-footer">
+                    <button class="text-btn" (click)="showWizard = false">Cancelar</button>
+                    <div class="wizard-nav">
+                        <button *ngIf="wizardStep > 1" class="secondary-btn" (click)="prevStep()">← Anterior</button>
+                        <button *ngIf="wizardStep < 4" class="primary-btn" (click)="nextStep()">Siguiente →</button>
+                        <button *ngIf="wizardStep === 4" class="save-btn" (click)="saveAgent()" [disabled]="isSaving">
+                            {{ isSaving ? 'Creando...' : '🚀 ¡Crear Agente!' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- ===================== PANEL: PREVIEW PROMPT COMPILADO ===================== -->
+<!-- ... (existing code remains) ... -->
+
+<!-- ===================== MODAL: PREVIEW SKILL GENERADA ===================== -->
+<div class="modal-overlay" *ngIf="showSkillPreview">
+    <div class="modal-content large fade-in">
+        <div class="modal-header">
+            <span class="modal-icon">🪄</span>
+            <div>
+                <h2>Propuesta del Copiloto IA</h2>
+                <p>Revisa las instrucciones técnicas generadas para <strong>{{ editingSkill.name }}</strong></p>
+            </div>
+        </div>
+
+        <div class="modal-body">
+            <div class="ai-generated-box">
+                <textarea [(ngModel)]="editingSkill.system_prompt_fragment" rows="15" class="code-area"></textarea>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="secondary-btn" (click)="showSkillPreview = false">Descartar</button>
+            <button class="save-btn" (click)="useAIGeneratedSkill()">✨ Aplicar al Diseñador</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: WIZARD DE SKILLS ===================== -->
+<div class="wizard-overlay" *ngIf="showSkillWizard">
+    <div class="wizard-card skill-wizard">
+        <div class="wizard-header">
+            <div class="wizard-title">
+                <span class="wizard-icon">🪄</span>
+                <div>
+                    <h2>Diseñador de Habilidades IA</h2>
+                    <p>Paso {{ skillWizardStep }} de 3</p>
+                </div>
+            </div>
+            <button class="close-wizard" (click)="showSkillWizard = false">✕</button>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="wizard-progress">
+            <div *ngFor="let s of [1,2,3]" class="progress-step" [class.active]="skillWizardStep >= s"
+                [class.done]="skillWizardStep > s">
+                <span *ngIf="skillWizardStep <= s">{{ s }}</span>
+                <span *ngIf="skillWizardStep > s">✓</span>
+            </div>
+        </div>
+
+        <div class="wizard-content">
+            <!-- PASO 1: Concepto -->
+            <div *ngIf="skillWizardStep === 1" class="fade-in">
+                <h3>🏷️ Nombre y Concepto</h3>
+                <p>¿Cómo se llama esta habilidad y en qué categoría encaja?</p>
+
+                <div class="form-group">
+                    <label>Nombre de la Habilidad</label>
+                    <input type="text" [(ngModel)]="editingSkill.name" (blur)="generateSlug()"
+                        placeholder="Ej: Gestor de Devoluciones">
+                </div>
+
+                <div class="form-group">
+                    <label>Categoría</label>
+                    <select [(ngModel)]="editingSkill.category">
+                        <option *ngFor="let cat of skillCategories" [value]="cat.value">
+                            {{ getCategoryIcon(cat.value) }} {{ cat.label }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- PASO 2: Descripción para la IA -->
+            <div *ngIf="skillWizardStep === 2" class="fade-in">
+                <h3>📝 Objetivo de la Habilidad</h3>
+                <p>Explica en lenguaje natural qué quieres que la IA aprenda a hacer. El Copiloto transformará esto en
+                    instrucciones técnicas.</p>
+
+                <div class="form-group">
+                    <label>Descripción detallada para el Copiloto</label>
+                    <textarea [(ngModel)]="editingSkill.description" rows="6"
+                        placeholder="Ej: El agente debe ser capaz de preguntar el número de pedido, verificar si pasaron menos de 30 días y ofrecer un cupón o devolución según el motivo..."></textarea>
+                </div>
+
+                <div class="ai-action-zone">
+                    <button class="ai-generate-btn" (click)="generateSkillWithAI()" [disabled]="isGeneratingAI">
+                        {{ isGeneratingAI ? '🤖 Redactando instrucciones...' : '🪄 Generar Prompt con IA' }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- PASO 3: Revisión Final -->
+            <div *ngIf="skillWizardStep === 3" class="fade-in">
+                <h3>⚙️ Revisión Final</h3>
+                <p>Ajusta el fragmento técnico si es necesario antes de guardarlo en el catálogo.</p>
+
+                <div class="form-group">
+                    <label>Instrucciones Técnicas (Prompt Fragment)</label>
+                    <textarea [(ngModel)]="editingSkill.system_prompt_fragment" rows="8" class="code-area"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Slug Interno</label>
+                    <input type="text" [(ngModel)]="editingSkill.slug" placeholder="slug_unico">
+                </div>
+            </div>
+        </div>
+
+        <div class="wizard-footer">
+            <button class="text-btn" (click)="showSkillWizard = false">Cancelar</button>
+            <div class="wizard-nav">
+                <button *ngIf="skillWizardStep > 1" class="secondary-btn" (click)="prevSkillStep()">← Anterior</button>
+                <button *ngIf="skillWizardStep < 2" class="primary-btn" (click)="nextSkillStep()">Siguiente →</button>
+                <button *ngIf="skillWizardStep === 3" class="save-btn" (click)="saveSkill(); showSkillWizard = false">🚀
+                    Guardar en Catálogo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== PANEL: PREVIEW PROMPT COMPILADO ===================== -->
+<div class="preview-overlay" [class.open]="showPromptPreview" (click)="showPromptPreview = false">
+    <div class="preview-panel" (click)="$event.stopPropagation()" *ngIf="showPromptPreview">
+
+        <!-- Header del panel -->
+        <div class="preview-header">
+            <div class="preview-title">
+                <span class="preview-icon">🧠</span>
+                <div>
+                    <h2>Prompt Compilado — {{ selectedAgent?.name }}</h2>
+                    <p>Así llega el contexto completo a la IA cuando este agente está activo.</p>
+                </div>
+            </div>
+            <div class="preview-header-actions">
+                <div class="token-counter">
+                    <span class="token-chars">{{ compiledPromptPreview.length | number }} chars</span>
+                    <span class="token-sep">·</span>
+                    <span class="token-est">~{{ compiledPromptTokenEstimate | number }} tokens</span>
+                </div>
+                <button class="copy-btn" (click)="copyPromptToClipboard()">📋 Copiar</button>
+                <button class="close-preview-btn" (click)="showPromptPreview = false">✕</button>
+            </div>
+        </div>
+
+        <!-- Leyenda de bloques -->
+        <div class="preview-legend">
+            <span class="legend-item block-a">A: Identidad</span>
+            <span class="legend-item block-b">B: Skills ({{ agentSkills.length }})</span>
+            <span class="legend-item block-c">C: Prompt Maestro</span>
+            <span class="legend-item block-d">D: Restricciones</span>
+            <span class="legend-item block-e">E: Merchant (en runtime)</span>
+        </div>
+
+        <!-- Cuerpo del prompt con coloreado por bloque -->
+        <div class="preview-body">
+            <pre class="prompt-code" [innerHTML]="highlightedPrompt"></pre>
+        </div>
+
+        <!-- Footer -->
+        <div class="preview-footer">
+            <p class="preview-note">💡 El Bloque E (Personalización del comercio) se agrega en runtime cuando el
+                merchant configura su IA Config.</p>
+            <button class="save-btn" (click)="showPromptPreview = false; saveAgent()" [disabled]="isSaving">
+                {{ isSaving ? 'Guardando...' : '💾 Guardar y Cerrar' }}
+            </button>
+        </div>
+    </div>
+</div>

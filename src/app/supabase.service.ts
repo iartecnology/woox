@@ -12,6 +12,11 @@ export class SupabaseService {
 
     constructor() { }
 
+    isValidUUID(uuid: string): boolean {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(uuid);
+    }
+
     async updateAgentStatus(status: 'online' | 'busy' | 'offline') {
         const userId = localStorage.getItem('user_id'); // Asumiendo que guardamos el ID
         if (userId) {
@@ -100,7 +105,7 @@ export class SupabaseService {
     }
 
     async refreshGlobalUnreadCount(merchantId: string) {
-        if (!merchantId) return;
+        if (!merchantId || !this.isValidUUID(merchantId)) return;
         const { data } = await this.getConversations(merchantId);
         if (data) {
             const total = data.reduce((acc: number, curr: any) => acc + (curr.unread_count || 0), 0);
@@ -207,19 +212,35 @@ export class SupabaseService {
     }
 
     async saveAgent(agent: any) {
+        const agentToSave = { ...agent };
+        delete agentToSave.created_at;
+        delete agentToSave.context_blocks; // UI-only field
+
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!agentToSave.id || !uuidRegex.test(agentToSave.id)) {
+            delete agentToSave.id;
+        }
+
         const { data, error } = await supabase
             .from('agents')
-            .upsert(agent);
+            .upsert(agentToSave)
+            .select()
+            .single();
         return { data, error };
     }
 
-    // --- PRODUCTOS Y CATEGORÍAS ---
+
     async getCategories(merchantId: string) {
+        if (!merchantId || !this.isValidUUID(merchantId)) {
+            console.error('[SupabaseService] getCategories: Invalid or missing UUID:', merchantId);
+            return { data: [], error: { message: `ID de comercio inválido ("${merchantId}"). Por favor, selecciona la empresa nuevamente.` } };
+        }
         const { data, error } = await supabase
             .from('categories')
             .select('*')
             .eq('merchant_id', merchantId)
             .order('name');
+        if (error) console.error('[SupabaseService] Error loading categories:', error);
         return { data, error };
     }
 
@@ -228,11 +249,16 @@ export class SupabaseService {
     }
 
     async getProducts(merchantId: string) {
+        if (!merchantId || !this.isValidUUID(merchantId)) {
+            console.error('[SupabaseService] getProducts: Invalid or missing UUID:', merchantId);
+            return { data: [], error: { message: `ID de comercio inválido ("${merchantId}"). Por favor, selecciona la empresa nuevamente.` } };
+        }
         const { data, error } = await supabase
             .from('products')
-            .select('*, categories(name)')
+            .select('*')
             .eq('merchant_id', merchantId)
             .order('name');
+        if (error) console.error('[SupabaseService] Error loading products:', error);
         return { data, error };
     }
 
@@ -375,6 +401,9 @@ export class SupabaseService {
     }
 
     async getConversations(merchantId: string) {
+        if (!merchantId || !this.isValidUUID(merchantId)) {
+            return { data: [], error: { message: 'Invalid UUID' } };
+        }
         const { data, error } = await supabase
             .from('conversations')
             .select('*, customers(full_name, phone)')
@@ -401,6 +430,10 @@ export class SupabaseService {
 
     // Suscripción Global para Notificaciones (Cualquier mensaje nuevo en conversaciones de este merchant)
     subscribeToMerchantConversations(merchantId: string, callback: (payload: any) => void) {
+        if (!merchantId || !this.isValidUUID(merchantId)) {
+            console.error('[SupabaseService] subscribeToMerchantConversations: Invalid UUID', merchantId);
+            return null;
+        }
         return supabase
             .channel(`merchant:${merchantId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `merchant_id=eq.${merchantId}` }, callback)
@@ -667,5 +700,69 @@ export class SupabaseService {
 
     async rpc(functionName: string, params: any) {
         return await supabase.rpc(functionName, params);
+    }
+
+    // --- NUEVO SISTEMA DE SKILLS RELACIONAL ---
+
+    async getSkillsCatalog() {
+        return await supabase
+            .from('skills_catalog')
+            .select('*')
+            .order('category', { ascending: true });
+    }
+
+    async getAgentSkills(agentId: string) {
+        return await supabase
+            .from('agent_skills')
+            .select(`
+                *,
+                skills_catalog (
+                    id,
+                    slug,
+                    name,
+                    description,
+                    category
+                )
+            `)
+            .eq('agent_id', agentId);
+    }
+
+    async updateAgentSkill(agentId: string, skillId: string, isEnabled: boolean) {
+        return await supabase
+            .from('agent_skills')
+            .upsert({
+                agent_id: agentId,
+                skill_id: skillId,
+                is_enabled: isEnabled
+            }, {
+                onConflict: 'agent_id,skill_id'
+            });
+    }
+
+    async deleteAgent(id: string) {
+        return await supabase.from('agents').delete().eq('id', id);
+    }
+
+    async saveSkillToCatalog(skill: any) {
+        return await supabase.from('skills_catalog').upsert(skill).select().single();
+    }
+
+    async deleteSkillFromCatalog(id: string) {
+        return await supabase.from('skills_catalog').delete().eq('id', id);
+    }
+
+    // --- PLATFORM SETTINGS ---
+    async getPlatformSettings() {
+        return await supabase
+            .from('platform_settings')
+            .select('*')
+            .eq('id', 'global')
+            .single();
+    }
+
+    async updatePlatformSettings(updates: any) {
+        return await supabase
+            .from('platform_settings')
+            .upsert({ id: 'global', ...updates });
     }
 }

@@ -5,6 +5,9 @@
             <button class="add-btn-small" (click)="openCategoryModal()">+</button>
         </div>
         <ul class="category-list">
+            <li [class.active]="selectedCategoryId === ''" (click)="selectCategory('')">
+                🌍 Todas las Categorías
+            </li>
             <li *ngFor="let cat of filteredCategories" [class.active]="selectedCategoryId === cat.id"
                 (click)="selectCategory(cat.id)">
                 {{ cat.name }}
@@ -49,20 +52,48 @@
 
             <!-- Content (Solo visible si NO está cargando) -->
             <ng-container *ngIf="!isLoading">
-                <!-- Debug Info -->
-                <div *ngIf="filteredCategories.length === 0"
-                    style="padding: 20px; background: #fff3cd; color: #856404; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeeba;">
-                    ⚠️ No hay categorías cargadas. MerchantId: {{ merchantId }}
+                <!-- Caso: Sin Merchant ID (Contexto perdido) -->
+                <div class="empty-catalog-fallback" *ngIf="!merchantId"
+                    style="grid-column: 1 / -1; text-align: center; padding: 60px 20px;">
+                    <div style="font-size: 4rem; margin-bottom: 20px;">🏛️</div>
+                    <h3>No se ha seleccionado una empresa</h3>
+                    <p style="color: #64748b; max-width: 400px; margin: 0 auto 24px;">
+                        Para gestionar un catálogo, primero selecciona una empresa de la lista principal.
+                    </p>
+                    <button class="primary-btn" routerLink="/super-admin" style="margin: 0 auto;">Volver a
+                        Empresas</button>
                 </div>
 
-                <div *ngIf="products.length === 0 && filteredCategories.length > 0"
-                    style="padding: 20px; background: #fff3cd; color: #856404; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeeba;">
-                    ⚠️ No hay productos en la base de datos para este comercio.
-                </div>
+                <div class="empty-catalog-fallback" *ngIf="merchantId && filteredProducts.length === 0"
+                    style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 2px dashed #cbd5e1;">
+                    <div style="font-size: 4rem; margin-bottom: 20px;">🍱</div>
+                    <h3>No encontramos productos</h3>
+                    <p style="color: #64748b; max-width: 400px; margin: 0 auto 24px;">
+                        {{ selectedCategoryId ? 'No hay productos en esta categoría.' : 'Este comercio aún no tiene
+                        productos registrados en su catálogo.' }}
+                    </p>
 
-                <div *ngIf="filteredProducts.length === 0 && products.length > 0"
-                    style="padding: 20px; background: #d1ecf1; color: #0c5460; border-radius: 8px; margin-bottom: 20px; border: 1px solid #bee5eb;">
-                    ℹ️ No hay productos en la categoría seleccionada: {{ selectedCategoryId }}
+                    <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 20px;">
+                        <button class="add-product-btn" (click)="openProductModal()">+ Crear Producto</button>
+                        <button class="secondary-btn" (click)="loadData()"
+                            style="padding: 10px 20px; border-radius: 12px; border: 1px solid #ddd; background: white; cursor: pointer;">
+                            🔄 Reintentar Carga
+                        </button>
+                    </div>
+
+                    <div
+                        style="margin-top: 30px; font-size: 0.7rem; color: #94a3b8; background: #f8fafc; padding: 12px; border-radius: 8px; display: inline-block;">
+                        <b>Debug Info:</b> Merchant ID: <code>{{ merchantId }}</code> |
+                        Categorías: {{ filteredCategories.length }} |
+                        Productos Totales: {{ products.length }}
+                    </div>
+
+                    <div *ngIf="products.length > 0 && selectedCategoryId !== ''" style="margin-top: 20px;">
+                        <button (click)="selectCategory('')"
+                            style="background: none; border: none; color: #4f46e5; cursor: pointer; text-decoration: underline; font-weight: 600;">
+                            Ver todos los productos ({{ products.length }})
+                        </button>
+                    </div>
                 </div>
 
                 <div *ngFor="let product of filteredProducts" class="product-card">
@@ -79,7 +110,7 @@
                         <p class="desc">{{ product.description }}</p>
                         <div class="actions">
                             <button class="edit-btn" (click)="openProductModal(product)">Editar</button>
-                            <button class="delete-btn" (click)="deleteProduct(product.id)">Eliminar</button>
+                            <button class="delete-btn" (click)="requestDeleteProduct(product.id)">Eliminar</button>
                         </div>
                     </div>
                 </div>
@@ -135,6 +166,20 @@
         <div class="modal-actions">
             <button class="cancel-btn" (click)="showCategoryModal = false">Cancelar</button>
             <button class="save-btn" (click)="saveCategory()">Crear Categoría</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmación Eliminar Producto -->
+<div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDeleteProduct()">
+    <div class="modal-content small" (click)="$event.stopPropagation()" style="text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 8px;">🗑️</div>
+        <h2 style="margin: 0 0 8px;">¿Eliminar Producto?</h2>
+        <p style="color: #64748b; margin: 0 0 24px; font-size: 0.9rem;">Esta acción no se puede deshacer.</p>
+        <div class="modal-actions" style="justify-content: center; gap: 12px;">
+            <button class="cancel-btn" (click)="cancelDeleteProduct()">Cancelar</button>
+            <button class="delete-btn" (click)="confirmDeleteProduct()" style="padding: 10px 20px;">Sí,
+                Eliminar</button>
         </div>
     </div>
 </div>
