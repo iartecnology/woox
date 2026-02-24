@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectorRef, NgZone } from '@angular/core';
 import { WOOX_DB_INIT_SQL } from './db-init.constants';
 import { createClient } from '@supabase/supabase-js';
 import { CommonModule } from '@angular/common';
@@ -125,6 +125,7 @@ interface Merchant {
     ai_schedule_end?: string;
     ai_schedule_message?: string;
     ai_enabled?: boolean;
+    industry_type?: string;
 }
 
 interface PlatformConfig {
@@ -155,12 +156,14 @@ export class SuperAdminComponent implements OnInit {
     sortDirection: 'asc' | 'desc' = 'asc';
     currentPage: number = 1;
     itemsPerPage: number = 5;
+    viewMerchants: Merchant[] = [];
     Math = Math;
 
     aiProviders = [
         { id: 'openai', name: 'OpenAI (GPT-4o)', icon: '🤖' },
         { id: 'anthropic', name: 'Anthropic (Claude 3.5)', icon: '🕵️' },
         { id: 'google_gemini', name: 'Google Gemini Pro', icon: '💎' },
+        { id: 'ollama', name: 'Ollama (Local AI)', icon: '🏠' },
         { id: 'deepseek', name: 'DeepSeek R1', icon: '🧠' }
     ];
 
@@ -181,11 +184,22 @@ export class SuperAdminComponent implements OnInit {
             { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Razonamiento Complejo)' },
             { id: 'gemini-pro', name: 'Gemini 1.0 Pro' }
         ],
-
+        'ollama': [
+            { id: 'llama3:latest', name: 'Llama 3 (Meta)' },
+            { id: 'mistral:latest', name: 'Mistral' },
+            { id: 'phi3:latest', name: 'Phi-3 (Microsoft)' },
+            { id: 'nomic-embed-text:latest', name: 'Nomic Embed (Recomendado para Vectores)' }
+        ],
         'deepseek': [
             { id: 'deepseek-chat', name: 'DeepSeek Chat (Recomendado)' },
             { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (R1)' }
         ]
+    };
+
+    embedModels: { [key: string]: { id: string; name: string }[] } = {
+        'openai': [{ id: 'text-embedding-3-small', name: 'text-embedding-3-small' }, { id: 'text-embedding-3-large', name: 'text-embedding-3-large' }],
+        'google_gemini': [{ id: 'text-embedding-004', name: 'text-embedding-004 (Premium)' }],
+        'ollama': [{ id: 'nomic-embed-text:latest', name: 'nomic-embed-text' }, { id: 'all-minilm:latest', name: 'all-minilm' }]
     };
 
     // --- ESTRUCTURA VISUAL DE CONFIGURACIÓN DE IA (SECCIONES) ---
@@ -284,6 +298,10 @@ export class SuperAdminComponent implements OnInit {
     aiConnectionStatus: 'none' | 'success' | 'error' = 'none';
     aiConnectionMessage: string = '';
 
+    isTestingEmbed: boolean = false;
+    embedConnectionStatus: 'none' | 'success' | 'error' = 'none';
+    embedConnectionMessage: string = '';
+
     // Gestión de Agentes
     showAgentManager: boolean = false;
     selectedAgent: Agent = {
@@ -336,6 +354,7 @@ export class SuperAdminComponent implements OnInit {
     private catalogService = inject(CatalogService);
     private router = inject(Router);
     private cdr = inject(ChangeDetectorRef);
+    private ngZone = inject(NgZone);
 
     constructor() { }
 
@@ -345,6 +364,7 @@ export class SuperAdminComponent implements OnInit {
             localStorage.removeItem('active_merchant_id');
             localStorage.removeItem('merchant_name');
             localStorage.removeItem('merchant_slug');
+            localStorage.removeItem('merchant_industry_type');
         }
         await this.loadInitialData();
     }
@@ -371,6 +391,7 @@ export class SuperAdminComponent implements OnInit {
                 this.platformAiSettings = { ...this.platformAiSettings, ...platformResult.data };
             }
 
+            this.updateMerchantsView();
             this.cdr.detectChanges(); // Forzar renderizado inicial
 
             // Si no hay agentes, cargar el default
@@ -560,6 +581,10 @@ export class SuperAdminComponent implements OnInit {
         ai_provider: 'google_gemini',
         ai_api_key: '',
         ai_model: '',
+        ollama_base_url: 'http://localhost:11434',
+        embed_provider: 'google_gemini',
+        embed_model: 'text-embedding-004',
+        embed_api_key: '',
         support_ai_enabled: false
     };
 
@@ -595,6 +620,7 @@ export class SuperAdminComponent implements OnInit {
     merchantUsers: MerchantUser[] = [];
     merchantTeams: Team[] = [];
     showTeamManager = false;
+    showMerchantStats = false;
     isAddingTeam = false;
 
     newTeam: Partial<Team> = {
@@ -670,25 +696,42 @@ export class SuperAdminComponent implements OnInit {
         }
     }
 
-    async openAIConfig(merchant: Merchant) {
-        this.isEditing = true;
-        this.selectedMerchant = { ...merchant };
+    consolidatedPrompt: string = '';
 
-        // Asegurar que existan las propiedades de IA para evitar errores de binding
+    async updateConsolidatedPrompt() {
+        if (!this.selectedMerchant?.id) return;
+        try {
+            const { data, error } = await this.supabaseService.rpc('get_compiled_prompt', {
+                p_merchant_id: this.selectedMerchant.id
+            });
+            this.consolidatedPrompt = data || 'Error al compilar prompt';
+        } catch (e) {
+            console.error('Error in updateConsolidatedPrompt', e);
+            this.consolidatedPrompt = 'Error al conectar con el servidor de prompts';
+        }
+    }
+
+    openAIConfig(merchant: Merchant) {
+        console.log('🤖 Opening AI Config for', merchant.name);
+        this.selectedMerchant = { ...merchant };
+        this.currentManagingMerchant = merchant;
+        this.isEditing = true;
+
+        // Asegurar propiedades de IA inmediatamente
         this.selectedMerchant.ai_provider = this.selectedMerchant.ai_provider || 'google_gemini';
         this.selectedMerchant.ai_api_key = this.selectedMerchant.ai_api_key || '';
         this.selectedMerchant.ai_model = this.selectedMerchant.ai_model || '';
         this.selectedMerchant.ai_personality = this.selectedMerchant.ai_personality || 'friendly';
         this.selectedMerchant.ai_context_blocks = this.selectedMerchant.ai_context_blocks || [];
-        this.selectedMerchant.ai_use_catalog = this.selectedMerchant.ai_use_catalog !== false; // Default true
+        this.selectedMerchant.ai_use_catalog = this.selectedMerchant.ai_use_catalog !== false;
         this.selectedMerchant.ai_restrictions = this.selectedMerchant.ai_restrictions || '';
+        this.selectedMerchant.industry_type = this.selectedMerchant.industry_type || 'retail';
+        this.selectedMerchant.ai_enabled = this.selectedMerchant.ai_enabled !== false;
 
-        this.currentManagingMerchant = merchant;
         this.showAIConfig = true;
         this.aiConnectionStatus = 'none';
         this.aiConnectionMessage = '';
 
-        // Resetear la visibilidad de los tokens al abrir (siempre ocultos por defecto)
         this.tokenVisibility = {
             whatsapp: false,
             telegram: false,
@@ -697,23 +740,9 @@ export class SuperAdminComponent implements OnInit {
 
         this.cdr.detectChanges();
 
-        try {
-            await this.updateConsolidatedPrompt();
-        } catch (e) {
-            console.error('Error al actualizar prompt en openAIConfig', e);
-        }
-
-        this.cdr.detectChanges();
-    }
-
-    consolidatedPrompt: string = '';
-
-    async updateConsolidatedPrompt() {
-        if (!this.selectedMerchant?.id) return;
-        const { data, error } = await this.supabaseService.rpc('get_compiled_prompt', {
-            p_merchant_id: this.selectedMerchant.id
+        this.updateConsolidatedPrompt().then(() => {
+            this.cdr.detectChanges();
         });
-        this.consolidatedPrompt = data || 'Error al compilar prompt';
     }
 
     async getAIContext() {
@@ -732,24 +761,37 @@ export class SuperAdminComponent implements OnInit {
 
 
     async openUserManager(merchant: Merchant) {
+        console.log('👤 Opening User Manager for', merchant.name);
         this.currentManagingMerchant = merchant;
         this.showUserManager = true;
         this.merchantTeams = [];
-        const { data } = await this.supabaseService.getTeams(merchant.id);
-        this.merchantTeams = data || [];
         this.cdr.detectChanges();
+
+        try {
+            const { data } = await this.supabaseService.getTeams(merchant.id);
+            this.merchantTeams = data || [];
+            this.cdr.detectChanges();
+        } catch (e) {
+            console.error('Error loading teams', e);
+        }
     }
 
     async openTeamManager(merchant: Merchant) {
+        console.log('👥 Opening Team Manager for', merchant.name);
         this.currentManagingMerchant = merchant;
         this.merchantTeams = [];
         this.showTeamManager = true;
-
-        const { data, error } = await this.supabaseService.getTeams(merchant.id);
-        if (!error) {
-            this.merchantTeams = data || [];
-        }
         this.cdr.detectChanges();
+
+        try {
+            const { data, error } = await this.supabaseService.getTeams(merchant.id);
+            if (!error) {
+                this.merchantTeams = data || [];
+                this.cdr.detectChanges();
+            }
+        } catch (e) {
+            console.error('Error loading teams', e);
+        }
     }
 
     async addTeam() {
@@ -887,19 +929,25 @@ export class SuperAdminComponent implements OnInit {
 
 
     enterAsMerchant(merchant: Merchant) {
-        localStorage.setItem('user_role', 'superadmin');
-        localStorage.setItem('active_merchant_id', merchant.id);
-        localStorage.setItem('merchant_name', merchant.name);
-        localStorage.setItem('merchant_slug', merchant.slug);
-        this.notificationService.show(`Bienvenido a ${merchant.name}`, 'success');
-        this.router.navigate(['/chats']);
+        this.ngZone.run(() => {
+            localStorage.setItem('user_role', 'superadmin');
+            localStorage.setItem('active_merchant_id', merchant.id);
+            localStorage.setItem('merchant_name', merchant.name);
+            localStorage.setItem('merchant_slug', merchant.slug);
+            localStorage.setItem('merchant_industry_type', merchant.industry_type || 'retail');
+            this.notificationService.show(`Bienvenido a ${merchant.name}`, 'success');
+            this.router.navigate(['/chats']);
+        });
     }
 
     viewMerchantStats(merchant: Merchant) {
-        this.router.navigate(['/platform-analytics'], { queryParams: { merchantId: merchant.id } });
+        this.ngZone.run(() => {
+            this.router.navigate(['/platform-analytics'], { queryParams: { merchantId: merchant.id } });
+        });
     }
 
     openBiolinkConfig(merchant: Merchant) {
+        console.log('🔗 Attempting to open Biolink Config for', merchant.name);
         this.currentManagingMerchant = merchant;
         if (!merchant.biolink) {
             merchant.biolink = {
@@ -921,6 +969,8 @@ export class SuperAdminComponent implements OnInit {
         }
         this.selectedMerchant = JSON.parse(JSON.stringify(merchant));
         this.showBiolinkConfig = true;
+        this.cdr.detectChanges();
+        console.log('✅ Biolink modal state updated');
     }
 
     editOmniConfig(merchant: Merchant) {
@@ -1155,29 +1205,51 @@ export class SuperAdminComponent implements OnInit {
         // Establecer como mercante activo para que el panel de chats lo reconozca
         localStorage.setItem('active_merchant_id', merchant.id || '');
 
-        this.isPreparingSimulator = true;
-        this.selectedMerchant = { ...merchant };
-        this.cdr.detectChanges();
+        this.ngZone.run(() => {
+            this.isPreparingSimulator = true;
+            this.selectedMerchant = { ...merchant };
+            this.cdr.detectChanges();
+        });
 
         try {
             await this.updateConsolidatedPrompt();
-            this.showSimulator = true;
+            this.ngZone.run(() => {
+                this.showSimulator = true;
+                this.cdr.detectChanges();
+            });
         } catch (error) {
             this.notificationService.show('Error al preparar simulador', 'error');
-            this.showSimulator = true; // Intentar mostrarlo de todos modos
+            this.ngZone.run(() => {
+                this.showSimulator = true;
+                this.cdr.detectChanges();
+            });
         } finally {
-            this.isPreparingSimulator = false;
-            this.cdr.detectChanges();
+            this.ngZone.run(() => {
+                this.isPreparingSimulator = false;
+                this.cdr.detectChanges();
+            });
         }
     }
 
     openLiveMonitor(merchant: Merchant) {
+        console.log('🛒 Opening Live Monitor for', merchant.name);
         this.currentMonitoringMerchantId = merchant.id;
         this.showLiveMonitor = true;
+        this.cdr.detectChanges();
     }
 
     goToCatalog(merchant: Merchant) {
-        this.router.navigate(['/products'], { queryParams: { merchantId: merchant.id } });
+        console.log(`[SuperAdmin] Navigating to Catalog for ${merchant.name}`);
+        localStorage.setItem('active_merchant_id', merchant.id);
+        localStorage.setItem('merchant_industry_type', merchant.industry_type || 'retail');
+        this.router.navigate(['/products']);
+    }
+
+    goToBrain(merchant: Merchant) {
+        console.log(`[SuperAdmin] Navigating to Merchant Brain for ${merchant.name}`);
+        localStorage.setItem('active_merchant_id', merchant.id);
+        localStorage.setItem('merchant_industry_type', merchant.industry_type || 'retail');
+        this.router.navigate(['/merchant-brain']);
     }
 
     openModal(merchant?: Merchant) {
@@ -1191,6 +1263,7 @@ export class SuperAdminComponent implements OnInit {
                 logo_url: '',
                 primary_color: '#4F46E5',
                 is_active: true,
+                industry_type: 'retail',
                 whatsapp_token: '',
                 telegram_bot_token: '',
                 facebook_page_token: '',
@@ -1208,6 +1281,7 @@ export class SuperAdminComponent implements OnInit {
             this.isEditing = false;
         }
         this.showModal = true;
+        this.cdr.detectChanges();
     }
 
     openPlatformConfig() {
@@ -1218,52 +1292,162 @@ export class SuperAdminComponent implements OnInit {
 
 
     openOmniConfig(merchant: Merchant) {
+        console.log('💬 Opening Omni Config for', merchant.name);
         this.selectedMerchant = { ...merchant };
         this.currentManagingMerchant = merchant;
 
-        // Sugerir código si no tiene uno
         if (!this.selectedMerchant.merchant_code) {
             this.suggestMerchantCode();
         }
 
         this.showOmniConfig = true;
+        this.cdr.detectChanges();
     }
 
     async testPlatformAIConnection() {
-        if (!this.platformAiSettings.ai_api_key) {
-            this.notificationService.show('Ingresa una Master API Key para probar', 'warning');
+        const provider = this.platformAiSettings.ai_provider || 'google_gemini';
+        const apiKey = this.platformAiSettings.ai_api_key;
+        const ollamaUrl = this.platformAiSettings.ollama_base_url || 'http://localhost:11434';
+
+        if (provider !== 'ollama' && !apiKey) {
+            this.notificationService.show('Ingresa una API Key para probar', 'warning');
             return;
         }
 
         this.isTestingAI = true;
         this.aiConnectionStatus = 'none';
         this.aiConnectionMessage = '';
+        this.cdr.detectChanges();
 
         try {
-            const provider = this.platformAiSettings.ai_provider || 'google_gemini';
+            console.log(`[SuperAdmin] Testing AI Connection for ${provider}...`);
+            let freshModels: any[] = [];
 
             if (provider === 'google_gemini') {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${this.platformAiSettings.ai_api_key}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
                 const resp = await fetch(url);
                 if (resp.ok) {
-                    this.aiConnectionStatus = 'success';
-                    this.aiConnectionMessage = '✅ Master Key válida (Google Gemini)';
+                    const data = await resp.json();
+                    freshModels = (data.models || [])
+                        .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+                        .map((m: any) => ({
+                            id: m.name.replace('models/', ''),
+                            name: m.displayName || m.name
+                        }));
                 } else {
                     const error = await resp.json();
                     throw new Error(error.error?.message || 'Key de Gemini inválida');
                 }
-            } else {
-                // Simulación para otros proveedores por ahora
-                await new Promise(resolve => setTimeout(resolve, 1000));
+            } else if (provider === 'openai') {
+                const url = 'https://api.openai.com/v1/models';
+                const resp = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    freshModels = (data.data || [])
+                        .filter((m: any) => m.id.startsWith('gpt-') || m.id.includes('o1'))
+                        .map((m: any) => ({
+                            id: m.id,
+                            name: m.id.toUpperCase()
+                        }));
+                } else {
+                    const error = await resp.json();
+                    throw new Error(error.error?.message || 'Key de OpenAI inválida');
+                }
+            } else if (provider === 'ollama') {
+                const url = `${ollamaUrl}/api/tags`;
+                const resp = await fetch(url);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    freshModels = (data.models || []).map((m: any) => ({
+                        id: m.name,
+                        name: m.name
+                    }));
+                } else {
+                    throw new Error('No se pudo conectar con Ollama en la URL provista.');
+                }
+            }
+
+            if (freshModels.length > 0) {
+                this.aiModels[provider] = freshModels;
+                if (!this.platformAiSettings.ai_model || !freshModels.find((m: any) => m.id === this.platformAiSettings.ai_model)) {
+                    this.platformAiSettings.ai_model = freshModels[0].id;
+                }
                 this.aiConnectionStatus = 'success';
-                this.aiConnectionMessage = 'Conexión exitosa (Simulada)';
+                this.aiConnectionMessage = `✅ Conexión exitosa. (${freshModels.length} modelos)`;
+                this.notificationService.show('Conexión válida. Modelos cargados.', 'success');
+            } else {
+                throw new Error('No se detectaron modelos compatibles.');
             }
         } catch (error: any) {
+            console.error('[SuperAdmin] AI Test Error:', error);
             this.aiConnectionStatus = 'error';
             this.aiConnectionMessage = error.message || 'Error de conexión';
-            this.notificationService.show('Error al validar la Master Key', 'error');
+            this.notificationService.show('Error al validar la conexión', 'error');
         } finally {
             this.isTestingAI = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    async testPlatformEmbeddingConnection() {
+        const provider = this.platformAiSettings.embed_provider || 'google_gemini';
+        const apiKey = this.platformAiSettings.embed_api_key || this.platformAiSettings.ai_api_key;
+        const ollamaUrl = this.platformAiSettings.ollama_base_url || 'http://localhost:11434';
+
+        if (provider !== 'ollama' && !apiKey) {
+            this.notificationService.show('Ingresa una API Key para probar embeddings', 'warning');
+            return;
+        }
+
+        this.isTestingEmbed = true;
+        this.embedConnectionStatus = 'none';
+        this.embedConnectionMessage = '';
+        this.cdr.detectChanges();
+
+        try {
+            let freshModels: any[] = [];
+
+            if (provider === 'google_gemini') {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                freshModels = (data.models || [])
+                    .filter((m: any) => m.supportedGenerationMethods?.includes('embedContent'))
+                    .map((m: any) => ({ id: m.name.replace('models/', ''), name: m.displayName || m.name }));
+            } else if (provider === 'openai') {
+                const url = 'https://api.openai.com/v1/models';
+                const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+                const data = await resp.json();
+                freshModels = (data.data || [])
+                    .filter((m: any) => m.id.includes('embed'))
+                    .map((m: any) => ({ id: m.id, name: m.id }));
+            } else if (provider === 'ollama') {
+                const url = `${ollamaUrl}/api/tags`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                freshModels = (data.models || [])
+                    .filter((m: any) => m.name.includes('embed') || m.name.includes('llama'))
+                    .map((m: any) => ({ id: m.name, name: m.name }));
+            }
+
+            if (freshModels.length > 0) {
+                this.embedModels[provider] = freshModels;
+                if (!this.platformAiSettings.embed_model || !freshModels.find((m: any) => m.id === this.platformAiSettings.embed_model)) {
+                    this.platformAiSettings.embed_model = freshModels[0].id;
+                }
+                this.embedConnectionStatus = 'success';
+                this.embedConnectionMessage = `✅ Embeddings OK. (${freshModels.length} modelos)`;
+            } else {
+                throw new Error('No se encontraron modelos de embedding.');
+            }
+        } catch (error: any) {
+            this.embedConnectionStatus = 'error';
+            this.embedConnectionMessage = error.message || 'Error de conexión';
+        } finally {
+            this.isTestingEmbed = false;
+            this.cdr.detectChanges();
         }
     }
 
@@ -1446,6 +1630,13 @@ export class SuperAdminComponent implements OnInit {
         if (!this.isEditing) {
             (merchantData as any).slug = this.selectedMerchant.name?.toLowerCase().replace(/ /g, '-') || '';
             delete (merchantData as any).id;
+        }
+
+        // --- ROBUSTEZ: Evitar errores de esquema si la columna biolink aún no existe ---
+        // Si biolink es null o undefined, lo eliminamos del objeto para que Supabase no intente insertarlo 
+        // en una columna que podría no existir todavía en el cache del esquema.
+        if (merchantData.biolink === undefined || merchantData.biolink === null) {
+            delete merchantData.biolink;
         }
 
         const { error } = await this.supabaseService.saveMerchant(merchantData);
@@ -1967,8 +2158,8 @@ Tenemos Hamburguesas, Pizzas, Sushi, Opciones Saludables y Bebidas.
         this.selectedMerchant.ai_context_blocks = this.selectedMerchant.ai_context_blocks.filter(b => b.id !== id);
     }
 
-    get sortedMerchants(): Merchant[] {
-        return [...this.merchants].sort((a, b) => {
+    updateMerchantsView(): void {
+        const sorted = [...this.merchants].sort((a, b) => {
             const valA = a[this.sortKey] || '';
             const valB = b[this.sortKey] || '';
 
@@ -1976,11 +2167,9 @@ Tenemos Hamburguesas, Pizzas, Sushi, Opciones Saludables y Bebidas.
             if (valA > valB) return this.sortDirection === 'asc' ? 1 : -1;
             return 0;
         });
-    }
 
-    get paginatedMerchants(): Merchant[] {
         const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-        return this.sortedMerchants.slice(startIndex, startIndex + this.itemsPerPage);
+        this.viewMerchants = sorted.slice(startIndex, startIndex + this.itemsPerPage);
     }
 
     get totalPages(): number {
@@ -1999,11 +2188,13 @@ Tenemos Hamburguesas, Pizzas, Sushi, Opciones Saludables y Bebidas.
             this.sortDirection = 'asc';
         }
         this.currentPage = 1;
+        this.updateMerchantsView();
     }
 
     changePage(page: number): void {
         if (page >= 1 && page <= this.totalPages) {
             this.currentPage = page;
+            this.updateMerchantsView();
         }
     }
 

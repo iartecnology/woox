@@ -178,9 +178,18 @@
                     <span class="icon">🚚</span>
                     <span>Reparto</span>
                 </a>
-                <a routerLink="/products" routerLinkActive="active" (click)="closeSidebar()">
+                <!-- Catálogo: Solo para comercios de Ventas/Retail -->
+                <a *ngIf="merchantIndustryType === 'retail'" routerLink="/products" routerLinkActive="active"
+                    (click)="closeSidebar()">
                     <span class="icon">🍱</span>
                     <span>Catálogo</span>
+                </a>
+
+                <!-- Cerebro de Empresa: Solo para comercios de Soporte/Atención (así se cumple el 'se cambia') -->
+                <a *ngIf="merchantIndustryType !== 'retail'" routerLink="/merchant-brain" routerLinkActive="active"
+                    (click)="closeSidebar()" class="brain-btn-highlight">
+                    <span class="icon">🧠</span>
+                    <span>Cerebro de Empresa</span>
                 </a>
                 <a routerLink="/ai-config" routerLinkActive="active" (click)="closeSidebar()">
                     <span class="icon">🤖</span>

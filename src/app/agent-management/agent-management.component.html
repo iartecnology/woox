@@ -33,6 +33,9 @@
                         General</button>
                     <button [class.active]="activeTab === 'skills'" (click)="activeTab = 'skills'; loadAgentSkills()">🚀
                         Habilidades</button>
+                    <button [class.active]="activeTab === 'knowledge'"
+                        (click)="activeTab = 'knowledge'; loadKnowledgeBlocks()">🧠
+                        Cerebro</button>
                     <button [class.active]="activeTab === 'designer'"
                         (click)="activeTab = 'designer'; loadSkillsCatalog()">🎨
                         Diseñador</button>
@@ -63,6 +66,23 @@
 
             <!-- ===================== PESTAÑA: GENERAL ===================== -->
             <div *ngIf="activeTab === 'general'" class="fade-in">
+                <!-- Acciones Superiores -->
+                <div class="footer-actions"
+                    style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0;">
+                    <button class="danger-outline-btn" (click)="deleteAgent(selectedAgent)">🗑️ Eliminar Agente</button>
+                    <div class="footer-right-actions">
+                        <button class="preview-btn" (click)="showPromptPreview = true; loadAgentSkills()">
+                            👁️ Ver Prompt Compilado
+                        </button>
+                        <button class="simulation-btn" (click)="toggleAgentSimulation()">
+                            🧪 Probar Agente
+                        </button>
+                        <button class="save-btn" (click)="saveAgent()" [disabled]="isSaving">
+                            {{ isSaving ? 'Guardando...' : '💾 Guardar Cambios' }}
+                        </button>
+                    </div>
+                </div>
+
                 <div class="agent-form-header">
                     <h3>🎭 Identidad y Lógica Base del Agente</h3>
                     <p class="desc">Define el rol central, sistema de instrucciones y personalidad de este arquetipo.
@@ -142,11 +162,24 @@
                         <button class="preview-btn" (click)="showPromptPreview = true; loadAgentSkills()">
                             👁️ Ver Prompt Compilado
                         </button>
+                        <button class="simulation-btn" (click)="toggleAgentSimulation()">
+                            🧪 Probar Agente
+                        </button>
                         <button class="save-btn" (click)="saveAgent()" [disabled]="isSaving">
                             {{ isSaving ? 'Guardando...' : '💾 Guardar Cambios' }}
                         </button>
                     </div>
                 </div>
+
+                <!-- SIMULADOR AGENTE (PREMIUM - COMPONENTIZADO) -->
+                <app-chat-simulator *ngIf="showAgentSimulator" [merchantName]="simulatedMerchant.name"
+                    [logoUrl]="simulatedMerchant.logo_url" [primaryColor]="simulatedMerchant.primary_color"
+                    [aiProvider]="platformSettings?.ai_provider || 'google_gemini'" [aiApiKey]="effectiveAiApiKey"
+                    [aiModel]="effectiveAiModel"
+                    [ollamaBaseUrl]="platformSettings?.ollama_base_url || 'http://localhost:11434'"
+                    [context]="agentFullContext" [merchantId]="simulatedMerchant.id" [aiEnabled]="true"
+                    [showMenuAction]="false" (onClose)="toggleAgentSimulation()">
+                </app-chat-simulator>
             </div>
 
             <!-- ===================== PESTAÑA: HABILIDADES (RELACIONAL) ===================== -->
@@ -190,6 +223,113 @@
                         <p class="skill-desc">{{ skill.description }}</p>
                         <div class="skill-prompt-preview" *ngIf="skill.system_prompt_fragment">
                             <code>{{ skill.system_prompt_fragment | slice:0:80 }}...</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===================== PESTAÑA: CEREBRO (KNOWLEDGE) ===================== -->
+            <div *ngIf="activeTab === 'knowledge'" class="fade-in">
+                <div class="knowledge-layout">
+                    <!-- Columna Izquierda: Gestión Manual -->
+                    <div class="knowledge-form-section">
+                        <div class="section-header">
+                            <div>
+                                <h3>🧠 Base de Conocimiento Maestro</h3>
+                                <p class="desc">Entrena al agente con datos técnicos, manuales y políticas que todos sus
+                                    comercios heredarán.</p>
+                            </div>
+                        </div>
+
+                        <div class="knowledge-add-card">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <h4 style="margin: 0; color: #1e293b;">{{ editingContextBlockId ? '✏️ Editar Bloque' :
+                                    '➕ Añadir Bloque Manual' }}</h4>
+                                <button *ngIf="editingContextBlockId" (click)="cancelEditKnowledgeBlock()"
+                                    style="background: transparent; border: none; color: #ef4444; cursor: pointer; font-size: 0.85rem; font-weight: 500;">✕
+                                    Cancelar</button>
+                            </div>
+                            <div class="form-group">
+                                <label>Título del Concepto</label>
+                                <input type="text" [(ngModel)]="newBlock.title"
+                                    placeholder="Ej: Política de Reembolsos">
+                            </div>
+                            <div class="form-group">
+                                <label>Contenido del Conocimiento</label>
+                                <textarea [(ngModel)]="newBlock.content" rows="4"
+                                    placeholder="Describe aquí el dato que el agente debe memorizar..."></textarea>
+                            </div>
+                            <button class="save-btn w-100" (click)="saveKnowledgeBlock()" [disabled]="isSaving">
+                                {{ isSaving ? 'Guardando...' : (editingContextBlockId ? '💾 Actualizar Bloque' : '💾
+                                Guardar Conocimiento') }}
+                            </button>
+                        </div>
+
+                        <div class="knowledge-ingest-card">
+                            <h4>🪄 Ingesta Inteligente (RAG)</h4>
+                            <p class="small-desc">Sube archivos o pega URLs para que la IA extraiga y vectorice la
+                                información
+                                automáticamente.</p>
+
+                            <div class="ingest-actions">
+                                <label class="file-upload-btn" [class.loading]="isProcessingFile">
+                                    <input type="file" (change)="onFileSelected($event)" accept=".pdf,.doc,.docx,.txt"
+                                        [disabled]="isProcessingFile">
+                                    <span *ngIf="!isProcessingFile">📄 Subir PDF / Doc</span>
+                                    <span *ngIf="isProcessingFile">⚙️ Procesando...</span>
+                                </label>
+                                <button class="secondary-btn" title="Próximamente">🌐 Ingerir URL</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha: Listado de Bloques -->
+                    <div class="knowledge-list-section">
+                        <div class="list-header">
+                            <h4>📦 Memoria del Agente ({{ agentKnowledge.length }})</h4>
+                            <button *ngIf="agentKnowledge.length > 0" class="mini-action-btn"
+                                (click)="syncAllEmbeddings()" [disabled]="isProcessingFile">
+                                {{ isProcessingFile ? '⏳ Sincronizando...' : '🔄 Sincronizar Semántica' }}
+                            </button>
+                        </div>
+
+                        <div class="knowledge-grid">
+                            <div *ngFor="let block of agentKnowledge" class="knowledge-item-card"
+                                [class.is-offline]="!block.embedding">
+                                <div class="k-item-header">
+                                    <strong>{{ block.title }}</strong>
+                                    <div style="display: flex; gap: 4px; align-items: center;">
+                                        <button *ngIf="!block.embedding" class="sync-mini-btn"
+                                            (click)="syncBlockEmbedding(block)" title="Sincronizar este bloque"
+                                            style="background: #f0fdf4; border: 1px solid #bbf7d0; cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 0.8rem;">
+                                            ⚡
+                                        </button>
+                                        <button class="edit-icon" (click)="editKnowledgeBlock(block)" title="Editar"
+                                            style="background: transparent; border: none; cursor: pointer; border-radius: 4px; padding: 2px; font-size: 1rem;">
+                                            ✏️
+                                        </button>
+                                        <button class="delete-icon"
+                                            (click)="deleteKnowledgeBlock(block.id)">🗑️</button>
+                                    </div>
+                                </div>
+                                <p>{{ block.content | slice:0:150 }}{{ block.content.length > 150 ? '...' : '' }}</p>
+                                <div class="k-item-meta">
+                                    <span class="v-badge" [class.no-vector]="!block.embedding">
+                                        {{ block.embedding ? '✅ Online (Semántico)' : '🛑 Offline (Texto)' }}
+                                    </span>
+                                    <span class="date"
+                                        [title]="'Actualizado: ' + (block.updated_at || block.created_at | date:'medium')">
+                                        {{ block.updated_at || block.created_at | date:'shortDate' }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div *ngIf="agentKnowledge.length === 0" class="empty-knowledge">
+                            <div class="k-icon">🧠</div>
+                            <p>El cerebro del agente está vacío. Añade información manual o usa la ingesta inteligente.
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -251,7 +391,33 @@
                                 (click)="assignSkillToCurrentAgent(editingSkill)" [disabled]="!editingSkill.id">
                                 ⚡ Asignar a "{{ selectedAgent.name }}"
                             </button>
+                            <button class="simulation-btn" (click)="toggleSimulation()"
+                                [disabled]="!editingSkill.system_prompt_fragment">
+                                🧪 Simular Habilidad
+                            </button>
                             <button class="save-btn" (click)="saveSkill()">💾 Guardar en Catálogo</button>
+                        </div>
+
+                        <!-- SIMULADOR CHAT (FLOTANTE DENTRO DEL FORM) -->
+                        <div class="skill-simulator-panel fade-in" *ngIf="isSimulating">
+                            <div class="sim-header">
+                                <span>🧪 Simulando: {{ editingSkill.name || 'Nueva Skill' }}</span>
+                                <button (click)="isSimulating = false">✕</button>
+                            </div>
+                            <div class="sim-messages" #simScroll>
+                                <div *ngFor="let msg of simMessages" class="sim-message"
+                                    [class.user]="msg.role === 'user'">
+                                    <div class="msg-bubble">{{ msg.text }}</div>
+                                </div>
+                                <div class="sim-message assistant" *ngIf="isGeneratingAI">
+                                    <div class="msg-bubble dots">...</div>
+                                </div>
+                            </div>
+                            <div class="sim-input">
+                                <input type="text" [(ngModel)]="simUserInput" (keyup.enter)="sendSimMessage()"
+                                    placeholder="Escribe para probar la skill...">
+                                <button (click)="sendSimMessage()">🚀</button>
+                            </div>
                         </div>
                     </div>
 
@@ -575,6 +741,27 @@
                 merchant configura su IA Config.</p>
             <button class="save-btn" (click)="showPromptPreview = false; saveAgent()" [disabled]="isSaving">
                 {{ isSaving ? 'Guardando...' : '💾 Guardar y Cerrar' }}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE CONFIRMACIÓN UNIVERSAL -->
+<div class="modal-overlay" *ngIf="showConfirmModal" (click)="showConfirmModal = false">
+    <div class="confirm-modal-box" (click)="$event.stopPropagation()">
+        <div class="confirm-icon-wrapper" [style.background]="confirmIcon === '🗑️' ? '#fee2e2' : '#f0f9ff'"
+            [style.color]="confirmIcon === '🗑️' ? '#ef4444' : '#4f46e5'">
+            {{ confirmIcon }}
+        </div>
+        <h3>{{ confirmTitle }}</h3>
+        <p>{{ confirmText }}</p>
+        <div class="confirm-modal-actions">
+            <button class="btn-cancel" (click)="showConfirmModal = false" [disabled]="isConfirming">
+                {{ cancelBtnText }}
+            </button>
+            <button class="btn-confirm" (click)="handleConfirm()" [disabled]="isConfirming"
+                [style.background]="confirmIcon === '🗑️' ? '#ef4444' : '#4f46e5'">
+                {{ isConfirming ? 'Procesando...' : confirmBtnText }}
             </button>
         </div>
     </div>

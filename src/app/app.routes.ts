@@ -14,6 +14,7 @@ import { CampaignsComponent } from './marketing/campaigns.component';
 import { BiolinkPageComponent } from './biolink-page/biolink-page.component';
 import { BiolinkAdminComponent } from './biolink-admin/biolink-admin';
 import { AgentManagementComponent } from './agent-management/agent-management.component';
+import { MerchantKnowledgeComponent } from './merchant-knowledge/merchant-knowledge.component';
 
 export const routes: Routes = [
     { path: 'login', component: LoginComponent },
@@ -30,6 +31,7 @@ export const routes: Routes = [
     { path: 'metrics', component: MetricsDashboardComponent },
     { path: 'products', component: ProductManagementComponent },
     { path: 'orders', component: OrderManagementComponent },
+    { path: 'merchant-brain', component: MerchantKnowledgeComponent },
     { path: 'bio/:slug', component: BiolinkPageComponent },
     { path: '', redirectTo: 'login', pathMatch: 'full' }
 ];

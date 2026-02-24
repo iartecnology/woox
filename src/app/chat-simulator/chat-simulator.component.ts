@@ -95,7 +95,7 @@ interface CartItem {
 
         <!-- Sugerencias y Carrito Flotante -->
         <div class="chat-actions-bar" *ngIf="!isTyping">
-           <button class="action-pill" (click)="quickAction('Ver menú')">🍴 Ver Menú</button>
+           <button class="action-pill" *ngIf="showMenuAction" (click)="quickAction('Ver menú')">🍴 Ver Menú</button>
            <button class="action-pill cart-pill" *ngIf="cart.length > 0" (click)="quickAction('Ver mi resumen de pedido')">
              🛒 Pedido ($ {{ cartTotal.toFixed(2) }})
            </button>
@@ -363,10 +363,12 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
   @Input() aiProvider: string = 'google_gemini';
   @Input() aiModel: string = 'gemini-1.5-flash'; // Default model corregido
   @Input() aiApiKey: string = '';
+  @Input() ollamaBaseUrl: string = 'http://localhost:11434';
   @Input() aiWelcomeMessage: string = '';
   @Input() context: string = '';
   @Input() merchantId: string = '';
   @Input() aiEnabled: boolean = true;
+  @Input() showMenuAction: boolean = true;
   @Output() onClose = new EventEmitter<void>();
 
   private liveOrderService = inject(LiveOrderService);
@@ -539,6 +541,34 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
         fullSystemInstruction += `\n\n### CONTEXTO ADICIONAL DE PRUEBA:\n${this.context}`;
       }
 
+      // --- RAG: BÚSQUEDA SEMÁNTICA EN TIEMPO REAL ---
+      // Obtenemos bloques relevantes de la DB usando el nuevo sistema vectorial
+      try {
+        console.log('🔍 Buscando contexto semántico para:', userText);
+        // FIXME: Obtenemos el ID del agente a través del merchant para la búsqueda
+        const { data: merchantData } = await this.supabaseService.getMerchantById(this.merchantId);
+
+        if (merchantData && merchantData.agent_id) {
+          const { data: relevantBlocks } = await this.supabaseService.rpc('match_context_blocks', {
+            p_agent_id: merchantData.agent_id,
+            p_merchant_id: this.merchantId,
+            p_query: userText,
+            p_limit: 3
+          });
+
+          if (relevantBlocks && relevantBlocks.length > 0) {
+            console.log('✨ Contexto útil encontrado:', relevantBlocks);
+            fullSystemInstruction += `\n\n### 📚 CONOCIMIENTO EN TIEMPO REAL (RAG):\nBasado en la pregunta del usuario, aquí tienes información exacta de la base de datos que DEBES usar para responder:\n`;
+            relevantBlocks.forEach((block: any) => {
+              fullSystemInstruction += `- **${block.title}**: ${block.content}\n`;
+            });
+          }
+        }
+      } catch (ragError) {
+        console.error('⚠️ Error leve en Búsqueda Semántica, continuando sin contexto extra:', ragError);
+      }
+      // ----------------------------------------------
+
       fullSystemInstruction += `${systemNudge}\n\nESTADO ACTUAL DEL CARRITO (TOTAL: $${this.cartTotal.toFixed(2)}):\n${JSON.stringify(this.cart)}`;
 
       console.log('--- SYSTEM PROMPT SENT TO AI ---');
@@ -580,6 +610,21 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
           ],
           temperature: 0.7,
           max_tokens: 1024
+        }
+      } else if (this.aiProvider === 'ollama') {
+        // Ollama API
+        apiUrl = `${this.ollamaBaseUrl}/api/chat`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: fullSystemInstruction },
+            ...chatContents.map((msg: any) => ({
+              role: msg.role === 'model' ? 'assistant' : 'user',
+              content: msg.parts[0].text
+            }))
+          ],
+          stream: false,
+          options: { temperature: 0.7 }
         };
       } else {
         // Google AI Studio (Gemini / Gemma)
@@ -649,9 +694,19 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       }
 
       const data = await response.json();
-      console.log('✅ Success! Response:', data);
+      let aiText = '';
 
-      let aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Lo siento, no pude generar una respuesta.';
+      if (isOpenAI) {
+        aiText = data.choices[0]?.message?.content || '';
+      } else if (this.aiProvider === 'ollama') {
+        aiText = data.message?.content || '';
+      } else {
+        aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      }
+
+      if (!aiText) {
+        aiText = 'Lo siento, no pude generar una respuesta.';
+      }
 
       // 2. DETECTAR ACTUALIZACIONES DE CARRITO (IA -> Sistema)
       // 2. DETECTAR ACTUALIZACIONES DE CARRITO (IA -> Sistema)

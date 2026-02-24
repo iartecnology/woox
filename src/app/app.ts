@@ -128,6 +128,10 @@ export class App {
     return localStorage.getItem('active_merchant_id');
   }
 
+  get merchantIndustryType() {
+    return localStorage.getItem('merchant_industry_type') || 'retail';
+  }
+
   get platformName() {
     return localStorage.getItem('platform_name') || 'Woox';
   }
@@ -183,6 +187,7 @@ export class App {
     localStorage.removeItem('active_merchant_id');
     localStorage.removeItem('merchant_name');
     localStorage.removeItem('merchant_slug');
+    localStorage.removeItem('merchant_industry_type');
     this.router.navigate(['/super-admin']);
     this.closeSidebar();
     this.closeProfileMenu();
@@ -194,6 +199,7 @@ export class App {
     localStorage.removeItem('merchant_name');
     localStorage.removeItem('merchant_slug');
     localStorage.removeItem('active_merchant_id');
+    localStorage.removeItem('merchant_industry_type');
     this.router.navigate(['/login']);
     this.closeSidebar();
     this.closeProfileMenu();

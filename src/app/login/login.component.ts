@@ -43,6 +43,7 @@ export class LoginComponent {
                     localStorage.setItem('active_merchant_id', user.merchant_id);
                     localStorage.setItem('merchant_name', user.merchants?.name || 'Comercio');
                     localStorage.setItem('merchant_slug', user.merchants?.slug || '');
+                    localStorage.setItem('merchant_industry_type', user.merchants?.industry_type || 'retail');
                     this.router.navigate(['/metrics']);
                 }
                 return;

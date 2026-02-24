@@ -163,14 +163,28 @@ BEGIN
         END IF;
 
         IF v_skill_record.slug = 'knowledge_base' THEN
-            SELECT string_agg(title || ': ' || content, E'\n\n') INTO v_knowledge
-            FROM (
-                SELECT title, content FROM agent_context_blocks WHERE agent_id = v_merchant.agent_id
-                UNION ALL
-                SELECT title, content FROM merchant_context_blocks WHERE merchant_id = p_merchant_id
-            ) combined;
+            -- 1. Conocimiento Maestro (Agente)
+            SELECT string_agg('• ' || title || ': ' || content, E'\n') INTO v_knowledge
+            FROM agent_context_blocks WHERE agent_id = v_merchant.agent_id;
             
-            v_prompt := v_prompt || '### CONOCIMIENTO EXTRA:' || E'\n' || COALESCE(v_knowledge, 'Sin información extra.') || E'\n\n';
+            IF v_knowledge IS NOT NULL THEN
+                v_prompt := v_prompt || '### CONOCIMIENTO MAESTRO (REGLAS GENERALES):' || E'\n' || v_knowledge || E'\n\n';
+            END IF;
+
+            -- 2. Conocimiento Específico (Comercio) - PRIORIDAD ALTA
+            v_knowledge := NULL;
+            SELECT string_agg('• ' || title || ': ' || content, E'\n') INTO v_knowledge
+            FROM merchant_context_blocks WHERE merchant_id = p_merchant_id;
+
+            IF v_knowledge IS NOT NULL THEN
+                v_prompt := v_prompt || '### CONOCIMIENTO ESPECÍFICO DEL LOCAL (PRIORIDAD MÁXIMA):' || E'\n' || 
+                           'Usa esta información para responder sobre horarios, políticas locales o detalles del negocio:' || E'\n' ||
+                           v_knowledge || E'\n\n';
+            END IF;
+            
+            IF v_knowledge IS NULL AND v_prompt NOT LIKE '%### CONOCIMIENTO MAESTRO%' THEN
+                v_prompt := v_prompt || '### CONOCIMIENTO EXTRA:' || E'\n' || 'Sin información adicional.' || E'\n\n';
+            END IF;
         END IF;
     END LOOP;
 

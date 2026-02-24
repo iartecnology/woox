@@ -28,6 +28,7 @@ export class AiConfigComponent implements OnInit {
         ai_restrictions: '',
         ai_use_catalog: true,
         ai_enabled: true,
+        industry_type: 'retail',
         ai_schedule_enabled: false,
         ai_schedule_start: '09:00',
         ai_schedule_end: '18:00',
@@ -174,8 +175,12 @@ export class AiConfigComponent implements OnInit {
                 console.log('🔄 [AiConfig] Normalizando Merchant ID de', this.merchantId, 'a', m.id);
                 this.merchantId = m.id;
             }
+            // Persistir el tipo de industria para el sidebar dinámico
+            localStorage.setItem('merchant_industry_type', m.industry_type || 'retail');
         }
     }
+
+
 
     async loadAgents() {
         const { data } = await this.supabaseService.getAgents();
@@ -200,7 +205,8 @@ export class AiConfigComponent implements OnInit {
 
     async saveConfig() {
         this.isSaving = true;
-        const updates = {
+        const updates: any = {
+            industry_type: this.merchantConfig.industry_type,
             ai_system_prompt: this.merchantConfig.ai_system_prompt,
             ai_personality: this.merchantConfig.ai_personality,
             ai_welcome_message: this.merchantConfig.ai_welcome_message,
@@ -231,6 +237,8 @@ export class AiConfigComponent implements OnInit {
         this.isSaving = false;
         if (!error) {
             this.notificationService.show('✅ Configuración guardada correctamente.', 'success');
+            // Persistir el tipo de industria para el sidebar dinámico
+            localStorage.setItem('merchant_industry_type', this.merchantConfig.industry_type || 'retail');
         } else {
             this.notificationService.show('Error al guardar: ' + error.message, 'error');
         }

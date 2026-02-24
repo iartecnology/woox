@@ -765,4 +765,36 @@ export class SupabaseService {
             .from('platform_settings')
             .upsert({ id: 'global', ...updates });
     }
+
+    // --- KNOWLEDGE BASE MANAGEMENT ---
+
+    async getAgentContextBlocks(agentId: string) {
+        return await supabase
+            .from('agent_context_blocks')
+            .select('*')
+            .eq('agent_id', agentId);
+    }
+
+    async saveAgentContextBlock(block: any) {
+        return await supabase.from('agent_context_blocks').upsert(block).select().single();
+    }
+
+    async deleteAgentContextBlock(id: string) {
+        return await supabase.from('agent_context_blocks').delete().eq('id', id);
+    }
+
+    async getMerchantContextBlocks(merchantId: string) {
+        return await supabase
+            .from('merchant_context_blocks')
+            .select('*')
+            .eq('merchant_id', merchantId);
+    }
+
+    async saveMerchantContextBlock(block: any) {
+        return await supabase.from('merchant_context_blocks').upsert(block).select().single();
+    }
+
+    async deleteMerchantContextBlock(id: string) {
+        return await supabase.from('merchant_context_blocks').delete().eq('id', id);
+    }
 }

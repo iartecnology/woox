@@ -200,6 +200,10 @@ CREATE TABLE IF NOT EXISTS platform_settings (
     ai_provider TEXT DEFAULT 'google_gemini',
     ai_model TEXT DEFAULT 'gemini-1.5-flash',
     ai_api_key TEXT,
+    ollama_base_url TEXT DEFAULT 'http://localhost:11434',
+    embed_provider TEXT DEFAULT 'google_gemini',
+    embed_model TEXT DEFAULT 'text-embedding-004',
+    embed_api_key TEXT,
     support_ai_enabled BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -372,16 +376,30 @@ BEGIN
             END IF;
         END IF;
 
-        -- Lógica: Conocimiento
+        -- Lógica: Conocimiento (SEMANTIC PRIORITIZATION)
         IF v_skill_record.slug = 'knowledge_base' THEN
-            SELECT string_agg(title || ': ' || content, E'\n\n') INTO v_knowledge
-            FROM (
-                SELECT title, content FROM agent_context_blocks WHERE agent_id = v_merchant.agent_id
-                UNION ALL
-                SELECT title, content FROM merchant_context_blocks WHERE merchant_id = p_merchant_id
-            ) combined;
+            -- 1. Conocimiento Maestro (Agente)
+            SELECT string_agg('• ' || title || ': ' || content, E'\n') INTO v_knowledge
+            FROM agent_context_blocks WHERE agent_id = v_merchant.agent_id;
             
-            v_prompt := v_prompt || '### CONOCIMIENTO EXTRA:' || E'\n' || COALESCE(v_knowledge, 'Sin info extra.') || E'\n\n';
+            IF v_knowledge IS NOT NULL THEN
+                v_prompt := v_prompt || '### CONOCIMIENTO MAESTRO (REGLAS GENERALES):' || E'\n' || v_knowledge || E'\n\n';
+            END IF;
+
+            -- 2. Conocimiento Específico (Comercio) - PRIORIDAD ALTA
+            v_knowledge := NULL;
+            SELECT string_agg('• ' || title || ': ' || content, E'\n') INTO v_knowledge
+            FROM merchant_context_blocks WHERE merchant_id = p_merchant_id;
+
+            IF v_knowledge IS NOT NULL THEN
+                v_prompt := v_prompt || '### CONOCIMIENTO ESPECÍFICO DEL LOCAL (PRIORIDAD MÁXIMA):' || E'\n' || 
+                           'Usa esta información para responder sobre horarios, políticas locales o detalles del negocio:' || E'\n' ||
+                           v_knowledge || E'\n\n';
+            END IF;
+            
+            IF v_knowledge IS NULL AND v_prompt NOT LIKE '%### CONOCIMIENTO MAESTRO%' THEN
+                v_prompt := v_prompt || '### CONOCIMIENTO EXTRA:' || E'\n' || 'Sin información adicional.' || E'\n\n';
+            END IF;
         END IF;
     END LOOP;
 
@@ -395,6 +413,10 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- MIGRACIONES GENERALES Y RLS
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE agent_context_blocks ADD COLUMN IF NOT EXISTS embedding vector(1536);
+ALTER TABLE merchant_context_blocks ADD COLUMN IF NOT EXISTS embedding vector(1536);
+
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS merchant_code TEXT;
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_menu_context TEXT;
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_restrictions TEXT;
@@ -414,12 +436,24 @@ ALTER TABLE agent_context_blocks DISABLE ROW LEVEL SECURITY;
 ALTER TABLE merchant_context_blocks DISABLE ROW LEVEL SECURITY;
 
 -- INITIAL SEED
-INSERT INTO agents (id, name, description, system_prompt, personality) VALUES
+INSERT INTO agents (id, name, description, system_prompt, personality, welcome_message) VALUES
 ('00000000-0000-0000-0000-000000000001', 'Woox Master Agent', 'Agente IA avanzado con sistema de skills', 
 'Eres un asistente de ventas experto de Woox. Tu misión es guiar al cliente por el menú, sugerir adicionales y cerrar la venta usando los comandos técnicos.',
-'friendly') ON CONFLICT DO NOTHING;
+'friendly', '¡Hola! ¿En qué puedo ayudarte?'),
+('00000000-0000-0000-0000-000000000002', 'Concierge Corporativo', 'Especialista en logística y soporte técnico avanzado.',
+'Eres el Concierge Corporativo oficial. Tu enfoque es la eficiencia, la precisión técnica y el soporte proactivo.',
+'professional', 'Bienvenido al portal de atención corporativa. ¿En qué proceso puedo asistirte?')
+ON CONFLICT (id) DO NOTHING;
+
+-- Relación de Skills para el nuevo agente
+INSERT INTO agent_skills (agent_id, skill_id, is_enabled)
+SELECT '00000000-0000-0000-0000-000000000002', id, true 
+FROM skills_catalog 
+WHERE slug IN ('security_foundation', 'knowledge_base')
+ON CONFLICT DO NOTHING;
 
 INSERT INTO profiles (email, password, full_name, role, merchant_id) VALUES
 ('admin@woox.app', 'admin123', 'Super Admin Woox', 'superadmin', NULL)
 ON CONFLICT DO NOTHING;
+
 `;

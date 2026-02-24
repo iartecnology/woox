@@ -297,7 +297,7 @@ code {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 3010;
 }
 
 .modal-content {
@@ -700,21 +700,50 @@ small {
     background: #e2e8f0;
 }
 
-/* Configuraciones Rápidas (Iconos) */
-.config-btns {
+/* Toolbar de Acciones Premium — Dos Filas */
+.action-toolbar-rows {
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
+    width: fit-content;
+}
+
+.action-row {
+    display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    min-width: 280px;
+    gap: 10px;
+    background: #ffffff;
+    padding: 5px 12px;
+    border-radius: 12px;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.action-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.action-group.highlighted {
+    background: #f0f4ff;
+    padding: 3px 5px;
+    border-radius: 10px;
+    border: 1px solid #dbeafe;
+}
+
+.group-separator {
+    width: 1px;
+    height: 22px;
+    background: #e2e8f0;
 }
 
 .config-icon-btn {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     border-radius: 10px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-secondary);
+    border: 1px solid transparent;
+    background: #ffffff;
     font-size: 1.1rem;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -722,31 +751,76 @@ small {
     align-items: center;
     justify-content: center;
     padding: 0;
+    color: #475569;
 }
 
 .config-icon-btn:hover {
     transform: translateY(-2px);
-    box-shadow: var(--card-shadow);
-    border-color: var(--accent-color);
+    background: #f1f5f9;
+    color: #0f172a;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Colores Temáticos por Tipo de Acción */
+.config-icon-btn.ai:hover {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1d4ed8;
+}
+
+.config-icon-btn.omni:hover {
+    background: #f0fdf4;
+    border-color: #22c55e;
+    color: #15803d;
 }
 
 .config-icon-btn.test:hover {
-    background-color: #fef2f2;
-    border-color: #ef4444;
+    background: #faf5ff;
+    border-color: #a855f7;
+    color: #7e22ce;
 }
 
-[data-theme="dark"] .config-icon-btn.test:hover {
-    background-color: rgba(239, 68, 68, 0.1);
-}
-
-.config-icon-btn.purge:hover {
-    background-color: #fffbeb;
+.config-icon-btn.catalog:hover,
+.config-icon-btn.brain:hover {
+    background: #fffbeb;
     border-color: #f59e0b;
+    color: #b45309;
 }
 
 .config-icon-btn.delete-merchant:hover {
-    background-color: #fef2f2;
+    background: #fef2f2;
     border-color: #ef4444;
+    color: #dc2626;
+}
+
+.config-icon-btn.enter:hover {
+    background: #ecfdf5;
+    border-color: #10b981;
+}
+
+.config-icon-btn.settings:hover {
+    background: #f8fafc;
+    border-color: #64748b;
+}
+
+[data-theme="dark"] .action-row {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+[data-theme="dark"] .action-group.highlighted {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+[data-theme="dark"] .config-icon-btn {
+    background: #334155;
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .config-icon-btn:hover {
+    background: #475569;
+    color: #f8fafc;
 }
 
 .btn-divider {

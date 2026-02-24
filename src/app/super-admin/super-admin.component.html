@@ -69,12 +69,14 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr *ngFor="let m of paginatedMerchants">
+                        <tr *ngFor="let m of viewMerchants">
                             <td>
                                 <div class="merchant-cell">
                                     <img [src]="m.logo_url" alt="Logo" class="merchant-logo">
                                     <div class="m-text">
-                                        <span class="merchant-name">{{ m.name }}</span>
+                                        <span class="merchant-name">
+                                            {{ m.industry_type === 'support' ? '🛎️' : '🛒' }} {{ m.name }}
+                                        </span>
                                         <code>/{{ m.slug }}</code>
                                     </div>
                                 </div>
@@ -121,42 +123,53 @@
                                 </span>
                             </td>
                             <td>
-                                <div class="config-btns">
-                                    <button class="config-icon-btn" title="Entrar como empresa"
-                                        (click)="enterAsMerchant(m)">👁️</button>
-                                    <button class="config-icon-btn" title="Gestionar Usuarios"
-                                        (click)="openUserManager(m)">👤</button>
-                                    <button class="config-icon-btn team" title="Gestionar Equipos"
-                                        (click)="openTeamManager(m)">👥</button>
-                                    <button class="config-icon-btn stats" title="Ver analíticas de la empresa"
-                                        (click)="viewMerchantStats(m)">📊</button>
-                                    <button class="config-icon-btn test" title="Probar simulador de chat"
-                                        (click)="testChatSimulator(m)" [disabled]="isPreparingSimulator">
-                                        <span *ngIf="!isPreparingSimulator">🚀</span>
-                                        <span *ngIf="isPreparingSimulator" class="small-spinner">⌛</span>
-                                    </button>
-                                    <button class="config-icon-btn live" title="Monitorea carritos en tiempo real"
-                                        (click)="openLiveMonitor(m)">🛒</button>
-                                    <div class="btn-divider"></div>
-                                    <button class="config-icon-btn" title="Configuración General"
-                                        (click)="openModal(m)">⚙️</button>
-                                    <button class="config-icon-btn ai" title="Configuración de IA"
-                                        (click)="openAIConfig(m)">🤖</button>
-                                    <button class="config-icon-btn omni" title="Omnicanalidad"
-                                        (click)="openOmniConfig(m)">💬</button>
-                                    <button class="config-icon-btn code" title="Widget Code"
-                                        (click)="generateChatCode(m)">📟</button>
-                                    <button class="config-icon-btn catalog" title="Configurar Catálogo de Productos"
-                                        (click)="goToCatalog(m)">🍔</button>
-                                    <button class="config-icon-btn biolink" title="Configurar BioLink (Linktree)"
-                                        (click)="openBiolinkConfig(m)">🔗</button>
-                                    <div class="btn-divider"></div>
-                                    <button class="config-icon-btn purge"
-                                        title="Limpiar todos los pedidos de este comercio"
-                                        (click)="clearMerchantOrders(m)">🧹</button>
-                                    <button class="config-icon-btn delete-merchant"
-                                        title="ELIMINAR ESTE COMERCIO PERMANENTEMENTE"
-                                        (click)="confirmDeleteMerchant(m)">🗑️</button>
+                                <div class="action-toolbar-rows">
+                                    <!-- Fila 1: Acciones Principales -->
+                                    <div class="action-row">
+                                        <div class="action-group">
+                                            <button class="config-icon-btn enter" title="Entrar como empresa"
+                                                (click)="enterAsMerchant(m)">👁️</button>
+                                            <button class="config-icon-btn users" title="Gestionar Usuarios"
+                                                (click)="openUserManager(m)">👤</button>
+                                            <button class="config-icon-btn teams" title="Gestionar Equipos"
+                                                (click)="openTeamManager(m)">👥</button>
+                                            <button class="config-icon-btn stats" title="Analíticas"
+                                                (click)="viewMerchantStats(m)">📊</button>
+                                        </div>
+                                        <div class="group-separator"></div>
+                                        <div class="action-group highlighted">
+                                            <button class="config-icon-btn ai" title="Configuración de IA"
+                                                (click)="openAIConfig(m)">🤖</button>
+                                            <button *ngIf="m.industry_type === 'retail'" class="config-icon-btn catalog"
+                                                title="Catálogo" (click)="goToCatalog(m)">🍔</button>
+                                            <button *ngIf="m.industry_type === 'support'" class="config-icon-btn brain"
+                                                title="Cerebro" (click)="goToBrain(m)">🧠</button>
+                                            <button class="config-icon-btn test" title="Simulador"
+                                                (click)="testChatSimulator(m)">🚀</button>
+                                        </div>
+                                    </div>
+                                    <!-- Fila 2: Canales, Config & Mantenimiento -->
+                                    <div class="action-row">
+                                        <div class="action-group">
+                                            <button class="config-icon-btn omni" title="Omnicanalidad"
+                                                (click)="openOmniConfig(m)">💬</button>
+                                            <button class="config-icon-btn code" title="Widget Code"
+                                                (click)="generateChatCode(m)">📟</button>
+                                            <button class="config-icon-btn biolink" title="BioLink"
+                                                (click)="openBiolinkConfig(m)">🔗</button>
+                                        </div>
+                                        <div class="group-separator"></div>
+                                        <div class="action-group">
+                                            <button class="config-icon-btn settings" title="Ajustes"
+                                                (click)="openModal(m)">⚙️</button>
+                                            <button class="config-icon-btn live" title="Monitor"
+                                                (click)="openLiveMonitor(m)">🛒</button>
+                                            <button class="config-icon-btn purge" title="Limpiar"
+                                                (click)="clearMerchantOrders(m)">🧹</button>
+                                            <button class="config-icon-btn delete-merchant" title="Eliminar"
+                                                (click)="confirmDeleteMerchant(m)">🗑️</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </td>
                         </tr>
@@ -183,308 +196,388 @@
             </div>
         </div>
     </section>
-</div>
 
-<!-- Modal para Registro/Edición/Configuración -->
-<div class="modal-overlay" *ngIf="showModal" (click)="showModal = false">
-    <div class="modal-content large" (click)="$event.stopPropagation()">
-        <h2>{{ isEditing ? 'Configurar' : 'Registrar' }} Empresa</h2>
+    <!-- Modal para Registro/Edición/Configuración -->
+    <div class="modal-overlay" *ngIf="showModal" (click)="showModal = false">
+        <div class="modal-content large" (click)="$event.stopPropagation()">
+            <h2>{{ isEditing ? 'Configurar' : 'Registrar' }} Empresa</h2>
 
-        <div class="form-grid">
-            <div class="section-divider full-width">Información Básica</div>
+            <div class="form-grid">
+                <div class="section-divider full-width">Información Básica</div>
 
-            <div class="form-group">
-                <label>Nombre de la Empresa</label>
-                <input type="text" [(ngModel)]="selectedMerchant.name" (blur)="suggestMerchantCode()"
-                    placeholder="Ej: Pizza Hut">
-            </div>
-
-            <div class="form-group">
-                <label>Color Principal</label>
-                <div class="color-input">
-                    <input type="color" [(ngModel)]="selectedMerchant.primary_color">
-                    <input type="text" [(ngModel)]="selectedMerchant.primary_color">
-                </div>
-            </div>
-
-            <div class="form-group full-width">
-                <label>URL del Logo</label>
-                <input type="text" [(ngModel)]="selectedMerchant.logo_url" placeholder="https://...">
-            </div>
-
-
-            <div class="form-group">
-                <label>Código de Comercio (Amigable)</label>
-                <input type="text" [(ngModel)]="selectedMerchant.merchant_code" placeholder="Ej: BKPRO1 (Sin guiones)">
-                <small>Identificador corto para URLs de Webhooks.</small>
-            </div>
-
-
-            <div class="section-divider full-width">Plan y Suscripción</div>
-
-            <div class="form-group">
-                <label>Plan Woox</label>
-                <select [(ngModel)]="selectedMerchant.subscription_plan">
-                    <option value="basic">Woox Basic</option>
-                    <option value="pro">Woox Pro</option>
-                    <option value="enterprise">Woox Enterprise</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Fecha de Vencimiento</label>
-                <input type="date" [(ngModel)]="selectedMerchant.subscription_expires_at">
-            </div>
-
-            <div class="form-group">
-                <label>Estado de la Empresa</label>
-                <select [(ngModel)]="selectedMerchant.is_active">
-                    <option [ngValue]="true">Activo / Operativo</option>
-                    <option [ngValue]="false">Suspendido / En Mora</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="modal-actions">
-            <button class="cancel-btn" (click)="showModal = false">Cancelar</button>
-            <button class="save-btn" (click)="saveMerchant()">
-                {{ isEditing ? 'Guardar Cambios' : 'Registrar Empresa' }}
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal para Código de Chat -->
-<div class="modal-overlay" *ngIf="showCodeModal" (click)="showCodeModal = false">
-    <div class="modal-content" (click)="$event.stopPropagation()">
-        <h2>Código del Widget de Chat</h2>
-        <p class="modal-desc">Copia este código y pégalo antes de cerrar la etiqueta <code>&lt;/body&gt;</code> en el
-            sitio web de la empresa.</p>
-
-        <div class="code-area">
-            <pre>{{ generatedCode }}</pre>
-        </div>
-
-        <div class="modal-actions">
-            <button class="cancel-btn" (click)="showCodeModal = false">Cerrar</button>
-            <button class="save-btn" (click)="copyCode()">Copiar Código</button>
-        </div>
-    </div>
-</div>
-
-<!-- SIMULADOR DE CHAT -->
-<app-chat-simulator *ngIf="showSimulator && selectedMerchant.name" [merchantName]="selectedMerchant.name"
-    [merchantId]="selectedMerchant.id || ''" [logoUrl]="selectedMerchant.logo_url || ''"
-    [primaryColor]="selectedMerchant.primary_color || '#4F46E5'"
-    [aiProvider]="selectedMerchant.ai_provider || 'google_gemini'" [aiApiKey]="selectedMerchant.ai_api_key || ''"
-    [aiModel]="selectedMerchant.ai_model || ''" [aiWelcomeMessage]="selectedMerchant.ai_welcome_message || ''"
-    [context]="getConsolidatedPrompt()" (onClose)="showSimulator = false">
-</app-chat-simulator>
-
-<!-- MONITOR DE CARRITOS EN TIEMPO REAL -->
-<div class="modal-overlay monitor-overlay" *ngIf="showLiveMonitor" (click)="showLiveMonitor = false">
-    <div class="monitor-modal-content" (click)="$event.stopPropagation()">
-        <button class="close-monitor-btn" (click)="showLiveMonitor = false">✕</button>
-        <app-live-orders-monitor [merchantId]="currentMonitoringMerchantId"></app-live-orders-monitor>
-    </div>
-</div>
-
-<!-- Modal de Configuración de Plataforma -->
-<div class="modal-overlay" *ngIf="showPlatformConfig" (click)="showPlatformConfig = false">
-    <div class="modal-content" (click)="$event.stopPropagation()">
-        <h2>⚙️ Configuración de Plataforma</h2>
-        <p class="modal-desc">Personaliza el branding global de tu plataforma SaaS.</p>
-
-        <div class="form-grid">
-            <div class="form-group full-width">
-                <label>Nombre de la Plataforma</label>
-                <input type="text" [(ngModel)]="platformConfig.platform_name" placeholder="Ej: Woox">
-                <small>Este nombre aparecerá en el sidebar y en la barra superior.</small>
-            </div>
-
-            <div class="form-group full-width">
-                <label>
-                    <input type="checkbox" [(ngModel)]="platformConfig.use_logo_image">
-                    Usar logo de imagen en lugar de texto
-                </label>
-            </div>
-
-            <div class="form-group full-width" *ngIf="platformConfig.use_logo_image">
-                <label>URL del Logo de Plataforma</label>
-                <input type="text" [(ngModel)]="platformConfig.platform_logo_url" placeholder="https://...">
-                <small>Recomendado: PNG transparente, 200x60px</small>
-            </div>
-
-            <div class="form-group full-width"
-                *ngIf="platformConfig.use_logo_image && platformConfig.platform_logo_url">
-                <label>Vista Previa</label>
-                <div class="logo-preview">
-                    <img [src]="platformConfig.platform_logo_url" alt="Logo Preview">
-                </div>
-            </div>
-
-            <div class="section-divider full-width">💰 Moneda e Idioma</div>
-
-            <div class="form-group">
-                <label>Idioma de la Plataforma</label>
-                <select [(ngModel)]="platformConfig.language">
-                    <option *ngFor="let lang of languages" [value]="lang.code">
-                        {{ lang.name }}
-                    </option>
-                </select>
-                <small>Idioma predeterminado para la interfaz.</small>
-            </div>
-
-            <div class="form-group">
-                <label>Moneda</label>
-                <select [(ngModel)]="platformConfig.currency">
-                    <option *ngFor="let curr of currencies" [value]="curr.code">
-                        {{ curr.name }}
-                    </option>
-                </select>
-                <small>Moneda para mostrar precios en toda la plataforma.</small>
-            </div>
-
-            <div class="section-divider full-width">🗄️ Configuración de Base de Datos (Supabase)</div>
-
-            <div class="form-group full-width">
-                <label>Supabase URL</label>
-                <input type="text" [(ngModel)]="platformConfig.supabase_url" placeholder="https://xxxxxx.supabase.co">
-                <small>La URL de tu proyecto Supabase.</small>
-            </div>
-
-            <div class="form-group full-width">
-                <label>Supabase Anon Key</label>
-                <div style="display: flex; gap: 10px;">
-                    <div style="display: flex; gap: 10px;">
-                        <input type="password" [(ngModel)]="platformConfig.supabase_key" style="flex: 1;"
-                            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
-                        <button class="action-btn" (click)="testSupabaseConnection()" [disabled]="isValidatingSupabase"
-                            style="white-space: nowrap; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;">
-                            {{ isValidatingSupabase ? '🕒 Probando...' : '🔍 Probar' }}
-                        </button>
-                        <button class="action-btn" (click)="resetSupabaseConfig()"
-                            title="Restablecer conexión original del servidor"
-                            style="white-space: nowrap; background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;">
-                            🔄 Reset
-                        </button>
-                    </div>
-                    <small *ngIf="supabaseStatus === 'success'"
-                        style="color: #059669; font-weight: 600; margin-top: 4px; display: block;">✅ Conexión
-                        Exitosa</small>
-                    <small *ngIf="supabaseStatus === 'error'"
-                        style="color: #dc2626; font-weight: 600; margin-top: 4px; display: block;">❌ Error de
-                        Conexión</small>
-                    <small *ngIf="supabaseStatus === 'none'">La clave pública (anon key) de tu proyecto. <a
-                            (click)="resetSupabaseConfig()"
-                            style="cursor:pointer; text-decoration: underline;">Restablecer originales</a></small>
-                </div>
-
-                <!-- Alerta de Inicialización / Actualización -->
-                <div class="init-alert-box full-width" *ngIf="supabaseStatus === 'success'"
-                    style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 16px; margin-top: 10px; animation: slideDown 0.3s ease-out;">
-                    <div style="display: flex; gap: 16px; align-items: flex-start;">
-                        <div style="font-size: 2rem;">{{ dbNeedsInitialization ? '🚧' : '🆙' }}</div>
-                        <div style="flex: 1;">
-                            <div style="font-weight: 800; color: #166534; font-size: 1.1rem; margin-bottom: 6px;">
-                                {{ dbNeedsInitialization ? '¡Conexión OK, pero Base de Datos Vacía!' : 'Actualizar Base
-                                de
-                                Datos' }}
-                            </div>
-                            <p style="font-size: 0.9rem; color: #15803d; line-height: 1.5; margin: 0;">
-                                {{ dbNeedsInitialization ?
-                                'Hemos detectado que tu proyecto en Supabase no tiene las tablas de Woox. ¿Deseas
-                                inicializarla ahora?' :
-                                '¿Has realizado cambios en el código o necesitas aplicar la última actualización de
-                                tablas?
-                                Pulsa aquí para obtener el script.' }}
-                            </p>
-                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                                <button (click)="copyInitSql()"
-                                    style="margin-top: 16px; background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); transition: all 0.2s;">
-                                    🚀 Copiar Script SQL & Abrir Editor
-                                </button>
-                                <button (click)="runTestOrderInsertion()"
-                                    style="margin-top: 16px; background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); transition: all 0.2s;">
-                                    🧪 Prueba Técnica: Insertar Pedido
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="section-divider full-width">🧠 IA de Asistencia Global (Copiloto)</div>
-                <div class="form-group full-width">
-                    <p class="desc">Configura la IA que ayudará a los administradores a redactar prompts y diseñar
-                        habilidades técnicas automáticamente.</p>
+                <div class="form-group">
+                    <label>Nombre de la Empresa</label>
+                    <input type="text" [(ngModel)]="selectedMerchant.name" (blur)="suggestMerchantCode()"
+                        placeholder="Ej: Pizza Hut">
                 </div>
 
                 <div class="form-group">
-                    <label>Proveedor de IA Asistente</label>
-                    <select [(ngModel)]="platformAiSettings.ai_provider" (change)="aiConnectionStatus = 'none'">
-                        <option value="google_gemini">Google Gemini (Recomendado)</option>
-                        <option value="openai">OpenAI ChatGPT</option>
+                    <label>🏢 Tipo de Empresa</label>
+                    <select [(ngModel)]="selectedMerchant.industry_type" style="width:100%;">
+                        <option value="retail">🛒 Comercio / Ventas — Activa catálogo de productos</option>
+                        <option value="support">🛎️ Atención / Servicios — Solo cerebro y conocimiento</option>
+                    </select>
+                    <small>Define el módulo principal: catálogo de ventas o base de conocimiento.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Color Principal</label>
+                    <div class="color-input">
+                        <input type="color" [(ngModel)]="selectedMerchant.primary_color">
+                        <input type="text" [(ngModel)]="selectedMerchant.primary_color">
+                    </div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>URL del Logo</label>
+                    <input type="text" [(ngModel)]="selectedMerchant.logo_url" placeholder="https://...">
+                </div>
+
+
+                <div class="form-group">
+                    <label>Código de Comercio (Amigable)</label>
+                    <input type="text" [(ngModel)]="selectedMerchant.merchant_code"
+                        placeholder="Ej: BKPRO1 (Sin guiones)">
+                    <small>Identificador corto para URLs de Webhooks.</small>
+                </div>
+
+
+                <div class="section-divider full-width">Plan y Suscripción</div>
+
+                <div class="form-group">
+                    <label>Plan Woox</label>
+                    <select [(ngModel)]="selectedMerchant.subscription_plan">
+                        <option value="basic">Woox Basic</option>
+                        <option value="pro">Woox Pro</option>
+                        <option value="enterprise">Woox Enterprise</option>
                     </select>
                 </div>
 
-                <div class="form-group full-width">
-                    <label>Master API Key</label>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="password" [(ngModel)]="platformAiSettings.ai_api_key" placeholder="AI API Key..."
-                            style="flex: 1;" (ngModelChange)="aiConnectionStatus = 'none'">
-                        <button class="action-btn" (click)="testPlatformAIConnection()"
-                            [disabled]="isTestingAI || !platformAiSettings.ai_api_key"
-                            style="white-space: nowrap; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;">
-                            {{ isTestingAI ? '🕒 Conectando...' : '⚡ Verificar' }}
-                        </button>
-                    </div>
-                    <small *ngIf="aiConnectionStatus === 'success'"
-                        style="color: #059669; font-weight: 600; margin-top: 4px; display: block;">✅ {{
-                        aiConnectionMessage
-                        }}</small>
-                    <small *ngIf="aiConnectionStatus === 'error'"
-                        style="color: #dc2626; font-weight: 600; margin-top: 4px; display: block;">❌ {{
-                        aiConnectionMessage
-                        }}</small>
-                    <small *ngIf="aiConnectionStatus === 'none'">Esta clave se usará EXCLUSIVAMENTE para las funciones
-                        de
-                        ayuda interna (Copiloto).</small>
+                <div class="form-group">
+                    <label>Fecha de Vencimiento</label>
+                    <input type="date" [(ngModel)]="selectedMerchant.subscription_expires_at">
                 </div>
 
                 <div class="form-group">
-                    <label>Modelo de IA</label>
-                    <select [(ngModel)]="platformAiSettings.ai_model"
-                        [disabled]="aiConnectionStatus !== 'success' && !platformAiSettings.ai_model">
-                        <option value="">Seleccionar modelo...</option>
-                        <option
-                            *ngFor="let model of getAvailableModels(platformAiSettings.ai_provider || 'google_gemini')"
-                            [value]="model.id">
-                            {{ model.name }}
-                        </option>
+                    <label>Estado de la Empresa</label>
+                    <select [(ngModel)]="selectedMerchant.is_active">
+                        <option [ngValue]="true">Activo / Operativo</option>
+                        <option [ngValue]="false">Suspendido / En Mora</option>
                     </select>
-                    <small *ngIf="aiConnectionStatus !== 'success' && !platformAiSettings.ai_model"
-                        style="color: #d97706;">⚠️ Verifica la conexión para ver modelos.</small>
-                </div>
-
-                <div class="form-group full-width">
-                    <label>
-                        <input type="checkbox" [(ngModel)]="platformAiSettings.support_ai_enabled">
-                        Habilitar Copiloto de IA en el Diseñador de Habilidades
-                    </label>
-                </div>
-
-                <div class="section-divider full-width">ℹ️ Información del Sistema</div>
-                <div class="form-group">
-                    <label>Versión Actual</label>
-                    <input type="text" value="1.0.0" disabled
-                        style="background: #f9fafb; cursor: not-allowed; opacity: 0.7;">
-                    <small>Versión del software Woox PRO.</small>
                 </div>
             </div>
 
             <div class="modal-actions">
-                <button class="cancel-btn" (click)="showPlatformConfig = false">Cancelar</button>
-                <button class="save-btn" (click)="savePlatformConfig()">Guardar y Aplicar</button>
+                <button class="cancel-btn" (click)="showModal = false">Cancelar</button>
+                <button class="save-btn" (click)="saveMerchant()">
+                    {{ isEditing ? 'Guardar Cambios' : 'Registrar Empresa' }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Código de Chat -->
+    <div class="modal-overlay" *ngIf="showCodeModal" (click)="showCodeModal = false">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+            <h2>Código del Widget de Chat</h2>
+            <p class="modal-desc">Copia este código y pégalo antes de cerrar la etiqueta <code>&lt;/body&gt;</code> en
+                el
+                sitio web de la empresa.</p>
+
+            <div class="code-area">
+                <pre>{{ generatedCode }}</pre>
+            </div>
+
+            <div class="modal-actions">
+                <button class="cancel-btn" (click)="showCodeModal = false">Cerrar</button>
+                <button class="save-btn" (click)="copyCode()">Copiar Código</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SIMULADOR DE CHAT -->
+    <app-chat-simulator *ngIf="showSimulator && selectedMerchant.name" [merchantName]="selectedMerchant.name"
+        [merchantId]="selectedMerchant.id || ''" [logoUrl]="selectedMerchant.logo_url || ''"
+        [primaryColor]="selectedMerchant.primary_color || '#4F46E5'"
+        [aiProvider]="selectedMerchant.ai_provider || 'google_gemini'" [aiApiKey]="selectedMerchant.ai_api_key || ''"
+        [aiModel]="selectedMerchant.ai_model || ''"
+        [ollamaBaseUrl]="platformAiSettings.ollama_base_url || 'http://localhost:11434'"
+        [aiWelcomeMessage]="selectedMerchant.ai_welcome_message || ''" [context]="getConsolidatedPrompt()"
+        (onClose)="showSimulator = false">
+    </app-chat-simulator>
+
+    <!-- MONITOR DE CARRITOS EN TIEMPO REAL -->
+    <div class="modal-overlay monitor-overlay" *ngIf="showLiveMonitor" (click)="showLiveMonitor = false">
+        <div class="monitor-modal-content" (click)="$event.stopPropagation()">
+            <button class="close-monitor-btn" (click)="showLiveMonitor = false">✕</button>
+            <app-live-orders-monitor [merchantId]="currentMonitoringMerchantId"></app-live-orders-monitor>
+        </div>
+    </div>
+
+    <!-- Modal de Configuración de Plataforma -->
+    <div class="modal-overlay" *ngIf="showPlatformConfig" (click)="showPlatformConfig = false">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+            <h2>⚙️ Configuración de Plataforma</h2>
+            <p class="modal-desc">Personaliza el branding global de tu plataforma SaaS.</p>
+
+            <div class="form-grid">
+                <div class="form-group full-width">
+                    <label>Nombre de la Plataforma</label>
+                    <input type="text" [(ngModel)]="platformConfig.platform_name" placeholder="Ej: Woox">
+                    <small>Este nombre aparecerá en el sidebar y en la barra superior.</small>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>
+                        <input type="checkbox" [(ngModel)]="platformConfig.use_logo_image">
+                        Usar logo de imagen en lugar de texto
+                    </label>
+                </div>
+
+                <div class="form-group full-width" *ngIf="platformConfig.use_logo_image">
+                    <label>URL del Logo de Plataforma</label>
+                    <input type="text" [(ngModel)]="platformConfig.platform_logo_url" placeholder="https://...">
+                    <small>Recomendado: PNG transparente, 200x60px</small>
+                </div>
+
+                <div class="form-group full-width"
+                    *ngIf="platformConfig.use_logo_image && platformConfig.platform_logo_url">
+                    <label>Vista Previa</label>
+                    <div class="logo-preview">
+                        <img [src]="platformConfig.platform_logo_url" alt="Logo Preview">
+                    </div>
+                </div>
+
+                <div class="section-divider full-width">💰 Moneda e Idioma</div>
+
+                <div class="form-group">
+                    <label>Idioma de la Plataforma</label>
+                    <select [(ngModel)]="platformConfig.language">
+                        <option *ngFor="let lang of languages" [value]="lang.code">
+                            {{ lang.name }}
+                        </option>
+                    </select>
+                    <small>Idioma predeterminado para la interfaz.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Moneda</label>
+                    <select [(ngModel)]="platformConfig.currency">
+                        <option *ngFor="let curr of currencies" [value]="curr.code">
+                            {{ curr.name }}
+                        </option>
+                    </select>
+                    <small>Moneda para mostrar precios en toda la plataforma.</small>
+                </div>
+
+                <div class="section-divider full-width">🗄️ Configuración de Base de Datos (Supabase)</div>
+
+                <div class="form-group full-width">
+                    <label>Supabase URL</label>
+                    <input type="text" [(ngModel)]="platformConfig.supabase_url"
+                        placeholder="https://xxxxxx.supabase.co">
+                    <small>La URL de tu proyecto Supabase.</small>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Supabase Anon Key</label>
+                    <div style="display: flex; gap: 10px;">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" [(ngModel)]="platformConfig.supabase_key" style="flex: 1;"
+                                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+                            <button class="action-btn" (click)="testSupabaseConnection()"
+                                [disabled]="isValidatingSupabase"
+                                style="white-space: nowrap; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;">
+                                {{ isValidatingSupabase ? '🕒 Probando...' : '🔍 Probar' }}
+                            </button>
+                            <button class="action-btn" (click)="resetSupabaseConfig()"
+                                title="Restablecer conexión original del servidor"
+                                style="white-space: nowrap; background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;">
+                                🔄 Reset
+                            </button>
+                        </div>
+                        <small *ngIf="supabaseStatus === 'success'"
+                            style="color: #059669; font-weight: 600; margin-top: 4px; display: block;">✅ Conexión
+                            Exitosa</small>
+                        <small *ngIf="supabaseStatus === 'error'"
+                            style="color: #dc2626; font-weight: 600; margin-top: 4px; display: block;">❌ Error de
+                            Conexión</small>
+                        <small *ngIf="supabaseStatus === 'none'">La clave pública (anon key) de tu proyecto. <a
+                                (click)="resetSupabaseConfig()"
+                                style="cursor:pointer; text-decoration: underline;">Restablecer originales</a></small>
+                    </div>
+
+                    <!-- Alerta de Inicialización / Actualización -->
+                    <div class="init-alert-box full-width" *ngIf="supabaseStatus === 'success'"
+                        style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 16px; margin-top: 10px; animation: slideDown 0.3s ease-out;">
+                        <div style="display: flex; gap: 16px; align-items: flex-start;">
+                            <div style="font-size: 2rem;">{{ dbNeedsInitialization ? '🚧' : '🆙' }}</div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 800; color: #166534; font-size: 1.1rem; margin-bottom: 6px;">
+                                    {{ dbNeedsInitialization ? '¡Conexión OK, pero Base de Datos Vacía!' : 'Actualizar
+                                    Base
+                                    de
+                                    Datos' }}
+                                </div>
+                                <p style="font-size: 0.9rem; color: #15803d; line-height: 1.5; margin: 0;">
+                                    {{ dbNeedsInitialization ?
+                                    'Hemos detectado que tu proyecto en Supabase no tiene las tablas de Woox. ¿Deseas
+                                    inicializarla ahora?' :
+                                    '¿Has realizado cambios en el código o necesitas aplicar la última actualización de
+                                    tablas?
+                                    Pulsa aquí para obtener el script.' }}
+                                </p>
+                                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                    <button (click)="copyInitSql()"
+                                        style="margin-top: 16px; background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); transition: all 0.2s;">
+                                        🚀 Copiar Script SQL & Abrir Editor
+                                    </button>
+                                    <button (click)="runTestOrderInsertion()"
+                                        style="margin-top: 16px; background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); transition: all 0.2s;">
+                                        🧪 Prueba Técnica: Insertar Pedido
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-divider full-width">🤖 Motor de Chat IA (Copiloto)</div>
+                    <div class="form-group full-width">
+                        <p class="desc">IA principal para el asistente interno y generación automática de prompts.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Proveedor de IA</label>
+                        <select [(ngModel)]="platformAiSettings.ai_provider" (change)="aiConnectionStatus = 'none'">
+                            <option *ngFor="let p of aiProviders" [value]="p.id">{{ p.name }}</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" *ngIf="platformAiSettings.ai_provider === 'ollama'">
+                        <label>URL de Ollama + Test</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" [(ngModel)]="platformAiSettings.ollama_base_url"
+                                placeholder="http://localhost:11434" style="flex: 1;">
+                            <button class="action-btn" (click)="testPlatformAIConnection()" [disabled]="isTestingAI"
+                                style="white-space: nowrap; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;">
+                                {{ isTestingAI ? '🕒 Conectando...' : '⚡ Verificar' }}
+                            </button>
+                        </div>
+                        <small *ngIf="aiConnectionStatus === 'success'"
+                            style="color: #059669; font-weight: 600; margin-top: 4px; display: block;">✅ {{
+                            aiConnectionMessage }}</small>
+                        <small *ngIf="aiConnectionStatus === 'error'"
+                            style="color: #dc2626; font-weight: 600; margin-top: 4px; display: block;">❌ {{
+                            aiConnectionMessage }}</small>
+                    </div>
+
+                    <div class="form-group full-width" *ngIf="platformAiSettings.ai_provider !== 'ollama'">
+                        <label>Master API Key (Chat)</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" [(ngModel)]="platformAiSettings.ai_api_key"
+                                placeholder="AI API Key..." style="flex: 1;"
+                                (ngModelChange)="aiConnectionStatus = 'none'">
+                            <button class="action-btn" (click)="testPlatformAIConnection()"
+                                [disabled]="isTestingAI || !platformAiSettings.ai_api_key"
+                                style="white-space: nowrap; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;">
+                                {{ isTestingAI ? '🕒 Conectando...' : '⚡ Verificar' }}
+                            </button>
+                        </div>
+                        <small *ngIf="aiConnectionStatus === 'success'"
+                            style="color: #059669; font-weight: 600; margin-top: 4px; display: block;">✅ {{
+                            aiConnectionMessage }}</small>
+                        <small *ngIf="aiConnectionStatus === 'error'"
+                            style="color: #dc2626; font-weight: 600; margin-top: 4px; display: block;">❌ {{
+                            aiConnectionMessage }}</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Modelo de Chat</label>
+                        <select [(ngModel)]="platformAiSettings.ai_model">
+                            <option *ngFor="let model of (aiModels[platformAiSettings.ai_provider] || [])"
+                                [value]="model.id">
+                                {{ model.name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="section-divider full-width">🧠 Motor de Embeddings (Vectores)</div>
+                    <div class="form-group full-width">
+                        <p class="desc">Configura el motor que se encargará de "vectorizar" la memoria del agente para
+                            búsquedas semánticas.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Proveedor de Embeddings</label>
+                        <select [(ngModel)]="platformAiSettings.embed_provider"
+                            (change)="embedConnectionStatus = 'none'">
+                            <option value="google_gemini">Google Gemini (Embeddings)</option>
+                            <option value="openai">OpenAI (Embeddings)</option>
+                            <option value="ollama">Ollama (Embeddings Locales)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" *ngIf="platformAiSettings.embed_provider !== 'ollama'">
+                        <label>API Key (Embeddings)</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" [(ngModel)]="platformAiSettings.embed_api_key"
+                                placeholder="Usar la de chat si está vacío..." style="flex: 1;"
+                                (ngModelChange)="embedConnectionStatus = 'none'">
+                            <button class="action-btn" (click)="testPlatformEmbeddingConnection()"
+                                [disabled]="isTestingEmbed"
+                                style="white-space: nowrap; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;">
+                                {{ isTestingEmbed ? '🕒 Conectando...' : '⚡ Verificar' }}
+                            </button>
+                        </div>
+                        <small *ngIf="embedConnectionStatus === 'success'"
+                            style="color: #059669; font-weight: 600; margin-top: 4px; display: block;">✅ {{
+                            embedConnectionMessage }}</small>
+                        <small *ngIf="embedConnectionStatus === 'error'"
+                            style="color: #dc2626; font-weight: 600; margin-top: 4px; display: block;">❌ {{
+                            embedConnectionMessage }}</small>
+                    </div>
+
+                    <div class="form-group" *ngIf="platformAiSettings.embed_provider === 'ollama'">
+                        <label>Cargar Modelos Ollama</label>
+                        <button class="action-btn" (click)="testPlatformEmbeddingConnection()"
+                            [disabled]="isTestingEmbed" style="width: 100%;">
+                            {{ isTestingEmbed ? '🕒 Conectando...' : '⚡ Refrescar Modelos' }}
+                        </button>
+                        <small *ngIf="embedConnectionStatus === 'success'"
+                            style="color: #059669; font-weight: 600; margin-top: 4px; display: block;">✅ {{
+                            embedConnectionMessage }}</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Modelo de Embedding</label>
+                        <select [(ngModel)]="platformAiSettings.embed_model">
+                            <option *ngFor="let model of (embedModels[platformAiSettings.embed_provider] || [])"
+                                [value]="model.id">
+                                {{ model.name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group full-width" style="margin-top: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" [(ngModel)]="platformAiSettings.support_ai_enabled">
+                            Habilitar Copiloto de IA en el Diseñador de Habilidades
+                        </label>
+                    </div>
+
+                    <div class="section-divider full-width">ℹ️ Información del Sistema</div>
+                    <div class="form-group">
+                        <label>Versión Actual</label>
+                        <input type="text" value="1.0.0" disabled
+                            style="background: #f9fafb; cursor: not-allowed; opacity: 0.7;">
+                        <small>Versión del software Woox PRO.</small>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="cancel-btn" (click)="showPlatformConfig = false">Cancelar</button>
+                    <button class="save-btn" (click)="savePlatformConfig()">Guardar y Aplicar</button>
+                </div>
             </div>
         </div>
     </div>
@@ -495,7 +588,8 @@
             <h2>👥 Usuarios de {{ currentManagingMerchant?.name }}</h2>
             <div class="info-alert-small"
                 style="background: #e0f2fe; color: #0369a1; padding: 10px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem;">
-                ℹ️ Los nuevos usuarios son asignados automáticamente al equipo de <strong>Atención al Cliente</strong>.
+                ℹ️ Los nuevos usuarios son asignados automáticamente al equipo de <strong>Atención al
+                    Cliente</strong>.
             </div>
             <p>Administra quiénes tienen acceso al panel de esta empresa.</p>
 
@@ -546,7 +640,8 @@
                         <tr *ngFor="let user of getUsersForMerchant(currentManagingMerchant?.id || '')">
                             <td>{{ user.full_name }}</td>
                             <td>{{ user.email }}</td>
-                            <td><span class="role-badge" [class]="user.role">{{ getRoleLabel(user.role) }}</span></td>
+                            <td><span class="role-badge" [class]="user.role">{{ getRoleLabel(user.role) }}</span>
+                            </td>
                             <td><span class="team-badge"
                                     style="background: #f1f5f9; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem;">{{
                                     getTeamName(user) }}</span></td>
@@ -716,7 +811,8 @@
             <div class="omni-config-content">
                 <section class="config-section">
                     <h3>Canales de Mensajería</h3>
-                    <p class="desc">Conecta tus canales de comunicación para que la IA pueda atender a tus clientes.</p>
+                    <p class="desc">Conecta tus canales de comunicación para que la IA pueda atender a tus clientes.
+                    </p>
 
                     <!-- NUEVO: URL de Webhook Amigable -->
                     <div class="webhook-display-box mb-20">
@@ -734,7 +830,8 @@
                                 Copiar</button>
                         </div>
                         <small [style.color]="selectedMerchant.merchant_code ? '#059669' : '#d97706'">
-                            {{ selectedMerchant.merchant_code ? '✅ Usando código amigable' : '⚠️ Usando ID (UUID) con
+                            {{ selectedMerchant.merchant_code ? '✅ Usando código amigable' : '⚠️ Usando ID (UUID)
+                            con
                             guiones - Recomendado crear uno corto' }}
                         </small>
                     </div>
@@ -817,7 +914,8 @@
                         </div>
                         <div class="url-copy-wrapper mb-15">
                             <input type="text" readonly [value]="getTelegramWebhookUrl()" class="webhook-url-input">
-                            <button class="copy-btn-small" (click)="copyToClipboard(getTelegramWebhookUrl())">📋 Copiar
+                            <button class="copy-btn-small" (click)="copyToClipboard(getTelegramWebhookUrl())">📋
+                                Copiar
                                 Webhook</button>
                         </div>
 
@@ -927,7 +1025,8 @@
                                     👁️ Ver
                                 </a>
                             </div>
-                            <p class="url-hint">Este es el enlace que debes poner en tu biografía de Instagram o TikTok.
+                            <p class="url-hint">Este es el enlace que debes poner en tu biografía de Instagram o
+                                TikTok.
                             </p>
                         </section>
 
@@ -1158,7 +1257,8 @@
                         <tr *ngFor="let user of filteredUsers">
                             <td>{{ user.full_name }}</td>
                             <td>{{ user.email }}</td>
-                            <td><span class="role-badge" [class]="user.role">{{ getRoleLabel(user.role) }}</span></td>
+                            <td><span class="role-badge" [class]="user.role">{{ getRoleLabel(user.role) }}</span>
+                            </td>
                             <td>{{ user.merchants?.name || '-' }}</td>
                             <td>
                                 <span class="status-dot" [class.active]="user.is_active"></span>
@@ -1250,3 +1350,4 @@
             </div>
         </div>
     </div>
+</div>

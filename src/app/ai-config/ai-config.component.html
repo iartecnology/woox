@@ -62,6 +62,23 @@
         </div>
         <!-- Pestaña General -->
         <div *ngIf="activeTab === 'general'" class="tab-pane">
+
+            <!-- 🏢 TIPO DE INDUSTRIA (Primero y más visible) -->
+            <section class="config-section highlight"
+                style="border: 2px solid var(--primary-color); margin-bottom: 20px;">
+                <h3>🏢 Tipo de Operación</h3>
+                <p class="desc">Define cómo opera tu empresa. Esto adapta el comportamiento de la IA y el menú lateral
+                    automáticamente.</p>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <select [(ngModel)]="merchantConfig.industry_type"
+                        style="font-size: 1rem; padding: 12px; border-radius: 10px;">
+                        <option value="retail">🛒 Comercio / Ventas — Activa catálogo de productos</option>
+                        <option value="support">🛎️ Atención / Servicios — Solo cerebro y conocimiento, sin ventas
+                        </option>
+                    </select>
+                </div>
+            </section>
+
             <section class="config-section master-toggle">
                 <div class="section-header">
                     <div class="title-with-badge">
@@ -135,7 +152,9 @@
                 </div>
             </section>
 
-            <section class="config-section highlight">
+
+
+            <section class="config-section highlight" *ngIf="merchantConfig.industry_type !== 'support'">
                 <h3>📚 Fuente de Conocimiento</h3>
                 <p class="desc">Define de dónde debe obtener la IA la información sobre tus productos y precios.</p>
 
