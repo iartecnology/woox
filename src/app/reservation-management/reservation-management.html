@@ -1,0 +1,127 @@
+<div class="reservation-page">
+    <div class="sidebar">
+        <div class="brand">Woox Reservas</div>
+        <nav>
+            <a routerLink="/crm">← Volver al CRM</a>
+            <a href="#" class="active">📅 Calendario</a>
+            <a href="#">⚙️ Recursos</a>
+            <a href="#">🚫 Bloqueos</a>
+            <a href="#">📊 Reportes</a>
+        </nav>
+    </div>
+
+    <div class="main-content">
+        <header class="topbar">
+            <h2>Gestión de Citas (Vista de Recepción)</h2>
+            <div class="actions">
+                <button class="btn btn-outline" (click)="changeView('month')"
+                    [class.active]="currentView === 'month'">Mes</button>
+                <button class="btn btn-outline" (click)="changeView('week')"
+                    [class.active]="currentView === 'week'">Semana</button>
+                <button class="btn btn-primary" (click)="changeView('day')"
+                    [class.active]="currentView === 'day'">Día</button>
+            </div>
+        </header>
+
+        <!-- KPIs Dashboard -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <h3>Citas Hoy</h3>
+                <div class="value">{{ kpis.todayTotal }}</div>
+                <div class="subtitle">{{ kpis.todayPending }} Pendientes</div>
+            </div>
+            <div class="kpi-card">
+                <h3>Tasa de Asistencia</h3>
+                <div class="value">{{ kpis.attendanceRate }}%</div>
+                <div class="subtitle">Últimos 7 días</div>
+            </div>
+            <div class="kpi-card">
+                <h3>Top Servicio</h3>
+                <div class="value-text">{{ kpis.topService }}</div>
+            </div>
+            <div class="kpi-card">
+                <h3>Agendadas por IA</h3>
+                <div class="value">{{ kpis.aiBookedRate }}%</div>
+                <div class="subtitle">Automatización nivel Woox</div>
+            </div>
+        </div>
+
+        <!-- Vista Calendario Día (Super Dashboard) -->
+        <div class="calendar-container" *ngIf="currentView === 'day'">
+            <div class="calendar-header-nav">
+                <button class="btn btn-icon" (click)="navigateDate(-1)">←</button>
+                <h3>{{ currentDate | date:'fullDate' }}</h3>
+                <button class="btn btn-icon" (click)="navigateDate(1)">→</button>
+            </div>
+
+            <div class="calendar-grid">
+                <!-- Columna de Horas -->
+                <div class="time-column">
+                    <div class="header-cell">Hora</div>
+                    <div class="time-cell" *ngFor="let time of timeSlots">
+                        {{ time }}
+                    </div>
+                </div>
+
+                <!-- Columnas por Recurso (Ej: Doctores) -->
+                <div class="resource-column" *ngFor="let res of resources">
+                    <div class="header-cell">{{ res.name }}</div>
+
+                    <div class="slot-cell" *ngFor="let time of timeSlots" (dblclick)="openBookingDetails(null)">
+                        <ng-container *ngFor="let booking of getBookingsForSlow(res.id, time)">
+                            <div class="booking-card" [ngClass]="getStatusClass(booking.status)"
+                                (click)="openBookingDetails(booking)">
+                                <strong>{{ booking.customerName }}</strong>
+                                <span>{{ booking.service }}</span>
+                            </div>
+                        </ng-container>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal / Offcanvas Details -->
+<div class="backdrop" *ngIf="selectedBooking" (click)="closeDetails()"></div>
+<div class="offcanvas" [class.open]="selectedBooking !== null">
+    <div class="offcanvas-header">
+        <h3>Detalles de la Cita</h3>
+        <button class="close-btn" (click)="closeDetails()">x</button>
+    </div>
+
+    <div class="offcanvas-body" *ngIf="selectedBooking">
+        <div class="customer-info">
+            <div class="avatar">{{ selectedBooking.customerName.charAt(0) }}</div>
+            <div class="info">
+                <h4>{{ selectedBooking.customerName }}</h4>
+                <p>Tel: +57 300 000 0000</p>
+                <p>Historial: 3era Cita</p>
+            </div>
+        </div>
+
+        <div class="status-badge" [ngClass]="getStatusClass(selectedBooking.status)">
+            {{ getStatusText(selectedBooking.status) }}
+        </div>
+
+        <div class="service-details">
+            <p><strong>Servicio:</strong> {{ selectedBooking.service }}</p>
+            <p><strong>Hora:</strong> {{ selectedBooking.time }} ({{ selectedBooking.durationMinutes }} min)</p>
+        </div>
+
+        <!-- Chat integration preview -->
+        <div class="chat-preview">
+            <h5>🤖 Historial de IA (WhatsApp)</h5>
+            <div class="chat-bubble user">Necesito cita para mañana</div>
+            <div class="chat-bubble ai">¡Tengo disponibilidad a las {{ selectedBooking.time }}!</div>
+            <div class="chat-bubble user">Dale, a esa hora perfecto.</div>
+            <div class="chat-bubble ai">¡Reserva confirmada!</div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn btn-outline">Reprogramar</button>
+            <button class="btn btn-danger">Cancelar (Liberar)</button>
+            <button class="btn btn-warning">No Asistió</button>
+        </div>
+    </div>
+</div>

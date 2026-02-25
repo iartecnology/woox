@@ -98,9 +98,9 @@ Para que el bot gestione esto nativamente en WhatsApp o Telegram sin herramienta
 
 ## 📝 4. Plan de Tareas de Implementación (Roadmap)
 
-### Fase 1: Motor Core en Supabase
-- [ ] Diseñar el esquema de base de datos (`reservable_resources`, `availability_schedules`, `bookings`).
-- [ ] Crear funciones RPC (SQL) para cálculo de disponibilidad de alto rendimiento. Las consultas de disponibilidad son costosas, las RPCs en Postgres son ultrarrápidas y evitan que la IA "piense" mucho tiempo.
+### Fase 1: Motor Core en Supabase (✅ COMPLETADO)
+- [x] Diseñar el esquema de base de datos (`reservable_resources`, `availability_schedules`, `bookings`).
+- [x] Crear funciones RPC (SQL) para cálculo de disponibilidad de alto rendimiento. Las consultas de disponibilidad son costosas, las RPCs en Postgres son ultrarrápidas y evitan que la IA "piense" mucho tiempo.
 
 ### Fase 2: Módulo Backoffice para el Comercio (Dashboard)
 - [ ] UI Calendario de Reservas (Vista Semanal / Mensual).

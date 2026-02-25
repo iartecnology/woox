@@ -144,6 +144,8 @@
                                                 title="Catálogo" (click)="goToCatalog(m)">🍔</button>
                                             <button *ngIf="m.industry_type === 'support'" class="config-icon-btn brain"
                                                 title="Cerebro" (click)="goToBrain(m)">🧠</button>
+                                            <button class="config-icon-btn res" title="Reservaciones"
+                                                (click)="goToReservations(m)">📅</button>
                                             <button class="config-icon-btn test" title="Simulador"
                                                 (click)="testChatSimulator(m)">🚀</button>
                                         </div>

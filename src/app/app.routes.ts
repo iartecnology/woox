@@ -15,6 +15,7 @@ import { BiolinkPageComponent } from './biolink-page/biolink-page.component';
 import { BiolinkAdminComponent } from './biolink-admin/biolink-admin';
 import { AgentManagementComponent } from './agent-management/agent-management.component';
 import { MerchantKnowledgeComponent } from './merchant-knowledge/merchant-knowledge.component';
+import { ReservationManagement } from './reservation-management/reservation-management';
 
 export const routes: Routes = [
     { path: 'login', component: LoginComponent },
@@ -22,6 +23,7 @@ export const routes: Routes = [
     { path: 'platform-analytics', component: PlatformAnalyticsComponent },
     { path: 'audit-logs', component: AuditLogsComponent },
     { path: 'crm', component: CustomerCrmComponent },
+    { path: 'reservations', component: ReservationManagement },
     { path: 'marketing', component: CampaignsComponent },
     { path: 'delivery', component: DeliveryPortalComponent },
     { path: 'chats', component: ChatManagementComponent },
