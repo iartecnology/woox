@@ -551,6 +551,7 @@ input:checked+.slider:before {
     color: #059669;
     border-color: #a7f3d0;
 }
+
 /* --- DYNAMIC SKILLS GRID --- */
 .skills-grid {
     display: grid;
@@ -696,4 +697,49 @@ input:checked+.slider:before {
 
 .link-btn:hover {
     color: #4338CA;
+}
+
+/* AI Connection Status */
+.input-with-status {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.status-indicator {
+    position: absolute;
+    right: 12px;
+    font-size: 1.2rem;
+}
+
+.status-message {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.status-message.success {
+    color: #10b981;
+}
+
+.status-message.error {
+    color: #ef4444;
+}
+
+.status-message.warning {
+    color: #f59e0b;
+}
+
+.status-message.loading {
+    color: #6366f1;
+}
+
+.verify-btn:hover:not(:disabled) {
+    background: #e5e7eb !important;
+    border-color: #9ca3af !important;
+}
+
+.verify-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }

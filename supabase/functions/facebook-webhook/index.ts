@@ -195,7 +195,7 @@ Deno.serve(async (req: Request) => {
                 body: JSON.stringify({
                     system_instruction: { parts: [{ text: systemPrompt }] },
                     contents: chatMessages,
-                    generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+                    generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
                 })
             });
 
@@ -204,7 +204,7 @@ Deno.serve(async (req: Request) => {
                 blended[0].parts[0].text = systemPrompt + "\n\n" + blended[0].parts[0].text;
                 geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${m.ai_api_key}`, {
                     method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ contents: blended, generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } })
+                    body: JSON.stringify({ contents: blended, generationConfig: { temperature: 0.3, maxOutputTokens: 2048 } })
                 });
             }
             const data = await geminiRes.json();
@@ -212,6 +212,10 @@ Deno.serve(async (req: Request) => {
         } catch (e) {
             aiResponse = "Error conectando con la IA.";
         }
+
+        // Limpiar artefactos de comandos antes de procesar
+        aiResponse = aiResponse.replace(/^\s*[}\]]+\s*$/gm, "").trim();
+        aiResponse = aiResponse.replace(/\[UPDATE[_ ]CART:[^\]]*\]/g, "").trim();
 
         // 4. Procesar Pedido
         if (aiResponse.includes("[ORDER_CONFIRMED:")) {

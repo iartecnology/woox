@@ -97,7 +97,7 @@
             </section>
 
             <section class="config-section">
-                <h3>Agente Maestro</h3>
+                <h3>Agente y Cerebro</h3>
                 <div class="form-group">
                     <div class="flex-header-label">
                         <label>Agente Seleccionado</label>
@@ -112,18 +112,90 @@
                     <small *ngIf="selectedAgent">Este agente define tu lógica base de venta.</small>
                 </div>
 
-                <div class="form-group mt-15" *ngIf="merchantConfig.ai_api_key">
-                    <label>Modelo de Inteligencia (Cerebro)</label>
-                    <select [(ngModel)]="merchantConfig.ai_model">
-                        <option *ngFor="let model of availableModels" [value]="model.id">
-                            {{ model.name }}
+                <div class="form-group mt-15">
+                    <label>Proveedor de IA</label>
+                    <select [(ngModel)]="merchantConfig.ai_provider" (change)="aiConnectionStatus = 'none'">
+                        <option *ngFor="let provider of aiProviders" [value]="provider.id">
+                            {{ provider.icon }} {{ provider.name }}
                         </option>
                     </select>
-                    <small>Este modelo procesa todas tus conversaciones de ventas.</small>
                 </div>
 
-                <div class="warning-text mt-15" *ngIf="!merchantConfig.ai_api_key">
-                    ⚠️ IA Desactivada: Contacta al administrador para configurar tu API Key y activar el asistente.
+                <div class="form-group mt-15">
+                    <label>API Key del Proveedor</label>
+                    <div class="input-with-status">
+                        <input type="text" [(ngModel)]="merchantConfig.ai_api_key" placeholder="sk-... o API Key"
+                            (ngModelChange)="aiConnectionStatus = 'none'">
+                        <div class="status-indicator" *ngIf="aiConnectionStatus !== 'none'"
+                            [class]="aiConnectionStatus">
+                            {{ aiConnectionStatus === 'success' ? '✅' : (aiConnectionStatus === 'loading' ? '⌛' :
+                            (aiConnectionStatus === 'warning' ? '⚠️' : '❌')) }}
+                        </div>
+                    </div>
+                    <div class="status-message" *ngIf="aiConnectionStatus !== 'none'" [class]="aiConnectionStatus">
+                        {{ aiConnectionMessage }}
+                    </div>
+                    <small *ngIf="merchantConfig.ai_provider === 'ollama' || merchantConfig.ai_provider === 'lmstudio'"
+                        style="color: #6366f1; font-weight: 600;">
+                        🚀 Tu proveedor local no requiere API Key. Puedes dejar este campo vacío o poner cualquier
+                        texto.
+                    </small>
+                </div>
+
+                <!-- URLs para IA Local -->
+                <div class="form-group mt-15" *ngIf="merchantConfig.ai_provider === 'ollama'">
+                    <label>Ollama API URL</label>
+                    <input type="text" [(ngModel)]="merchantConfig.ollama_base_url"
+                        placeholder="http://localhost:11434">
+                    <small>La dirección donde corre tu instancia de Ollama.</small>
+                </div>
+
+                <div class="form-group mt-15" *ngIf="merchantConfig.ai_provider === 'lmstudio'">
+                    <label>LM Studio API URL</label>
+                    <input type="text" [(ngModel)]="merchantConfig.lmstudio_base_url"
+                        placeholder="http://localhost:1234/v1">
+                    <small>La dirección donde corre tu instancia de LM Studio.</small>
+                </div>
+
+                <div class="form-group mt-15">
+                    <button class="verify-btn" (click)="testAIConnection()"
+                        style="width: 100%; padding: 10px; border-radius: 8px; background: #f3f4f6; color: #374151; font-weight: 600; cursor: pointer; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; gap: 8px;"
+                        [disabled]="isTestingAI || (!merchantConfig.ai_api_key && merchantConfig.ai_provider !== 'ollama' && merchantConfig.ai_provider !== 'lmstudio')">
+                        <span *ngIf="!isTestingAI">⚡ Verificar Conexión y Listar Modelos</span>
+                        <span *ngIf="isTestingAI">⌛ Conectando...</span>
+                    </button>
+                </div>
+
+                <div class="form-group mt-15">
+                    <label>Modelo de Inteligencia (Cerebro)</label>
+                    <ng-container
+                        *ngIf="merchantConfig.ai_provider === 'ollama' || merchantConfig.ai_provider === 'lmstudio'; else cloudMerchantModelSelect">
+                        <input type="text" [(ngModel)]="merchantConfig.ai_model" list="mercLocalModelsList"
+                            placeholder="Ej: qwen/qwen2.5-coder-14b">
+                        <datalist id="mercLocalModelsList">
+                            <option *ngFor="let model of aiModels[merchantConfig.ai_provider] || []" [value]="model.id">
+                                {{ model.name }}
+                            </option>
+                        </datalist>
+                        <small>Puedes elegir de la lista o escribir el nombre exacto del modelo.</small>
+                    </ng-container>
+                    <ng-template #cloudMerchantModelSelect>
+                        <select [(ngModel)]="merchantConfig.ai_model"
+                            *ngIf="aiConnectionStatus === 'success' || merchantConfig.ai_model">
+                            <option value="">Seleccionar modelo...</option>
+                            <option *ngFor="let model of aiModels[merchantConfig.ai_provider] || []" [value]="model.id">
+                                {{ model.name }}
+                            </option>
+                        </select>
+                    </ng-template>
+                    <small
+                        *ngIf="merchantConfig.ai_provider !== 'ollama' && merchantConfig.ai_provider !== 'lmstudio'">El
+                        cerebro que procesará tus conversaciones.</small>
+                </div>
+
+                <div class="warning-text mt-15"
+                    *ngIf="!merchantConfig.ai_api_key && merchantConfig.ai_provider !== 'ollama' && merchantConfig.ai_provider !== 'lmstudio'">
+                    ⚠️ IA Desactivada: Configura una API Key para activar el asistente.
                 </div>
             </section>
 
@@ -313,8 +385,10 @@
 </div>
 
 <!-- Simulador de Chat -->
-<app-chat-simulator *ngIf="showSimulator" [merchantName]="merchantConfig.name" [logoUrl]="merchantConfig.logo_url"
-    [primaryColor]="merchantConfig.primary_color" [aiApiKey]="merchantConfig.ai_api_key"
-    [aiModel]="merchantConfig.ai_model" [aiEnabled]="merchantConfig.ai_enabled" [context]="fullContext"
-    (onClose)="toggleSimulator()">
+<app-chat-simulator *ngIf="showSimulator" [merchantName]="merchantConfig.name" [merchantId]="merchantConfig.id"
+    [logoUrl]="merchantConfig.logo_url" [primaryColor]="merchantConfig.primary_color"
+    [aiProvider]="merchantConfig.ai_provider" [aiApiKey]="merchantConfig.ai_api_key" [aiModel]="merchantConfig.ai_model"
+    [ollamaBaseUrl]="merchantConfig.ollama_base_url || 'http://localhost:11434'"
+    [lmstudioBaseUrl]="merchantConfig.lmstudio_base_url || 'http://localhost:1234/v1'"
+    [aiEnabled]="merchantConfig.ai_enabled" [context]="fullContext" (onClose)="toggleSimulator()">
 </app-chat-simulator>

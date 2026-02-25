@@ -70,8 +70,9 @@ declare const pdfjsLib: any;
                             <strong>{{ block.title }}</strong>
                             <div class="k-item-actions">
                                 <button *ngIf="!block.embedding" class="sync-mini-btn" (click)="syncBlock(block)" title="Vectorizar">⚡</button>
+                                <button class="eye-icon" (click)="viewVector(block)" title="Ver Vector" *ngIf="block.embedding">👁️</button>
                                 <button class="edit-icon" (click)="editBlock(block)" title="Editar">✏️</button>
-                                <button class="delete-icon" (click)="deleteBlock(block.id)">🗑️</button>
+                                <button class="delete-icon" (click)="confirmDeleteBlock(block)" title="Eliminar">🗑️</button>
                             </div>
                         </div>
                         <p>{{ block.content | slice:0:160 }}{{ block.content.length > 160 ? '...' : '' }}</p>
@@ -90,6 +91,53 @@ declare const pdfjsLib: any;
                     <div class="k-icon">🧠</div>
                     <p>La memoria exclusiva de tu empresa está vacía.<br>Añade información específica que solo aplique a este negocio.</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN (ESTILO PREMIUM) -->
+    <div class="delete-modal-overlay" *ngIf="showDeleteConfirmModal" (click)="showDeleteConfirmModal = false">
+        <div class="delete-confirmation-dialog" (click)="$event.stopPropagation()">
+            <div class="delete-icon-wrapper danger">🗑️</div>
+            <h3>Eliminar Bloque</h3>
+            <p>¿Estás seguro de que deseas eliminar <strong>{{ blockToDelete?.title }}</strong>? Esta acción borrará el conocimiento semántico y no se puede deshacer.</p>
+
+            <div class="delete-dialog-actions">
+                <button class="dialog-cancel-btn" (click)="showDeleteConfirmModal = false" [disabled]="isSaving">
+                    Cancelar
+                </button>
+                <button class="dialog-confirm-btn" (click)="executeDelete()" [disabled]="isSaving">
+                    <span *ngIf="!isSaving">Eliminar Bloque</span>
+                    <span *ngIf="isSaving">⌛ Eliminando...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE VISTA DE VECTOR -->
+    <div class="delete-modal-overlay" *ngIf="showVectorModal" (click)="showVectorModal = false">
+        <div class="delete-confirmation-dialog vector-modal" (click)="$event.stopPropagation()">
+            <div class="delete-icon-wrapper" style="background: #eef2ff; color: #6366f1;">🧠</div>
+            <h3>Análisis del Conocimiento</h3>
+            
+            <div class="vector-readable-info">
+                <label>Información Original:</label>
+                <div class="source-text-box">
+                    <strong>{{ selectedVectorBlock?.title }}</strong>
+                    <p>{{ selectedVectorBlock?.content }}</p>
+                </div>
+            </div>
+
+            <div class="vector-math-info mt-20">
+                <label>Representación Vectorial ({{ selectedVectorBlock?.embedding?.length }} dimensiones):</label>
+                <p class="vector-desc">Estos números son la "huella digital" semántica que permite a la IA encontrar esta información por significado y no solo por palabras clave.</p>
+                <div class="vector-content">
+                    <code>{{ selectedVectorBlock?.embedding | json }}</code>
+                </div>
+            </div>
+
+            <div class="delete-dialog-actions mt-24">
+                <button class="dialog-cancel-btn w-100" (click)="showVectorModal = false">Cerrar Análisis</button>
             </div>
         </div>
     </div>
@@ -146,13 +194,52 @@ declare const pdfjsLib: any;
         .date { font-size: 0.75rem; color: #94a3b8; }
         .sync-mini-btn { background: #f0fdf4; border: 1px solid #bbf7d0; cursor: pointer; border-radius: 6px; padding: 3px 8px; font-size: 0.8rem; transition: all 0.2s; }
         .sync-mini-btn:hover { background: #dcfce7; }
-        .edit-icon { background: transparent; border: none; cursor: pointer; border-radius: 6px; padding: 3px; font-size: 0.95rem; transition: all 0.2s; }
+        .edit-icon, .eye-icon, .delete-icon { background: transparent; border: none; cursor: pointer; border-radius: 6px; padding: 5px; font-size: 1rem; transition: all 0.2s; }
         .edit-icon:hover { background: #ede9fe; }
-        .delete-icon { background: transparent; border: none; cursor: pointer; border-radius: 6px; padding: 3px; font-size: 0.95rem; transition: all 0.2s; }
+        .eye-icon:hover { background: #e0f2fe; }
         .delete-icon:hover { background: #fee2e2; }
+
+        /* MODALES PREMIUM */
+        .delete-modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center; z-index: 9999;
+        }
+        .delete-confirmation-dialog {
+            background: white; border-radius: 20px; padding: 32px; width: 90%; max-width: 400px;
+            text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2); animation: modalSlideUp 0.3s ease-out;
+        }
+        .vector-modal { max-width: 600px; }
+        .vector-readable-info { text-align: left; margin-bottom: 20px; }
+        .vector-readable-info label, .vector-math-info label { display: block; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .source-text-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+        .source-text-box strong { display: block; font-size: 0.95rem; color: #0f172a; margin-bottom: 6px; }
+        .source-text-box p { font-size: 0.85rem; color: #475569; margin: 0; line-height: 1.5; white-space: pre-wrap; }
+        .vector-math-info { text-align: left; }
+        .vector-content { 
+            background: #0f172a; color: #38bdf8; padding: 16px; border-radius: 12px; 
+            max-height: 150px; overflow-y: auto; text-align: left; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+            line-height: 1.4;
+        }
+        .vector-desc { color: #64748b; font-size: 0.85rem; margin-bottom: 12px; line-height: 1.4; }
+        @keyframes modalSlideUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        .delete-icon-wrapper {
+            width: 64px; height: 64px; background: #fffbeb; color: #f59e0b;
+            border-radius: 16px; display: flex; align-items: center; justify-content: center;
+            font-size: 2rem; margin: 0 auto 20px;
+        }
+        .delete-icon-wrapper.danger { background: #fef2f2; color: #ef4444; }
+        .delete-dialog-actions { display: flex; gap: 12px; margin-top: 24px; }
+        .dialog-cancel-btn { flex: 1; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+        .dialog-cancel-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+        .dialog-confirm-btn { flex: 1; padding: 12px; border-radius: 12px; border: none; background: #ef4444; color: white; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+        .dialog-confirm-btn:hover { background: #dc2626; transform: translateY(-1px); }
+
         .empty-knowledge { text-align: center; padding: 60px 20px; background: white; border-radius: 16px; border: 2px dashed #e2e8f0; }
         .k-icon { font-size: 3rem; margin-bottom: 12px; }
         .empty-knowledge p { color: #94a3b8; font-size: 0.9rem; line-height: 1.6; }
+        .mt-20 { margin-top: 20px; }
+        .mt-24 { margin-top: 24px; }
     `]
 })
 export class MerchantKnowledgeComponent implements OnInit {
@@ -167,13 +254,40 @@ export class MerchantKnowledgeComponent implements OnInit {
     isProcessingFile = false;
     fileStatus = '';
 
+    // Modales
+    showDeleteConfirmModal = false;
+    blockToDelete: any = null;
+    showVectorModal = false;
+    selectedVectorBlock: any = null;
+
     // API Key y settings para embeddings
     platformSettings: any = null;
 
     async ngOnInit() {
-        this.merchantId = localStorage.getItem('active_merchant_id') || localStorage.getItem('merchant_id') || '';
-        await this.loadSettings();
-        await this.loadBlocks();
+        // Asegurar que tenemos el ID del comercio antes de cargar
+        this.merchantId = localStorage.getItem('active_merchant_id') ||
+            localStorage.getItem('merchant_id') ||
+            '';
+
+        if (!this.merchantId) {
+            console.warn('[Cerebro] No merchantId found in localStorage');
+            // Reintentar en un momento por si SuperAdmin lo está seteando
+            setTimeout(() => {
+                this.merchantId = localStorage.getItem('active_merchant_id') || '';
+                if (this.merchantId) {
+                    this.initializeData();
+                }
+            }, 100);
+        } else {
+            this.initializeData();
+        }
+    }
+
+    async initializeData() {
+        await Promise.all([
+            this.loadSettings(),
+            this.loadBlocks()
+        ]);
     }
 
     async loadSettings() {
@@ -185,6 +299,7 @@ export class MerchantKnowledgeComponent implements OnInit {
         if (!this.merchantId) return;
         const { data } = await this.supabaseService.getMerchantContextBlocks(this.merchantId);
         this.blocks = data || [];
+        console.log(`[Cerebro] Loaded ${this.blocks.length} blocks for ${this.merchantId}`);
     }
 
     async saveBlock() {
@@ -226,11 +341,30 @@ export class MerchantKnowledgeComponent implements OnInit {
         this.editingBlockId = null;
     }
 
-    async deleteBlock(id: string) {
-        if (!confirm('¿Eliminar este bloque de conocimiento?')) return;
-        await this.supabaseService.deleteMerchantContextBlock(id);
-        await this.loadBlocks();
-        this.notificationService.show('Bloque eliminado', 'info');
+    confirmDeleteBlock(block: any) {
+        this.blockToDelete = block;
+        this.showDeleteConfirmModal = true;
+    }
+
+    async executeDelete() {
+        if (!this.blockToDelete) return;
+        this.isSaving = true;
+        try {
+            await this.supabaseService.deleteMerchantContextBlock(this.blockToDelete.id);
+            this.showDeleteConfirmModal = false;
+            this.blockToDelete = null;
+            await this.loadBlocks();
+            this.notificationService.show('Bloque eliminado', 'info');
+        } catch (error) {
+            this.notificationService.show('Error al eliminar', 'error');
+        } finally {
+            this.isSaving = false;
+        }
+    }
+
+    viewVector(block: any) {
+        this.selectedVectorBlock = block;
+        this.showVectorModal = true;
     }
 
     async syncBlock(block: any) {
@@ -301,7 +435,7 @@ export class MerchantKnowledgeComponent implements OnInit {
         } finally {
             this.isProcessingFile = false;
             this.fileStatus = '';
-            event.target.value = '';
+            (event.target as HTMLInputElement).value = '';
         }
     }
 
@@ -313,7 +447,7 @@ export class MerchantKnowledgeComponent implements OnInit {
         for (let i = 1; i <= maxPages; i++) {
             const page = await pdf.getPage(i);
             const content = await page.getTextContent();
-            text += content.items.map((item: any) => item.str).join(' ') + '\n';
+            text += content.items.map((item: any) => (item as any).str).join(' ') + '\n';
         }
         return text;
     }

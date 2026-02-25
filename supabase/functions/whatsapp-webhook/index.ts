@@ -173,6 +173,64 @@ Deno.serve(async (req: Request) => {
             return new Response("ok", { headers: corsHeaders });
         }
 
+        // --- NUEVA LÓGICA DE HORARIOS (Scheduling) ---
+        if (m.ai_schedule_enabled) {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/Bogota',
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: false
+            });
+            const parts = formatter.formatToParts(now);
+            const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
+            const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+            const currentTimeMinutes = hour * 60 + minute;
+
+            const [startH, startM] = (m.ai_schedule_start || '09:00').split(':').map(Number);
+            const [endH, endM] = (m.ai_schedule_end || '18:00').split(':').map(Number);
+            const startTimeMinutes = startH * 60 + startM;
+            const endTimeMinutes = endH * 60 + endM;
+
+            let isWithinSchedule = false;
+            if (startTimeMinutes <= endTimeMinutes) {
+                isWithinSchedule = currentTimeMinutes >= startTimeMinutes && currentTimeMinutes <= endTimeMinutes;
+            } else {
+                // Caso horario nocturno (ej: 22:00 a 06:00)
+                isWithinSchedule = currentTimeMinutes >= startTimeMinutes || currentTimeMinutes <= endTimeMinutes;
+            }
+
+            if (!isWithinSchedule) {
+                const scheduleMessage = m.ai_schedule_message || "Lo siento, en este momento no estamos disponibles. Por favor, escríbenos más tarde.";
+                const waUrl = `https://graph.facebook.com/v22.0/${m.whatsapp_phone_number_id}/messages`;
+
+                // Enviar mensaje de fuera de horario a WhatsApp
+                await fetch(waUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${m.whatsapp_token}`
+                    },
+                    body: JSON.stringify({
+                        messaging_product: "whatsapp",
+                        to: customerPhone,
+                        text: { body: sanitizeMarkdown(scheduleMessage) }
+                    })
+                });
+
+                // Guardar el mensaje en la base de datos
+                await supabase.from("messages").insert({
+                    conversation_id: conversation.id,
+                    sender_type: "ai",
+                    content: scheduleMessage,
+                    metadata: { type: 'out_of_schedule' }
+                });
+
+                console.log(`[Webhook WA] Fuera de horario para ${conversation.id}. Enviando mensaje alternativo.`);
+                return new Response("ok", { headers: corsHeaders });
+            }
+        }
+
         // Lógica de IA...
         const { data: products } = await supabase.from("products").select("name, price, is_available, category:categories(name)").eq("merchant_id", merchantIdInternal).eq("is_available", true).limit(40);
         let menu = "";
@@ -218,8 +276,10 @@ Deno.serve(async (req: Request) => {
         // 4. Llamar a la IA (Gemini o OpenAI) - Lógica Robusta
         let aiResponse = "";
 
-        // VERIFICAR API KEY
-        if (!m.ai_api_key) {
+        // VERIFICAR API KEY (Excepto para Ollama/LMStudio que pueden ser locales)
+        const isOllama = m.ai_provider === 'ollama';
+        const isLMStudio = m.ai_provider === 'lmstudio';
+        if (!m.ai_api_key && !isOllama && !isLMStudio) {
             console.error("[AI Error] Missing AI API Key for merchant:", merchantIdInternal);
             return new Response("ok", { headers: corsHeaders });
         }
@@ -250,14 +310,71 @@ Deno.serve(async (req: Request) => {
                     body: JSON.stringify({
                         model: modelName,
                         messages: openaiMessages,
-                        temperature: 0.7,
-                        max_tokens: 1024
+                        temperature: 0.5,
+                        max_tokens: 2048
                     })
                 });
 
                 if (!openaiRes.ok) throw new Error(`OpenAI error: ${openaiRes.status}`);
                 const openaiData = await openaiRes.json();
                 aiResponse = openaiData.choices?.[0]?.message?.content || "Lo siento, no pude procesar tu mensaje.";
+
+            } else if (isOllama) {
+                // Ollama API logic
+                const ollamaUrl = m.ollama_base_url || 'http://localhost:11434';
+                console.log("[DEBUG] Using Ollama API at:", ollamaUrl);
+
+                const ollamaRes = await fetch(`${m.ollama_base_url || 'http://localhost:11434'}/api/chat`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true"
+                    },
+                    body: JSON.stringify({
+                        model: modelName,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            ...chatMessages.map(msg => ({
+                                role: msg.role === "model" ? "assistant" : "user",
+                                content: msg.parts[0].text
+                            }))
+                        ],
+                        stream: false
+                    })
+                });
+
+                if (!ollamaRes.ok) throw new Error(`Ollama error: ${ollamaRes.status}`);
+                const ollamaData = await ollamaRes.json();
+                aiResponse = ollamaData.message?.content || "Lo siento, no pude procesar tu mensaje.";
+
+            } else if (isLMStudio) {
+                // LM Studio API (OpenAI Compatible)
+                const lmUrl = m.lmstudio_base_url || 'http://localhost:1234/v1';
+                console.log("[DEBUG] Using LM Studio API at:", lmUrl);
+
+                const lmRes = await fetch(`${lmUrl}/chat/completions`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true"
+                    },
+                    body: JSON.stringify({
+                        model: modelName,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            ...chatMessages.map(msg => ({
+                                role: msg.role === "model" ? "assistant" : "user",
+                                content: msg.parts[0].text
+                            }))
+                        ],
+                        temperature: 0.5,
+                        max_tokens: 2048
+                    })
+                });
+
+                if (!lmRes.ok) throw new Error(`LM Studio error: ${lmRes.status}`);
+                const lmData = await lmRes.json();
+                aiResponse = lmData.choices?.[0]?.message?.content || "Lo siento, no pude procesar tu mensaje.";
 
             } else {
                 // Google AI Studio (Gemini / Gemma)
@@ -270,7 +387,7 @@ Deno.serve(async (req: Request) => {
                     body: JSON.stringify({
                         system_instruction: { parts: [{ text: systemPrompt }] },
                         contents: chatMessages,
-                        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+                        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
                     })
                 });
 
@@ -290,7 +407,7 @@ Deno.serve(async (req: Request) => {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             contents: blendedContents,
-                            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+                            generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
                         })
                     });
                 }
@@ -309,6 +426,10 @@ Deno.serve(async (req: Request) => {
             console.error("[AI Exception]", e);
             aiResponse = "Lo siento, estoy teniendo problemas técnicos con mi cerebro digital. (" + e.message + ")";
         }
+
+        // Limpiar artefactos de comandos antes de procesar
+        aiResponse = aiResponse.replace(/^\s*[}\]]+\s*$/gm, "").trim();
+        aiResponse = aiResponse.replace(/\[UPDATE[_ ]CART:[^\]]*\]/g, "").trim();
 
         // Procesar Pedidos
         if (aiResponse.includes("[ORDER_CONFIRMED:")) {

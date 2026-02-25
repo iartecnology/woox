@@ -126,6 +126,8 @@ interface Merchant {
     ai_schedule_message?: string;
     ai_enabled?: boolean;
     industry_type?: string;
+    ollama_base_url?: string;
+    lmstudio_base_url?: string;
 }
 
 interface PlatformConfig {
@@ -164,6 +166,7 @@ export class SuperAdminComponent implements OnInit {
         { id: 'anthropic', name: 'Anthropic (Claude 3.5)', icon: '🕵️' },
         { id: 'google_gemini', name: 'Google Gemini Pro', icon: '💎' },
         { id: 'ollama', name: 'Ollama (Local AI)', icon: '🏠' },
+        { id: 'lmstudio', name: 'LM Studio (Local AI)', icon: '💻' },
         { id: 'deepseek', name: 'DeepSeek R1', icon: '🧠' }
     ];
 
@@ -478,6 +481,44 @@ export class SuperAdminComponent implements OnInit {
                     const error = await response.json();
                     throw new Error(error.error?.message || 'API Key de OpenAI inválida');
                 }
+            } else if (provider === 'ollama') {
+                const baseUrl = this.selectedMerchant.ollama_base_url || 'http://localhost:11434';
+                const response = await fetch(`${baseUrl}/api/tags`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        throw new Error('El servidor de Ollama no devolvió JSON. Verifica la URL.');
+                    }
+                    const data = await response.json();
+                    freshModels = (data.models || []).map((m: any) => ({
+                        id: m.name,
+                        name: m.name
+                    }));
+                } else {
+                    throw new Error('No se pudo conectar con Ollama en ' + baseUrl);
+                }
+            } else if (provider === 'lmstudio') {
+                const baseUrl = this.selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1';
+                const response = await fetch(`${baseUrl}/models`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        throw new Error('El servidor no devolvió JSON válido. Posiblemente sea una página de error o landing page. Verifica la URL.');
+                    }
+                    const data = await response.json();
+                    // Soporte para formato OpenAI (data) y formato LM Studio v3 (models)
+                    const modelsArray = data.data || data.models || [];
+                    freshModels = modelsArray.map((m: any) => ({
+                        id: m.id || m.key || m.name,
+                        name: m.id || m.key || m.display_name || m.name
+                    }));
+                } else {
+                    throw new Error('No se pudo conectar con LM Studio en ' + baseUrl);
+                }
             } else if (provider === 'anthropic' || provider === 'deepseek') {
                 // Para estos, simplemente validamos longitud básica del token por ahora
                 // ya que no todos tienen listado de modelos público tan directo sin CORS
@@ -504,9 +545,17 @@ export class SuperAdminComponent implements OnInit {
                 throw new Error('No se encontraron modelos disponibles para esta cuenta');
             }
         } catch (error: any) {
+            console.error('AI Connection Test Error:', error);
+            let userMessage = error.message || 'Error de conexión';
+
+            // Detectar si el error es por respuesta HTML (común en ngrok/local ai mal configurado)
+            if (userMessage.includes('Unexpected token') && (userMessage.includes('<') || userMessage.includes('DOCTYPE'))) {
+                userMessage = 'El servidor devolvió una página HTML en lugar de JSON. Verifica que la URL sea correcta y que el servidor de IA esté respondiendo.';
+            }
+
             this.aiConnectionStatus = 'error';
-            this.aiConnectionMessage = error.message || 'Error de conexión';
-            this.notificationService.show(this.aiConnectionMessage, 'error');
+            this.aiConnectionMessage = userMessage;
+            this.notificationService.show(userMessage, 'error');
         } finally {
             this.isTestingAI = false;
         }
@@ -680,10 +729,14 @@ export class SuperAdminComponent implements OnInit {
         const updates = { ...this.selectedMerchant };
         delete (updates as any).id;
 
+        // Limpiar URLs de IA local si no son el proveedor activo para evitar errores de schema cache
+        if (updates.ai_provider !== 'ollama') delete (updates as any).ollama_base_url;
+        if (updates.ai_provider !== 'lmstudio') delete (updates as any).lmstudio_base_url;
+
         // --- FIXED: Asegurar que agent_id sea un UUID válido o null ---
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (updates.agent_id && !uuidRegex.test(updates.agent_id)) {
-            updates.agent_id = undefined; // O null, dependiendo de la DB
+            updates.agent_id = undefined;
         }
 
         const { error } = await this.supabaseService.updateMerchant(this.currentManagingMerchant.id, updates);
@@ -727,6 +780,8 @@ export class SuperAdminComponent implements OnInit {
         this.selectedMerchant.ai_restrictions = this.selectedMerchant.ai_restrictions || '';
         this.selectedMerchant.industry_type = this.selectedMerchant.industry_type || 'retail';
         this.selectedMerchant.ai_enabled = this.selectedMerchant.ai_enabled !== false;
+        this.selectedMerchant.ollama_base_url = this.selectedMerchant.ollama_base_url || 'http://localhost:11434';
+        this.selectedMerchant.lmstudio_base_url = this.selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1';
 
         this.showAIConfig = true;
         this.aiConnectionStatus = 'none';
@@ -752,6 +807,31 @@ export class SuperAdminComponent implements OnInit {
 
     getConsolidatedPrompt(): string {
         return this.consolidatedPrompt;
+    }
+
+    getSchedulePos(time: string | undefined): string {
+        if (!time) return '0%';
+        const [hours, minutes] = time.split(':').map(Number);
+        const totalMinutes = hours * 60 + minutes;
+        const percentage = (totalMinutes / 1440) * 100;
+        return `${percentage}%`;
+    }
+
+    getScheduleWidth(start: string | undefined, end: string | undefined): string {
+        if (!start || !end) return '0%';
+        const [startH, startM] = start.split(':').map(Number);
+        const [endH, endM] = end.split(':').map(Number);
+
+        const startTotal = startH * 60 + startM;
+        const endTotal = endH * 60 + endM;
+
+        if (endTotal < startTotal) {
+            const width = ((1440 - startTotal + endTotal) / 1440) * 100;
+            return `${width}%`;
+        }
+
+        const width = ((endTotal - startTotal) / 1440) * 100;
+        return `${width}%`;
     }
 
     copyCode() {
@@ -1381,9 +1461,16 @@ export class SuperAdminComponent implements OnInit {
                 throw new Error('No se detectaron modelos compatibles.');
             }
         } catch (error: any) {
-            console.error('[SuperAdmin] AI Test Error:', error);
+            console.error('AI Connection Test Error:', error);
+            let userMessage = error.message || 'Error de conexión';
+
+            // Detectar si el error es por respuesta HTML (común en ngrok/local ai mal configurado)
+            if (userMessage.includes('Unexpected token') && (userMessage.includes('<') || userMessage.includes('DOCTYPE'))) {
+                userMessage = 'El servidor devolvió una página HTML en lugar de JSON. Verifica la URL y que el servidor esté activo.';
+            }
+
             this.aiConnectionStatus = 'error';
-            this.aiConnectionMessage = error.message || 'Error de conexión';
+            this.aiConnectionMessage = userMessage;
             this.notificationService.show('Error al validar la conexión', 'error');
         } finally {
             this.isTestingAI = false;

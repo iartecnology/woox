@@ -9,16 +9,15 @@ function sanitizeMarkdown(text: string): string {
     let sanitized = text;
     // Borrar bloques técnicos conocidos
     sanitized = sanitized.replace(/\(INTERNO:.*?\)/gi, "");
-    sanitized = sanitized.replace(/\(DESCRIPCIÓN REAL:.*?\)/gi, "");
+    sanitized = sanitized.replace(/\(DESCRIPCION REAL:.*?\)/gi, "");
     sanitized = sanitized.replace(/\[DISPONIBLE\]/gi, "");
     sanitized = sanitized.replace(/\[AGOTADO\]/gi, "");
 
-    // Nueva limpieza agresiva de comandos y JSON
-    sanitized = sanitized.replace(/\[\w+:[^\]]*\]/gi, "");
-    sanitized = sanitized.replace(/UPDATE[ _]CART:?\s*\{[\s\S]*?\}/gi, "");
-    sanitized = sanitized.replace(/ORDER[ _]CONFIRMED:?\s*\{[\s\S]*?\}/gi, "");
-    sanitized = sanitized.replace(/\{"customer_name":[\s\S]*?\}/gi, "");
-    sanitized = sanitized.replace(/\{"name":[\s\S]*?\}/gi, "");
+    // Limpiar comandos internos de la IA (con regex GREEDY para manejar JSON anidado)
+    sanitized = sanitized.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*\}\s*\]/g, "");
+    sanitized = sanitized.replace(/\[UPDATE[_ ]CART:\s*\{[\s\S]*?\}\s*\]/g, "");
+    // Eliminar cualquier }] residual que pueda quedar
+    sanitized = sanitized.replace(/^\s*[}\]]+\s*$/gm, "");
 
     const asterisks = (sanitized.match(/\*/g) || []).length;
     const underscores = (sanitized.match(/_/g) || []).length;
@@ -54,6 +53,12 @@ Deno.serve(async (req: Request) => {
         const { data: m } = await supabase.from("merchants").select("*").eq("id", merchantId).single();
         if (!m) throw new Error("Merchant not found");
 
+        // Enviar acción 'typing' inmediatamente para mejorar la percepción de velocidad
+        fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendChatAction`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, action: "typing" })
+        }).catch(e => console.error("Error sending typing action", e));
 
         // Obtener o crear cliente
         let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", merchantId).eq("telegram_user_id", telegramUserId).maybeSingle();
@@ -79,28 +84,39 @@ Deno.serve(async (req: Request) => {
             conversation = nconv;
         }
 
-        // Guardar mensaje del cliente
-        await supabase.from("messages").insert({
-            conversation_id: conversation!.id,
-            sender_type: "customer",
-            content: messageText,
-            metadata: { telegram_message_id: messageId }
-        });
+        // Todas las operaciones restantes en paralelo (guardar mensaje + leer datos)
+        const [
+            _savedMsg,
+            _updatedConv,
+            { data: products },
+            { data: categories },
+            { data: history },
+            { data: compiledPrompt }
+        ] = await Promise.all([
+            supabase.from("messages").insert({
+                conversation_id: conversation!.id,
+                sender_type: "customer",
+                content: messageText,
+                metadata: { telegram_message_id: messageId }
+            }),
+            supabase.from("conversations").update({
+                last_message: messageText,
+                last_message_at: new Date().toISOString(),
+                unread_count: (conversation!.unread_count || 0) + 1
+            }).eq("id", conversation!.id),
+            supabase.from("products").select("id, name, price, category_id").eq("merchant_id", merchantId).eq("is_available", true).limit(50),
+            supabase.from("categories").select("id, name").eq("merchant_id", merchantId),
+            supabase.from("messages").select("sender_type, content").eq("conversation_id", conversation!.id).order("created_at", { ascending: false }).limit(10),
+            supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantId })
+        ]);
 
-        await supabase.from("conversations").update({
-            last_message: messageText,
-            last_message_at: new Date().toISOString(),
-            unread_count: (conversation!.unread_count || 0) + 1
-        }).eq("id", conversation!.id);
-
-        // Obtener catálogo más detallado
-        const { data: products } = await supabase.from("products").select("id, name, price, is_available, category:categories(name)").eq("merchant_id", merchantId).eq("is_available", true).limit(50);
-
+        // Construir menú local (para ORDER_CONFIRMED item matching)
         let menu = "";
         if (products && products.length > 0) {
             const groups: any = {};
             products.forEach((p: any) => {
-                const catName = p.category?.name || "Otros";
+                const cat = categories?.find((c: any) => c.id === p.category_id);
+                const catName = cat?.name || "Otros";
                 if (!groups[catName]) groups[catName] = [];
                 groups[catName].push(`• ${p.name} $${p.price}`);
             });
@@ -109,10 +125,7 @@ Deno.serve(async (req: Request) => {
                 .join('\n\n');
         }
 
-        // Obtener historial
-        const { data: history } = await supabase.from("messages").select("sender_type, content").eq("conversation_id", conversation!.id).order("created_at", { ascending: false }).limit(10);
-
-        // Construir historial para Gemini
+        // Construir historial para el modelo
         const messages: any[] = [];
         if (history) {
             [...history].reverse().forEach(msg => {
@@ -122,25 +135,11 @@ Deno.serve(async (req: Request) => {
                 });
             });
         }
+        if (messages.length > 0 && messages[0].role === "model") messages.shift();
 
-        // Asegurar que empiece con user
-        if (messages.length > 0 && messages[0].role === "model") {
-            messages.shift();
-        }
+        // System prompt desde la DB (fuente única)
+        const systemPrompt = compiledPrompt || `Eres el asistente de ${m.name}. Ayuda al cliente con su pedido.`;
 
-        // Obtener categorías únicas (para referencia local si el RPC falla)
-        const categoriesList = [...new Set(products?.map((p: any) => p.category?.name || "Otros"))].join(", ");
-
-        // === PROMPT CENTRALIZADO (Single Source of Truth) ===
-        // Obtener el prompt compilado desde la base de datos (incluye skills, catálogo, reglas de pedido, etc.)
-        let systemPrompt = '';
-        const { data: compiledPrompt } = await supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantId });
-        if (compiledPrompt) {
-            systemPrompt = compiledPrompt;
-        } else {
-            // Fallback mínimo si el RPC falla
-            systemPrompt = `Eres el asistente virtual de ${m.name}. Ayuda al cliente a realizar su pedido de forma natural. Categorías disponibles: ${categoriesList}.`;
-        }
 
 
         // Agregar el mensaje actual
@@ -158,7 +157,69 @@ Deno.serve(async (req: Request) => {
             return new Response("ok", { headers: corsHeaders });
         }
 
-        // Llamar a la IA (Gemini o OpenAI)
+        // --- NUEVA LÓGICA DE HORARIOS (Scheduling) ---
+        if (m.ai_schedule_enabled) {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/Bogota',
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: false
+            });
+            const parts = formatter.formatToParts(now);
+            const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
+            const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+            const currentTimeMinutes = hour * 60 + minute;
+
+            const [startH, startM] = (m.ai_schedule_start || '09:00').split(':').map(Number);
+            const [endH, endM] = (m.ai_schedule_end || '18:00').split(':').map(Number);
+            const startTimeMinutes = startH * 60 + startM;
+            const endTimeMinutes = endH * 60 + endM;
+
+            let isWithinSchedule = false;
+            if (startTimeMinutes <= endTimeMinutes) {
+                isWithinSchedule = currentTimeMinutes >= startTimeMinutes && currentTimeMinutes <= endTimeMinutes;
+            } else {
+                // Caso horario nocturno (ej: 22:00 a 06:00)
+                isWithinSchedule = currentTimeMinutes >= startTimeMinutes || currentTimeMinutes <= endTimeMinutes;
+            }
+
+            if (!isWithinSchedule) {
+                const scheduleMessage = m.ai_schedule_message || "Lo siento, en este momento no estamos disponibles. Por favor, escríbenos más tarde.";
+
+                // Enviar mensaje de fuera de horario
+                await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: sanitizeMarkdown(scheduleMessage),
+                        parse_mode: "Markdown"
+                    })
+                });
+
+                // Guardar el mensaje en la base de datos
+                await supabase.from("messages").insert({
+                    conversation_id: conversation!.id,
+                    sender_type: "ai",
+                    content: scheduleMessage,
+                    metadata: { type: 'out_of_schedule' }
+                });
+
+                console.log(`[Webhook] Fuera de horario para ${conversation!.id}. Enviando mensaje alternativo.`);
+                return new Response("ok", { headers: corsHeaders });
+            }
+        }
+
+        // VERIFICAR API KEY (Excepto para Ollama/LMStudio que pueden ser locales)
+        const isOllama = m.ai_provider === 'ollama';
+        const isLMStudio = m.ai_provider === 'lmstudio';
+        if (!m.ai_api_key && !isOllama && !isLMStudio) {
+            console.error("[AI Error] Missing AI API Key for merchant:", merchantId);
+            return new Response("ok", { headers: corsHeaders });
+        }
+
+        // Llamar a la IA (Gemini o OpenAI o Ollama)
         let aiResponse = "";
         try {
             const modelName = m.ai_model || 'gemini-1.5-flash';
@@ -201,12 +262,69 @@ Deno.serve(async (req: Request) => {
 
                 const openaiData = await openaiRes.json();
                 aiResponse = openaiData.choices?.[0]?.message?.content || "Lo siento, no pude procesar tu mensaje.";
-            } else {
-                // Google AI Studio (Gemini / Gemma)
-                console.log("[DEBUG] Using Google AI Studio API");
-                const cleanModelName = modelName.includes('/') ? modelName.split('/').pop() : modelName;
 
-                // Asegurar alternancia y empezar con USER
+            } else if (isOllama) {
+                // Ollama API
+                const ollamaUrl = m.ollama_base_url || 'http://localhost:11434';
+                console.log("[DEBUG] Using Ollama API at:", ollamaUrl);
+
+                const ollamaRes = await fetch(`${ollamaUrl}/api/chat`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true"
+                    },
+                    body: JSON.stringify({
+                        model: modelName,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            ...messages.map(msg => ({
+                                role: msg.role === "model" ? "assistant" : "user",
+                                content: msg.parts[0].text
+                            }))
+                        ],
+                        stream: false
+                    })
+                });
+
+                if (!ollamaRes.ok) throw new Error(`Ollama error: ${ollamaRes.status}`);
+                const ollamaData = await ollamaRes.json();
+                aiResponse = ollamaData.message?.content || "Lo siento, no pude procesar tu mensaje.";
+
+            } else if (isLMStudio) {
+                // LM Studio API (OpenAI Compatible)
+                const lmUrl = m.lmstudio_base_url || 'http://localhost:1234/v1';
+                console.log("[DEBUG] Using LM Studio API at:", lmUrl);
+
+                const lmRes = await fetch(`${lmUrl}/chat/completions`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true"
+                    },
+                    body: JSON.stringify({
+                        model: modelName,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            ...messages.map(msg => ({
+                                role: msg.role === "model" ? "assistant" : "user",
+                                content: msg.parts[0].text
+                            }))
+                        ],
+                        temperature: 0.5,
+                        max_tokens: 2048
+                    })
+                });
+
+                if (!lmRes.ok) throw new Error(`LM Studio error: ${lmRes.status}`);
+                const lmData = await lmRes.json();
+                aiResponse = lmData.choices?.[0]?.message?.content || "Lo siento, no pude procesar tu mensaje.";
+
+            } else {
+                const cleanModelName = modelName.includes('/') ? modelName.split('/').pop() : modelName;
+                const isGemmaModel = cleanModelName!.toLowerCase().startsWith('gemma');
+
+                // Asegurar alternancia de roles
                 const finalContents: any[] = [];
                 for (const msg of messages) {
                     if (finalContents.length > 0 && finalContents[finalContents.length - 1].role === msg.role) {
@@ -217,75 +335,65 @@ Deno.serve(async (req: Request) => {
                 }
                 if (finalContents.length > 0 && finalContents[0].role === "model") finalContents.shift();
 
-                // Proactividad: Modelos que NO soportan system_instruction (evitar error 400 y reintento lento)
-                const supportsSysInstr = !cleanModelName.toLowerCase().includes('gemma-3');
-
                 let geminiRes;
-                if (supportsSysInstr) {
+
+                if (!isGemmaModel) {
+                    // Gemini (y otros modelos Google): soporta system_instruction
                     geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModelName}:generateContent?key=${m.ai_api_key}`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            system_instruction: {
-                                parts: [{ text: systemPrompt }]
-                            },
+                            system_instruction: { parts: [{ text: systemPrompt }] },
                             contents: finalContents,
-                            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+                            generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
                         })
                     });
                 } else {
-                    console.log("[DEBUG] Skipping system_instruction for Gemma-3");
-                    geminiRes = { ok: false, status: 400 } as any;
-                }
-
-                if (!geminiRes.ok) {
-                    // Fallback: Si system_instruction falla, intentar mandarlo mezclado con el primer mensaje USER
-                    console.log("[DEBUG] Fallback: Merging system prompt with first message...");
-                    const blendedContents = JSON.parse(JSON.stringify(finalContents));
-                    if (blendedContents.length > 0 && blendedContents[0].role === "user") {
-                        blendedContents[0].parts[0].text = systemPrompt + "\n\n" + blendedContents[0].parts[0].text;
+                    // Gemma: NO soporta system_instruction → inyectamos el prompt en el primer mensaje
+                    console.log("[DEBUG] Gemma model detected — injecting system prompt into first message");
+                    const gemmaContents = JSON.parse(JSON.stringify(finalContents));
+                    if (gemmaContents.length > 0) {
+                        gemmaContents[0].parts[0].text = `${systemPrompt}\n\n---\n\n${gemmaContents[0].parts[0].text}`;
                     } else {
-                        blendedContents.unshift({ role: "user", parts: [{ text: systemPrompt }] });
+                        gemmaContents.push({ role: "user", parts: [{ text: systemPrompt }] });
                     }
-
                     geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModelName}:generateContent?key=${m.ai_api_key}`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            contents: blendedContents,
-                            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+                            contents: gemmaContents,
+                            generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
                         })
                     });
                 }
 
-                if (!geminiRes.ok) {
-                    const errorText = await (geminiRes as any).text ? await (geminiRes as any).text() : "Unknown error";
-                    console.error("[GEMINI FINAL ERROR]", geminiRes.status, errorText);
-                    throw new Error(`Gemini error: ${geminiRes.status}`);
+                if (!geminiRes || !geminiRes.ok) {
+                    const errorText = await geminiRes?.text() || "Unknown error";
+                    console.error("[GEMINI ERROR]", geminiRes?.status, errorText);
+                    throw new Error(`Gemini error: ${geminiRes?.status} - ${errorText}`);
                 }
+
 
                 const geminiData = await geminiRes.json();
                 aiResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "Lo siento, no pude procesar tu mensaje.";
             }
-
             console.log("[DEBUG] AI response success, length:", aiResponse.length);
         } catch (err: any) {
             console.error("[AI GLOBAL ERROR]:", err.message);
-            aiResponse = "Disculpa, hay un problema con el modelo de IA seleccionado (" + (m.ai_model || 'Gemma/Gemini') + "). Por favor verifica tu API Key o intenta con el modelo 'gemini-1.5-flash'.";
+            aiResponse = "Disculpa, hay un problema con el modelo de IA seleccionado. Por favor verifica tu configuración.";
         }
 
-        // Procesar ORDER_CONFIRMED (regex robusta para JSON anidado con ítems)
+        // === PROCESAR RESPUESTA DE IA ===
+
+        // 1. Extraer ORDER_CONFIRMED ANTES de limpiar (regex GREEDY para manejar JSON anidado con items[])
+        const orderMatch = aiResponse.match(/\[ORDER_CONFIRMED:\s*(\{[\s\S]*\})\s*\]/);
         let orderConfirmationText = "";
-        const orderMatch = aiResponse.match(/\[ORDER_CONFIRMED:\s*(\{.*\})\s*\]/s);
 
         if (orderMatch) {
             try {
-                const jsonContent = orderMatch[1].trim();
-                const info = JSON.parse(jsonContent);
-                // Limpiar el tag de la respuesta final (con regex global para borrar posibles duplicados o fragmentos)
-                aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:[\s\S]*?\]/g, "").trim();
-                // Limpiar fragmentos huérfanos que a veces deja la IA por error de delimitación
-                aiResponse = aiResponse.replace(/Código de Confirmación:?\s*\}?\]?/gi, "").trim();
+                const info = JSON.parse(orderMatch[1].trim());
+                // Remover el comando completo del texto visible (greedy para no dejar }])
+                aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*\}\s*\]/, "").trim();
 
                 const customerUpdates: any = {};
                 if (info.customer_name) customerUpdates.full_name = info.customer_name;
@@ -308,30 +416,19 @@ Deno.serve(async (req: Request) => {
                 if (order) {
                     orderConfirmationText = `\n\n🚀 *¡Pedido registrado!*\n🆔 *Orden #${order.id.split('-')[0].toUpperCase()}*`;
 
-                    // NUEVO: Guardar productos del pedido si vienen en el JSON
-                    if (info.items && Array.isArray(info.items) && info.items.length > 0) {
+                    if (info.items && Array.isArray(info.items)) {
                         const itemsToInsert = info.items.map((it: any) => {
-                            const qty = Number(it.qty || it.quantity || 1);
-                            const price = Number(it.price || 0);
-
-                            // Intentar encontrar el product_id por nombre
-                            const matchedProduct = products?.find((p: any) =>
-                                p.name.toLowerCase().trim() === String(it.name).toLowerCase().trim()
-                            );
-
+                            const matchedProduct = products?.find((p: any) => p.name.toLowerCase() === String(it.name).toLowerCase());
                             return {
                                 order_id: order.id,
                                 product_id: matchedProduct?.id || null,
-                                product_name: String(it.name || 'Producto'),
-                                quantity: qty,
-                                unit_price: price,
-                                subtotal: qty * price
+                                product_name: String(it.name),
+                                quantity: Number(it.qty || 1),
+                                unit_price: Number(it.price || 0),
+                                subtotal: Number((it.qty || 1) * (it.price || 0))
                             };
                         });
-
-                        const { error: itemsError } = await supabase.from("order_items").insert(itemsToInsert);
-                        if (itemsError) console.error("❌ [Webhook] Error insertando items:", itemsError);
-                        else console.log(`✅ [Webhook] ${itemsToInsert.length} items guardados para orden ${order.id}`);
+                        await supabase.from("order_items").insert(itemsToInsert);
                     }
                 }
             } catch (e) {
@@ -339,11 +436,10 @@ Deno.serve(async (req: Request) => {
             }
         }
 
-        // Limpiar y enviar
-        const cleanResponse = sanitizeMarkdown(aiResponse);
-        const finalMessage = cleanResponse + orderConfirmationText;
-
+        // Enviar respuesta
+        const finalMessage = sanitizeMarkdown(aiResponse) + orderConfirmationText;
         console.log("[DEBUG] Sending to Telegram...");
+
         const tgRes = await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -354,22 +450,18 @@ Deno.serve(async (req: Request) => {
             })
         });
 
-        const tgData = await tgRes.json();
         if (!tgRes.ok) {
-            console.error("[TELEGRAM ERROR]", tgRes.status, tgData);
-            // Intentar reenvío sin Markdown como último recurso
+            const tgData = await tgRes.json();
             if (tgData.description?.includes("can't parse entities")) {
-                console.log("[DEBUG] Retrying Telegram without Markdown...");
                 await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ chat_id: chatId, text: finalMessage })
                 });
             }
-        } else {
-            console.log("[DEBUG] Telegram response OK");
         }
 
+        // Guardar y actualizar
         await supabase.from("messages").insert({
             conversation_id: conversation!.id,
             sender_type: "ai",
@@ -385,6 +477,9 @@ Deno.serve(async (req: Request) => {
 
     } catch (error: any) {
         console.error(`[FATAL ERROR]`, error.message);
-        return new Response("ok", { headers: corsHeaders });
+        return new Response(JSON.stringify({ error: error.message }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
     }
 });

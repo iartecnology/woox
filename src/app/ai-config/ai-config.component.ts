@@ -40,16 +40,47 @@ export class AiConfigComponent implements OnInit {
 
     agents: any[] = [];
 
-    availableModels = [
-        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Recomendado ⚡)' },
-        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Razonamiento 🧠)' },
-        { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Más rápido 🚀)' },
-        { id: 'gemma-2-9b-it', name: 'Gemma 2 9B (Google Ligero 🍃)' },
-        { id: 'gemma-2-27b-it', name: 'Gemma 2 27B (Google Potente 🔥)' },
-        { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (OpenAI Estándar)' },
-        { id: 'gpt-4o-mini', name: 'GPT-4o Mini (OpenAI Veloz)' },
-        { id: 'gpt-4o', name: 'GPT-4o (OpenAI Premium ✨)' }
+    aiProviders = [
+        { id: 'openai', name: 'OpenAI (GPT-4o)', icon: '🤖' },
+        { id: 'anthropic', name: 'Anthropic (Claude 3.5)', icon: '🕵️' },
+        { id: 'google_gemini', name: 'Google Gemini Pro', icon: '💎' },
+        { id: 'ollama', name: 'Ollama (Local AI)', icon: '🏠' },
+        { id: 'lmstudio', name: 'LM Studio (Local AI)', icon: '💻' },
+        { id: 'deepseek', name: 'DeepSeek R1', icon: '🧠' }
     ];
+
+    aiModels: { [key: string]: { id: string; name: string }[] } = {
+        'openai': [
+            { id: 'gpt-4o', name: 'GPT-4o (Recomendado)' },
+            { id: 'gpt-4o-mini', name: 'GPT-4o Mini (Rápido)' },
+            { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
+            { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Económico)' }
+        ],
+        'anthropic': [
+            { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet (Recomendado)' },
+            { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus (Más potente)' },
+            { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku (Ultra rápido)' }
+        ],
+        'google_gemini': [
+            { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Recomendado)' },
+            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Razonamiento)' },
+            { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Experimental)' },
+            { id: 'gemma-2-9b-it', name: 'Gemma 2 9B (Ligero)' }
+        ],
+        'ollama': [
+            { id: 'llama3:latest', name: 'Llama 3' },
+            { id: 'mistral:latest', name: 'Mistral' },
+            { id: 'phi3:latest', name: 'Phi-3 (Microsoft)' }
+        ],
+        'deepseek': [
+            { id: 'deepseek-chat', name: 'DeepSeek Chat (Recomendado)' },
+            { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (R1)' }
+        ]
+    };
+
+    aiConnectionStatus: 'none' | 'loading' | 'success' | 'error' | 'warning' = 'none';
+    aiConnectionMessage: string = '';
+    isTestingAI: boolean = false;
 
     // --- ESTRUCTURA VISUAL DE CONFIGURACIÓN DE IA (SECCIONES) ---
     aiConfigSections = [
@@ -142,6 +173,8 @@ export class AiConfigComponent implements OnInit {
     availablePromptRules: any[] = [];
     skillsCatalog: any[] = [];
     agentSkills: any[] = [];
+    merchantKnowledgeBlocks: any[] = [];
+    agentKnowledgeBlocks: any[] = [];
 
     isSaving: boolean = false;
     private catalogService = inject(CatalogService);
@@ -158,6 +191,10 @@ export class AiConfigComponent implements OnInit {
             await this.loadAgents();
             await this.loadSkillsCatalog();
             this.catalogContext = await this.catalogService.getAIContextForMerchant(this.merchantId);
+
+            // Cargar Bloques de Conocimiento del Comercio
+            const { data: mBlocks } = await this.supabaseService.getMerchantContextBlocks(this.merchantId);
+            if (mBlocks) this.merchantKnowledgeBlocks = mBlocks;
         }
     }
 
@@ -170,6 +207,10 @@ export class AiConfigComponent implements OnInit {
         const { data: m, error } = await this.supabaseService.getMerchantByAnyId(this.merchantId);
         if (m) {
             this.merchantConfig = m;
+            this.merchantConfig.ai_provider = this.merchantConfig.ai_provider || 'google_gemini';
+            this.merchantConfig.ollama_base_url = this.merchantConfig.ollama_base_url || 'http://localhost:11434';
+            this.merchantConfig.lmstudio_base_url = this.merchantConfig.lmstudio_base_url || 'http://localhost:1234/v1';
+
             // Normalizar el ID a UUID si era un código
             if (m.id !== this.merchantId) {
                 console.log('🔄 [AiConfig] Normalizando Merchant ID de', this.merchantId, 'a', m.id);
@@ -195,8 +236,14 @@ export class AiConfigComponent implements OnInit {
 
     async loadAgentSkills() {
         if (!this.merchantConfig.agent_id) return;
-        const { data } = await this.supabaseService.getAgentSkills(this.merchantConfig.agent_id);
-        if (data) this.agentSkills = data;
+
+        const [skillsRes, blocksRes] = await Promise.all([
+            this.supabaseService.getAgentSkills(this.merchantConfig.agent_id),
+            this.supabaseService.getAgentContextBlocks(this.merchantConfig.agent_id)
+        ]);
+
+        if (skillsRes.data) this.agentSkills = skillsRes.data;
+        if (blocksRes.data) this.agentKnowledgeBlocks = blocksRes.data;
     }
 
     setTab(tab: 'general' | 'training' | 'remarketing' | 'schedule') {
@@ -220,11 +267,15 @@ export class AiConfigComponent implements OnInit {
             remarketing_enabled: this.merchantConfig.remarketing_enabled,
             remarketing_delay_minutes: this.merchantConfig.remarketing_delay_minutes,
             remarketing_message: this.merchantConfig.remarketing_message,
-            ai_schedule_enabled: this.merchantConfig.ai_schedule_enabled,
-            ai_schedule_start: this.merchantConfig.ai_schedule_start,
-            ai_schedule_end: this.merchantConfig.ai_schedule_end,
-            ai_schedule_message: this.merchantConfig.ai_schedule_message
+            ai_schedule_message: this.merchantConfig.ai_schedule_message,
+            ai_provider: this.merchantConfig.ai_provider,
+            ollama_base_url: this.merchantConfig.ollama_base_url,
+            lmstudio_base_url: this.merchantConfig.lmstudio_base_url
         };
+
+        // Limpiar URLs de IA local si no son el proveedor activo
+        if (updates.ai_provider !== 'ollama') delete updates.ollama_base_url;
+        if (updates.ai_provider !== 'lmstudio') delete updates.lmstudio_base_url;
 
         // --- FIXED: Validar UUID para agent_id ---
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -242,6 +293,110 @@ export class AiConfigComponent implements OnInit {
         } else {
             this.notificationService.show('Error al guardar: ' + error.message, 'error');
         }
+    }
+
+    async testAIConnection() {
+        this.isTestingAI = true;
+        this.aiConnectionStatus = 'loading';
+        this.aiConnectionMessage = 'Verificando conectividad...';
+
+        try {
+            const provider = this.merchantConfig.ai_provider;
+            let freshModels: any[] = [];
+
+            if (provider === 'openai') {
+                const response = await fetch('https://api.openai.com/v1/models', {
+                    headers: { 'Authorization': `Bearer ${this.merchantConfig.ai_api_key}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    freshModels = data.data.filter((m: any) => m.id.startsWith('gpt-') || m.id.startsWith('o1-') || m.id.startsWith('o3-')).map((m: any) => ({
+                        id: m.id,
+                        name: m.id
+                    }));
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || 'API Key de OpenAI inválida');
+                }
+            } else if (provider === 'ollama') {
+                const baseUrl = this.merchantConfig.ollama_base_url || 'http://localhost:11434';
+                const response = await fetch(`${baseUrl}/api/tags`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        throw new Error('Ollama no devolvió JSON. Verifica la URL.');
+                    }
+                    const data = await response.json();
+                    freshModels = (data.models || []).map((m: any) => ({
+                        id: m.name,
+                        name: m.name
+                    }));
+                } else {
+                    throw new Error('No se pudo conectar con Ollama en ' + baseUrl);
+                }
+            } else if (provider === 'lmstudio') {
+                const baseUrl = this.merchantConfig.lmstudio_base_url || 'http://localhost:1234/v1';
+                const response = await fetch(`${baseUrl}/models`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        throw new Error('LM Studio no devolvió JSON. Verifica que la URL sea correcta y termine en /v1.');
+                    }
+                    const data = await response.json();
+                    const modelsArray = data.data || data.models || [];
+                    freshModels = modelsArray.map((m: any) => ({
+                        id: m.id || m.key || m.name,
+                        name: m.id || m.key || m.display_name || m.name
+                    }));
+                } else {
+                    throw new Error('No se pudo conectar con LM Studio en ' + baseUrl);
+                }
+            } else if (provider === 'google_gemini') {
+                // Gemini no tiene un endpoint simple de listado sin auth compleja, usamos los locales o validación básica
+                if (!this.merchantConfig.ai_api_key) throw new Error('Se requiere API Key de Google');
+                this.aiConnectionStatus = 'success';
+                this.aiConnectionMessage = 'Configuración de Gemini lista.';
+                return;
+            } else {
+                // Otros proveedores (DeepSeek, Anthropic)
+                if (!this.merchantConfig.ai_api_key) throw new Error('Se requiere API Key');
+                this.aiConnectionStatus = 'success';
+                this.aiConnectionMessage = `Proveedor ${provider} validado.`;
+                return;
+            }
+
+            if (freshModels.length > 0) {
+                this.aiModels[provider] = freshModels;
+                this.aiConnectionStatus = 'success';
+                this.aiConnectionMessage = `Conexión exitosa. Se encontraron ${freshModels.length} modelos.`;
+            } else {
+                this.aiConnectionStatus = 'warning' as any;
+                this.aiConnectionMessage = 'Conectado, pero no se encontraron modelos disponibles.';
+            }
+
+        } catch (error: any) {
+            console.error('AI Connection Test Error:', error);
+            let userMessage = error.message || 'Error de conexión';
+
+            // Detectar si el error es por respuesta HTML (común en ngrok/local ai mal configurado)
+            if (userMessage.includes('Unexpected token') && (userMessage.includes('<') || userMessage.includes('DOCTYPE'))) {
+                userMessage = 'El servidor devolvió una página HTML en lugar de JSON. Verifica la URL de ngrok y que LM Studio esté en modo "Server".';
+            }
+
+            this.aiConnectionStatus = 'error';
+            this.aiConnectionMessage = userMessage;
+            this.notificationService.show(userMessage, 'error');
+        } finally {
+            this.isTestingAI = false;
+        }
+    }
+
+    getProviderLogo(providerId: string): string {
+        return this.aiProviders.find(p => p.id === providerId)?.icon || '🤖';
     }
 
     onFileUpload(event: any) {
@@ -305,42 +460,75 @@ MENÚ DISPONIBLE:
 ${catalogContext}`;
         }
 
+        // 1. Preparar Bloques de Datos Dinámicos
         const combinedMenu = [
             this.merchantConfig.ai_system_prompt || '',
             this.merchantConfig.ai_use_catalog ? catalogContext : ''
         ].filter(c => !!c).join('\n\n');
 
-        const knowledgeContext = (agent.context_blocks || []).map((b: any) => `${b.title}:\n${b.content}`).join('\n\n');
+        // 2. Preparar Conocimiento (Cerebro)
+        const agentKB = this.agentKnowledgeBlocks.map(b => `• ${b.title}: ${b.content}`).join('\n');
+        const merchantKB = this.merchantKnowledgeBlocks.map(b => `• ${b.title}: ${b.content}`).join('\n');
+
+        // 3. Preparar Skills (Fragmentos de Sistema)
+        const skillsFragments = this.agentSkills
+            .filter(s => s.is_enabled)
+            .map(s => s.skills_catalog?.system_prompt_fragment)
+            .filter(f => !!f)
+            .join('\n\n');
 
         const combinedRestrictions = [
             agent.restrictions || '',
             this.merchantConfig.ai_restrictions || ''
         ].filter(r => !!r).join('\n');
 
+        // 4. Construir Prompt Base
         let finalPrompt = agent.system_prompt || '';
 
+        // Prioridad de Reemplazo
         finalPrompt = finalPrompt
             .replace(/{{merchantName}}/g, this.merchantConfig.name || 'la empresa')
             .replace(/{{personality}}/g, this.merchantConfig.ai_personality || agent.personality || 'amable')
             .replace(/{{welcomeMessage}}/g, this.merchantConfig.ai_welcome_message || agent.welcome_message || '');
 
+        // Inyectar Skills
+        if (skillsFragments) {
+            finalPrompt += '\n\n### CAPACIDADES Y PROTOCOLOS ADICIONALES (SKILLS) ###\n' + skillsFragments;
+        }
+
+        // Inyectar Conocimiento Maestro y Local
+        if (agentKB) {
+            finalPrompt += '\n\n### CONOCIMIENTO MAESTRO (REGLAS GENERALES) ###\n' + agentKB;
+        }
+        if (merchantKB) {
+            finalPrompt += '\n\n### CONOCIMIENTO ESPECÍFICO DEL LOCAL (MÁXIMA PRIORIDAD) ###\n' + merchantKB;
+        }
+
+        // Reemplazar o Append de Instrucciones, Restricciones y Menú
         if (finalPrompt.includes('{{systemPrompt}}')) {
             finalPrompt = finalPrompt.replace(/{{systemPrompt}}/g, this.merchantConfig.ai_system_prompt || '');
-        } else {
-            finalPrompt += '\n\n### INSTRUCCIONES DEL COMERCIO\n' + (this.merchantConfig.ai_system_prompt || '');
+        } else if (this.merchantConfig.ai_system_prompt) {
+            finalPrompt += '\n\n### INSTRUCCIONES MANUALES DEL COMERCIO ###\n' + this.merchantConfig.ai_system_prompt;
         }
 
         if (finalPrompt.includes('{{restrictions}}')) {
             finalPrompt = finalPrompt.replace(/{{restrictions}}/g, combinedRestrictions);
         } else {
-            finalPrompt += '\n\n### RESTRICCIONES Y PROHIBICIONES\n' + (combinedRestrictions || 'No hay restricciones específicas.');
+            finalPrompt += '\n\n### RESTRICCIONES Y PROHIBICIONES ###\n' + (combinedRestrictions || 'No hay restricciones específicas.');
         }
 
         if (finalPrompt.includes('{{catalogContext}}')) {
             finalPrompt = finalPrompt.replace(/{{catalogContext}}/g, combinedMenu);
         } else {
-            finalPrompt += '\n\n### MENÚ OFICIAL\n' + combinedMenu;
+            finalPrompt += `\n\n### !!! FUENTE DE VERDAD ABSOLUTA - CATÁLOGO OFICIAL !!! ###
+IMPORTANTE: Olvida cualquier conocimiento previo sobre productos, menús o precios de este tipo de negocio que tengas de tu entrenamiento general.
+Tu ÚNICA fuente de verdad es la lista que se muestra a continuación. Si un producto NO está en esta lista, NO EXISTE para ti. No lo inventes ni lo menciones.
+
+LISTA DE PRODUCTOS REALES EN ${this.merchantConfig.name}:\n` + combinedMenu;
         }
+
+        // Limpieza final de placeholders no reemplazados en fragments
+        finalPrompt = finalPrompt.replace(/{{merchantName}}/g, this.merchantConfig.name || 'la empresa');
 
         return finalPrompt;
     }

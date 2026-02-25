@@ -95,7 +95,6 @@ interface CartItem {
 
         <!-- Sugerencias y Carrito Flotante -->
         <div class="chat-actions-bar" *ngIf="!isTyping">
-           <button class="action-pill" *ngIf="showMenuAction" (click)="quickAction('Ver menú')">🍴 Ver Menú</button>
            <button class="action-pill cart-pill" *ngIf="cart.length > 0" (click)="quickAction('Ver mi resumen de pedido')">
              🛒 Pedido ($ {{ cartTotal.toFixed(2) }})
            </button>
@@ -124,7 +123,7 @@ interface CartItem {
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 2000;
+      z-index: 5000;
     }
     .simulator-window {
       width: 400px;
@@ -364,6 +363,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
   @Input() aiModel: string = 'gemini-1.5-flash'; // Default model corregido
   @Input() aiApiKey: string = '';
   @Input() ollamaBaseUrl: string = 'http://localhost:11434';
+  @Input() lmstudioBaseUrl: string = 'http://localhost:1234/v1';
   @Input() aiWelcomeMessage: string = '';
   @Input() context: string = '';
   @Input() merchantId: string = '';
@@ -594,6 +594,11 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       let requestBody: any = {};
       let headers: any = { 'Content-Type': 'application/json' };
 
+      // Añadir bypass de ngrok solo para proveedores locales/túneles
+      if (this.aiProvider === 'ollama' || this.aiProvider === 'lmstudio') {
+        headers['ngrok-skip-browser-warning'] = 'true';
+      }
+
       if (isOpenAI) {
         // OpenAI API
         apiUrl = 'https://api.openai.com/v1/chat/completions';
@@ -610,7 +615,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
           ],
           temperature: 0.7,
           max_tokens: 1024
-        }
+        };
       } else if (this.aiProvider === 'ollama') {
         // Ollama API
         apiUrl = `${this.ollamaBaseUrl}/api/chat`;
@@ -625,6 +630,21 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
           ],
           stream: false,
           options: { temperature: 0.7 }
+        };
+      } else if (this.aiProvider === 'lmstudio') {
+        // LM Studio API
+        apiUrl = `${this.lmstudioBaseUrl}/chat/completions`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: fullSystemInstruction },
+            ...chatContents.map((msg: any) => ({
+              role: msg.role === 'model' ? 'assistant' : 'user',
+              content: msg.parts[0].text
+            }))
+          ],
+          temperature: 0.7,
+          max_tokens: 1024
         };
       } else {
         // Google AI Studio (Gemini / Gemma)
@@ -696,8 +716,8 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       const data = await response.json();
       let aiText = '';
 
-      if (isOpenAI) {
-        aiText = data.choices[0]?.message?.content || '';
+      if (isOpenAI || this.aiProvider === 'lmstudio') {
+        aiText = data.choices?.[0]?.message?.content || '';
       } else if (this.aiProvider === 'ollama') {
         aiText = data.message?.content || '';
       } else {

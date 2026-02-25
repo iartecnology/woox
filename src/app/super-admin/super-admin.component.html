@@ -301,7 +301,8 @@
         [primaryColor]="selectedMerchant.primary_color || '#4F46E5'"
         [aiProvider]="selectedMerchant.ai_provider || 'google_gemini'" [aiApiKey]="selectedMerchant.ai_api_key || ''"
         [aiModel]="selectedMerchant.ai_model || ''"
-        [ollamaBaseUrl]="platformAiSettings.ollama_base_url || 'http://localhost:11434'"
+        [ollamaBaseUrl]="selectedMerchant.ollama_base_url || 'http://localhost:11434'"
+        [lmstudioBaseUrl]="selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1'"
         [aiWelcomeMessage]="selectedMerchant.ai_welcome_message || ''" [context]="getConsolidatedPrompt()"
         (onClose)="showSimulator = false">
     </app-chat-simulator>
@@ -719,13 +720,45 @@
                                             placeholder="sk-... o API Key" autocomplete="off"
                                             (ngModelChange)="aiConnectionStatus = 'none'">
                                     </div>
-                                    <small class="input-hint">Tu clave se guarda de forma segura y solo se usa para
-                                        estas
-                                        conexiones.</small>
+                                    <small class="input-hint">
+                                        <ng-container
+                                            *ngIf="selectedMerchant.ai_provider === 'ollama' || selectedMerchant.ai_provider === 'lmstudio'">
+                                            🚀 <strong>Opcional:</strong> Los proveedores locales no suelen requerir API
+                                            Key.
+                                        </ng-container>
+                                        <ng-container
+                                            *ngIf="selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio'">
+                                            Tu clave se guarda de forma segura y solo se usa para estas conexiones.
+                                        </ng-container>
+                                    </small>
+                                </div>
+
+                                <!-- NUEVO: URL de Ollama -->
+                                <div class="form-group" *ngIf="selectedMerchant.ai_provider === 'ollama'">
+                                    <label>Ollama API URL</label>
+                                    <div class="input-with-status">
+                                        <input type="text" [(ngModel)]="selectedMerchant.ollama_base_url"
+                                            placeholder="http://localhost:11434"
+                                            (ngModelChange)="aiConnectionStatus = 'none'">
+                                    </div>
+                                    <small class="input-hint">La dirección local o remota donde corre tu instancia de
+                                        Ollama.</small>
+                                </div>
+
+                                <!-- NUEVO: URL de LM Studio -->
+                                <div class="form-group" *ngIf="selectedMerchant.ai_provider === 'lmstudio'">
+                                    <label>LM Studio API URL</label>
+                                    <div class="input-with-status">
+                                        <input type="text" [(ngModel)]="selectedMerchant.lmstudio_base_url"
+                                            placeholder="http://localhost:1234/v1"
+                                            (ngModelChange)="aiConnectionStatus = 'none'">
+                                    </div>
+                                    <small class="input-hint">La dirección local donde corre el servidor de LM Studio
+                                        (por defecto puerto 1234).</small>
                                 </div>
 
                                 <button class="verify-btn" (click)="testAIConnection()"
-                                    [disabled]="isTestingAI || !selectedMerchant.ai_api_key">
+                                    [disabled]="isTestingAI || (!selectedMerchant.ai_api_key && selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio')">
                                     <span *ngIf="!isTestingAI">⚡ Verificar y Listar Modelos</span>
                                     <span *ngIf="isTestingAI">⌛ Conectando con {{ selectedMerchant.ai_provider
                                         }}...</span>
@@ -760,16 +793,33 @@
 
                                 <div class="form-group">
                                     <label>Modelo de IA</label>
-                                    <select [(ngModel)]="selectedMerchant.ai_model"
-                                        [disabled]="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model">
-                                        <option value="">Seleccionar modelo...</option>
-                                        <option
-                                            *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider || 'google_gemini')"
-                                            [value]="model.id">
-                                            {{ model.name }}
-                                        </option>
-                                    </select>
-                                    <small *ngIf="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model"
+                                    <ng-container
+                                        *ngIf="selectedMerchant.ai_provider === 'ollama' || selectedMerchant.ai_provider === 'lmstudio'; else cloudModelSelect">
+                                        <input type="text" [(ngModel)]="selectedMerchant.ai_model"
+                                            list="localModelsList" placeholder="Ej: qwen/qwen2.5-coder-14b">
+                                        <datalist id="localModelsList">
+                                            <option
+                                                *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider)"
+                                                [value]="model.id">
+                                                {{ model.name }}
+                                            </option>
+                                        </datalist>
+                                        <small class="input-hint">Puedes elegir de la lista o escribir el nombre exacto
+                                            del modelo.</small>
+                                    </ng-container>
+                                    <ng-template #cloudModelSelect>
+                                        <select [(ngModel)]="selectedMerchant.ai_model"
+                                            [disabled]="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model">
+                                            <option value="">Seleccionar modelo...</option>
+                                            <option
+                                                *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider || 'google_gemini')"
+                                                [value]="model.id">
+                                                {{ model.name }}
+                                            </option>
+                                        </select>
+                                    </ng-template>
+                                    <small
+                                        *ngIf="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model && selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio'"
                                         class="warn-text">
                                         ⚠️ Verifica la conexión para ver modelos.
                                     </small>
@@ -792,6 +842,68 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Tarjeta 3: Horario de Atención de la IA -->
+                        <div class="ai-config-card">
+                            <div class="card-header">
+                                <div class="header-main">
+                                    <span class="card-icon">🕒</span>
+                                    <h4>Horario de Atención de la IA</h4>
+                                </div>
+                                <div class="toggle-wrapper">
+                                    <label class="switch">
+                                        <input type="checkbox" [(ngModel)]="selectedMerchant.ai_schedule_enabled">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="card-body" [class.disabled]="!selectedMerchant.ai_schedule_enabled">
+                                <p class="card-desc">Define cuándo la IA debe responder automáticamente. Fuera de este
+                                    rango, enviará el mensaje alternativo.</p>
+
+                                <div class="schedule-inputs">
+                                    <div class="form-group">
+                                        <label>Hora de Inicio</label>
+                                        <input type="time" [(ngModel)]="selectedMerchant.ai_schedule_start">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Hora de Fin</label>
+                                        <input type="time" [(ngModel)]="selectedMerchant.ai_schedule_end">
+                                    </div>
+                                </div>
+
+                                <div class="visual-schedule-bar-container">
+                                    <div class="visual-schedule-bar">
+                                        <div class="time-marker start">{{selectedMerchant.ai_schedule_start || '09:00'}}
+                                        </div>
+                                        <div class="bar-track">
+                                            <div class="bar-fill"
+                                                [style.left]="getSchedulePos(selectedMerchant.ai_schedule_start)"
+                                                [style.width]="getScheduleWidth(selectedMerchant.ai_schedule_start, selectedMerchant.ai_schedule_end)">
+                                            </div>
+                                        </div>
+                                        <div class="time-marker end">{{selectedMerchant.ai_schedule_end || '18:00'}}
+                                        </div>
+                                    </div>
+                                    <div class="day-labels">
+                                        <span>00:00</span>
+                                        <span>06:00</span>
+                                        <span>12:00</span>
+                                        <span>18:00</span>
+                                        <span>23:59</span>
+                                    </div>
+                                </div>
+
+                                <div class="form-group mt-20">
+                                    <label>Mensaje Fuera de Horario</label>
+                                    <textarea [(ngModel)]="selectedMerchant.ai_schedule_message" rows="3"
+                                        placeholder="Ej: ¡Hola! Gracias por escribirnos. Nuestro asistente virtual está descansando. Volveremos a atenderte automáticamente mañana a las 9:00 AM."></textarea>
+                                    <small class="hint-text">Este mensaje se enviará una sola vez cuando un cliente
+                                        contacte fuera del horario.</small>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </section>
             </div>
