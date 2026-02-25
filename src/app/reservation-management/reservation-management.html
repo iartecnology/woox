@@ -3,10 +3,14 @@
         <div class="brand">Woox Reservas</div>
         <nav>
             <a routerLink="/crm">← Volver al CRM</a>
-            <a href="#" class="active">📅 Calendario</a>
-            <a href="#">⚙️ Recursos</a>
-            <a href="#">🚫 Bloqueos</a>
-            <a href="#">📊 Reportes</a>
+            <a href="javascript:void(0)" [class.active]="activeTab === 'calendar'" (click)="changeTab('calendar')">📅
+                Calendario</a>
+            <a href="javascript:void(0)" [class.active]="activeTab === 'resources'" (click)="changeTab('resources')">⚙️
+                Recursos</a>
+            <a href="javascript:void(0)" [class.active]="activeTab === 'blocks'" (click)="changeTab('blocks')">🚫
+                Bloqueos</a>
+            <a href="javascript:void(0)" [class.active]="activeTab === 'reports'" (click)="changeTab('reports')">📊
+                Reportes</a>
         </nav>
     </div>
 
@@ -78,6 +82,94 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vista Gestión de Recursos -->
+<div class="resources-container" *ngIf="activeTab === 'resources'">
+    <div class="resources-header">
+        <h3>Tus Recursos Reservables</h3>
+        <button class="btn btn-primary" (click)="openResourceCreator()">+ Crear Recurso</button>
+    </div>
+    <p style="color: #666; margin-top:0;">Define qué es exactamente lo que alquilas o agendas (Personas, Mesas, Cabañas,
+        etc.)</p>
+
+    <div class="resource-cards-grid">
+        <!-- Tarjeta de Recurso -->
+        <div class="resource-card" *ngFor="let res of resources">
+            <div class="rc-header">
+                <h4>{{ res.name }}</h4>
+                <span class="badge" [ngClass]="res.type">{{ res.type }}</span>
+            </div>
+            <div class="rc-body">
+                <p><strong>Tipo:</strong> {{ res.type }}</p>
+            </div>
+            <div class="rc-actions">
+                <button class="btn btn-outline btn-small">Editar Horarios</button>
+                <button class="btn btn-outline btn-small">Editar</button>
+            </div>
+        </div>
+
+        <!-- Placeholder si no hay recursos -->
+        <div class="empty-state" *ngIf="resources.length === 0">
+            <div class="es-icon">🏢</div>
+            <h4>No tienes recursos aún</h4>
+            <p>Empieza creando el primer servicio o espacio disponible para reservas.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Crear/Editar Recurso -->
+<div class="backdrop" *ngIf="showResourceModal" (click)="closeResourceCreator()"></div>
+<div class="modal offcanvas" [class.open]="showResourceModal" style="width: 500px;">
+    <div class="offcanvas-header">
+        <h3>{{ isEditingResource ? 'Editar' : 'Nuevo' }} Recurso</h3>
+        <button class="close-btn" (click)="closeResourceCreator()">x</button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="form-group">
+            <label>Nombre del Recurso</label>
+            <input type="text" [(ngModel)]="activeResource.name" class="form-control"
+                placeholder="Ej: Dr. Pérez, Mesa 4, Estándar Double">
+        </div>
+        <div class="form-group">
+            <label>Tipo (Estructura de la Reserva)</label>
+            <select [(ngModel)]="activeResource.type" class="form-control">
+                <option value="service">💆 Servicio/Profesional (Duración Fija - Ej: Corte 45min)</option>
+                <option value="table">🍽️ Mesa/Espacio Físico (Capacidad múltiple)</option>
+                <option value="property">🏘️ Propiedad Única (Ej: Airbnb Cabaña VIP)</option>
+                <option value="room_type">🏨 Tipo de Habitación (Inventario múltiple - Ej: 10 Suites)</option>
+            </select>
+            <small class="text-muted">Esto le enseña a la Inteligencia Artificial de Woox cómo negociar la cita.</small>
+        </div>
+
+        <div class="form-row" *ngIf="activeResource.type === 'service'">
+            <div class="form-group half">
+                <label>Duración (Minutos)</label>
+                <input type="number" [(ngModel)]="activeResource.duration_minutes" class="form-control">
+            </div>
+            <div class="form-group half">
+                <label>Colchón Limpieza (Min)</label>
+                <input type="number" [(ngModel)]="activeResource.buffer_time_minutes" class="form-control">
+            </div>
+        </div>
+
+        <div class="form-row" *ngIf="activeResource.type !== 'service'">
+            <div class="form-group half">
+                <label>Capacidad (Personas)</label>
+                <input type="number" [(ngModel)]="activeResource.capacity" class="form-control" placeholder="Ej: 4">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Precio Base</label>
+            <input type="number" [(ngModel)]="activeResource.base_price" class="form-control" placeholder="0">
+        </div>
+
+        <div class="form-group mt-auto">
+            <button class="btn btn-primary w-100" style="padding: 12px; font-size:16px;"
+                (click)="saveResource()">Guardar Recurso</button>
         </div>
     </div>
 </div>

@@ -75,7 +75,8 @@
                                     <img [src]="m.logo_url" alt="Logo" class="merchant-logo">
                                     <div class="m-text">
                                         <span class="merchant-name">
-                                            {{ m.industry_type === 'support' ? '🛎️' : '🛒' }} {{ m.name }}
+                                            {{ m.industry_type === 'support' ? '🛎️' : (m.industry_type ===
+                                            'reservations' ? '📅' : '🛒') }} {{ m.name }}
                                         </span>
                                         <code>/{{ m.slug }}</code>
                                     </div>
@@ -144,7 +145,8 @@
                                                 title="Catálogo" (click)="goToCatalog(m)">🍔</button>
                                             <button *ngIf="m.industry_type === 'support'" class="config-icon-btn brain"
                                                 title="Cerebro" (click)="goToBrain(m)">🧠</button>
-                                            <button class="config-icon-btn res" title="Reservaciones"
+                                            <button *ngIf="m.industry_type === 'reservations'"
+                                                class="config-icon-btn res" title="Reservaciones"
                                                 (click)="goToReservations(m)">📅</button>
                                             <button class="config-icon-btn test" title="Simulador"
                                                 (click)="testChatSimulator(m)">🚀</button>
@@ -218,8 +220,9 @@
                     <select [(ngModel)]="selectedMerchant.industry_type" style="width:100%;">
                         <option value="retail">🛒 Comercio / Ventas — Activa catálogo de productos</option>
                         <option value="support">🛎️ Atención / Servicios — Solo cerebro y conocimiento</option>
+                        <option value="reservations">📅 Reservas / Citas — Motor de agendamiento y calendarios</option>
                     </select>
-                    <small>Define el módulo principal: catálogo de ventas o base de conocimiento.</small>
+                    <small>Define el módulo principal: catálogo, resolutor o motor de reservaciones.</small>
                 </div>
 
                 <div class="form-group">

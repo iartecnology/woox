@@ -1332,6 +1332,13 @@ export class SuperAdminComponent implements OnInit {
         this.router.navigate(['/merchant-brain']);
     }
 
+    goToReservations(merchant: Merchant) {
+        console.log(`[SuperAdmin] Navigating to Reservations for ${merchant.name}`);
+        localStorage.setItem('active_merchant_id', merchant.id);
+        localStorage.setItem('merchant_industry_type', merchant.industry_type || 'reservations');
+        this.router.navigate(['/reservations']);
+    }
+
     openModal(merchant?: Merchant) {
         if (merchant) {
             this.selectedMerchant = { ...merchant };

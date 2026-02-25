@@ -1,7 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { SupabaseService } from '../supabase.service';
+import { NotificationService } from '../notification.service';
+import { supabase } from '../supabase-config';
 
 @Component({
   selector: 'app-reservation-management',
@@ -11,6 +14,10 @@ import { FormsModule } from '@angular/forms';
   styleUrls: ['./reservation-management.css'],
 })
 export class ReservationManagement implements OnInit {
+  private supabase = inject(SupabaseService);
+  private ns = inject(NotificationService);
+
+  activeTab: 'calendar' | 'resources' | 'blocks' | 'reports' = 'calendar';
   currentView: 'day' | 'week' | 'month' = 'day';
   currentDate: Date = new Date();
 
@@ -23,28 +30,57 @@ export class ReservationManagement implements OnInit {
     aiBookedRate: 85
   };
 
-  resources = [
-    { id: '1', name: 'Dr. Pérez', type: 'professional' },
-    { id: '2', name: 'Dra. Gómez', type: 'professional' },
-    { id: '3', name: 'Dr. Ruiz', type: 'professional' }
-  ];
-
-  timeSlots = [
+  resources: any[] = [];
+  timeSlots: string[] = [
     '08:00', '09:00', '10:00', '11:00', '12:00',
     '13:00', '14:00', '15:00', '16:00', '17:00'
   ];
-
-  bookings = [
-    { id: 'b1', resourceId: '1', customerName: 'Juan Manuel', time: '09:00', durationMinutes: 45, status: 'confirmed', service: 'Consulta General' },
-    { id: 'b2', resourceId: '2', customerName: 'María Clara', time: '11:00', durationMinutes: 60, status: 'pending', service: 'Odontología' },
-    { id: 'b3', resourceId: '1', customerName: 'Carlos Luis', time: '14:00', durationMinutes: 30, status: 'completed', service: 'Limpieza' },
-    { id: 'b4', resourceId: '3', customerName: 'Ana Sofía', time: '15:00', durationMinutes: 45, status: 'no_show', service: 'Revisión' }
-  ];
+  bookings: any[] = [];
 
   selectedBooking: any = null;
+  merchantId: string = '';
+
+  // Resource Creator State
+  showResourceModal: boolean = false;
+  isEditingResource: boolean = false;
+  activeResource: any = {
+    name: '',
+    type: 'service',
+    duration_minutes: 45,
+    buffer_time_minutes: 15,
+    capacity: 1,
+    base_price: 0
+  };
 
   ngOnInit() {
-    // Load from supabase later
+    this.merchantId = localStorage.getItem('active_merchant_id') || '';
+    if (this.merchantId) {
+      this.loadRealData();
+    }
+  }
+
+  async loadRealData() {
+    // CARGAR RECURSOS
+    const { data: resData, error: resError } = await supabase
+      .from('reservable_resources')
+      .select('*')
+      .eq('merchant_id', this.merchantId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true });
+
+    if (resError) {
+      console.error('Error al cargar recursos:', resError);
+      this.ns.show('Error al cargar recursos del comercio.', 'error');
+    } else {
+      this.resources = resData || [];
+    }
+
+    // CARGAR BOOKINGS DEL DIA (Mock temporal hasta crear la vista completa)
+    this.bookings = [];
+  }
+
+  changeTab(tab: 'calendar' | 'resources' | 'blocks' | 'reports') {
+    this.activeTab = tab;
   }
 
   changeView(view: 'day' | 'week' | 'month') {
@@ -61,6 +97,76 @@ export class ReservationManagement implements OnInit {
 
   closeDetails() {
     this.selectedBooking = null;
+  }
+
+  // --- Resource Management ---
+  openResourceCreator(resource: any = null) {
+    if (resource) {
+      this.isEditingResource = true;
+      this.activeResource = { ...resource };
+    } else {
+      this.isEditingResource = false;
+      this.activeResource = {
+        name: '',
+        type: 'service',
+        duration_minutes: 45,
+        buffer_time_minutes: 15,
+        capacity: 1,
+        base_price: 0
+      };
+    }
+    this.showResourceModal = true;
+  }
+
+  closeResourceCreator() {
+    this.showResourceModal = false;
+  }
+
+  async saveResource() {
+    if (!this.activeResource.name) {
+      this.ns.show('El nombre es requerido para el recurso', 'warning');
+      return;
+    }
+
+    const payload = {
+      merchant_id: this.merchantId,
+      name: this.activeResource.name,
+      type: this.activeResource.type,
+      duration_minutes: this.activeResource.duration_minutes,
+      buffer_time_minutes: this.activeResource.buffer_time_minutes,
+      capacity: this.activeResource.capacity,
+      base_price: this.activeResource.base_price,
+      is_active: true
+    };
+
+    if (!this.isEditingResource) {
+      // Create
+      const { error } = await supabase
+        .from('reservable_resources')
+        .insert([payload]);
+
+      if (error) {
+        this.ns.show('Error al crear recurso: ' + error.message, 'error');
+      } else {
+        this.ns.show('Recurso creado exitosamente', 'success');
+        this.loadRealData();
+      }
+    } else {
+      // Update
+      const { error } = await supabase
+        .from('reservable_resources')
+        .update(payload)
+        .eq('id', this.activeResource.id);
+
+      if (error) {
+        this.ns.show('Error al actualizar: ' + error.message, 'error');
+      } else {
+        this.ns.show('Recurso actualizado', 'success');
+        this.loadRealData();
+      }
+    }
+
+    this.closeResourceCreator();
   }
 
   getStatusClass(status: string) {
