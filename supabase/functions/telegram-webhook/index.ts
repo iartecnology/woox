@@ -12,6 +12,8 @@ function sanitizeMarkdown(text: string): string {
     sanitized = sanitized.replace(/\(DESCRIPCION REAL:.*?\)/gi, "");
     sanitized = sanitized.replace(/\[DISPONIBLE\]/gi, "");
     sanitized = sanitized.replace(/\[AGOTADO\]/gi, "");
+    sanitized = sanitized.replace(/\[CHECK_AVAILABILITY:.*?\]/gi, "");
+    sanitized = sanitized.replace(/\[CREATE_BOOKING:.*?\]/gi, "");
 
     // Limpiar comandos internos de la IA (con regex GREEDY para manejar JSON anidado)
     sanitized = sanitized.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*\}\s*\]/g, "");
@@ -91,7 +93,8 @@ Deno.serve(async (req: Request) => {
             { data: products },
             { data: categories },
             { data: history },
-            { data: compiledPrompt }
+            { data: compiledPrompt },
+            { data: resources }
         ] = await Promise.all([
             supabase.from("messages").insert({
                 conversation_id: conversation!.id,
@@ -107,7 +110,8 @@ Deno.serve(async (req: Request) => {
             supabase.from("products").select("id, name, price, category_id").eq("merchant_id", merchantId).eq("is_available", true).limit(50),
             supabase.from("categories").select("id, name").eq("merchant_id", merchantId),
             supabase.from("messages").select("sender_type, content").eq("conversation_id", conversation!.id).order("created_at", { ascending: false }).limit(10),
-            supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantId })
+            supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantId }),
+            supabase.from("reservable_resources").select("*").eq("merchant_id", merchantId).eq("is_active", true)
         ]);
 
         // Construir menú local (para ORDER_CONFIRMED item matching)
@@ -433,6 +437,90 @@ Deno.serve(async (req: Request) => {
                 }
             } catch (e) {
                 console.error("Order JSON Error", e);
+            }
+        }
+
+        // 2. Procesar CHECK_AVAILABILITY
+        const availabilityMatch = aiResponse.match(/\[CHECK_AVAILABILITY:\s*(\{[\s\S]*\})\s*\]/);
+        if (availabilityMatch) {
+            try {
+                const info = JSON.parse(availabilityMatch[1].trim());
+                const resourceId = info.resource_id;
+                const startStr = info.start;
+                const pax = Number(info.pax || 1);
+
+                if (resourceId && startStr) {
+                    const start = new Date(startStr);
+                    // Calcular fin basado en la duración del recurso o default 60min
+                    const resInfo = resources?.find((r: any) => r.id === resourceId);
+                    const duration = resInfo?.duration_minutes || 60;
+                    const end = new Date(start.getTime() + duration * 60000);
+
+                    const { data: availResult, error: availError } = await supabase.rpc('check_availability', {
+                        p_resource_id: resourceId,
+                        p_start_datetime: start.toISOString(),
+                        p_end_datetime: end.toISOString(),
+                        p_requested_pax: pax
+                    });
+
+                    if (availError) throw availError;
+
+                    const statusIcon = availResult.available ? "✅" : "❌";
+                    const statusText = availResult.available ? "DISPONIBLE" : `NO DISPONIBLE (${availResult.reason})`;
+
+                    // Inyectar el resultado en la respuesta para que el usuario lo vea
+                    aiResponse = aiResponse.replace(/\[CHECK_AVAILABILITY:.*?\]/, `\n\n${statusIcon} *Consulta de disponibilidad:* ${statusText}`).trim();
+                }
+            } catch (e) {
+                console.error("Availability Error", e);
+                aiResponse = aiResponse.replace(/\[CHECK_AVAILABILITY:.*?\]/, "\n\n⚠️ Error técnico consultando disponibilidad.");
+            }
+        }
+
+        // 3. Procesar CREATE_BOOKING
+        const bookingMatch = aiResponse.match(/\[CREATE_BOOKING:\s*(\{[\s\S]*\})\s*\]/);
+        if (bookingMatch) {
+            try {
+                const info = JSON.parse(bookingMatch[1].trim());
+                const resourceId = info.resource_id;
+                const startStr = info.start;
+                const pax = Number(info.pax || 1);
+
+                if (resourceId && startStr) {
+                    const start = new Date(startStr);
+                    const resInfo = resources?.find((r: any) => r.id === resourceId);
+                    const duration = resInfo?.duration_minutes || 60;
+                    const end = new Date(start.getTime() + duration * 60000);
+
+                    // 1. Actualizar cliente si vienen datos
+                    if (info.name || info.phone) {
+                        const updates: any = {};
+                        if (info.name) updates.full_name = info.name;
+                        if (info.phone) updates.phone = info.phone;
+                        await supabase.from("customers").update(updates).eq("id", customer!.id);
+                    }
+
+                    // 2. Crear reserva
+                    const { data: booking, error: bError } = await supabase.from("bookings").insert({
+                        merchant_id: merchantId,
+                        customer_id: customer!.id,
+                        conversation_id: conversation!.id,
+                        resource_id: resourceId,
+                        start_time: start.toISOString(),
+                        end_time: end.toISOString(),
+                        pax: pax,
+                        status: 'confirmed',
+                        channel: 'telegram'
+                    }).select('id').single();
+
+                    if (bError) throw bError;
+
+                    aiResponse = aiResponse.replace(/\[CREATE_BOOKING:.*?\]/, "").trim();
+                    orderConfirmationText += `\n\n📅 *¡Reserva Confirmada!*\n🆔 *ID: ${booking.id.split('-')[0].toUpperCase()}*\n📍 *Recurso:* ${resInfo?.name || 'Agendado'}\n⏰ *Inicio:* ${start.toLocaleString('es-CO')}`;
+                }
+            } catch (e) {
+                console.error("Booking Creation Error", e);
+                aiResponse = aiResponse.replace(/\[CREATE_BOOKING:.*?\]/, "\n\n⚠️ No pudimos procesar la reserva automáticamente.");
             }
         }
 

@@ -107,9 +107,9 @@ Para que el bot gestione esto nativamente en WhatsApp o Telegram sin herramienta
 - [x] Creador de Recursos (El comercio define sus horarios, mesas o habitaciones).
 - [x] Sistema de bloqueo de fechas manual.
 
-### Fase 3: Integración de la Skill IA en Webhooks
-- [ ] Extender el webhook actual (Telegram/WhatsApp) para escuchar los comandos `[CHECK_AVAILABILITY]` y `[CREATE_BOOKING]`.
-- [ ] Entrenar al System Prompt base con las reglas de agendamiento para que la IA actúe como un recepcionista experto (nunca sobre-venda y ofrezca alternativas si no hay cupo).
+### Fase 3: Integración de la Skill IA en Webhooks (✅ COMPLETADO)
+- [x] Extender el webhook actual (Telegram/WhatsApp) para escuchar los comandos `[CHECK_AVAILABILITY]` y `[CREATE_BOOKING]`.
+- [x] Entrenar el System Prompt base con reglas de agendamiento. para que la IA actúe como un recepcionista experto (nunca sobre-venda y ofrezca alternativas si no hay cupo).
 
 ### Fase 4: Integración Omnicanal (IA Landing)
 - [ ] Desarrollar el componente web `<BookingWidget />` para que las páginas generadas en *Woox AI Landing* expongan un calendario clásico para quienes no quieran usar WhatsApp.
