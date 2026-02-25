@@ -52,6 +52,18 @@ export class ReservationManagement implements OnInit {
     base_price: 0
   };
 
+  // Blocks (Exceptions) State
+  exceptions: any[] = [];
+  showBlockModal: boolean = false;
+  isEditingBlock: boolean = false;
+  activeBlock: any = {
+    resource_id: null,
+    start_datetime: '',
+    end_datetime: '',
+    reason: '',
+    is_block: true
+  };
+
   ngOnInit() {
     this.merchantId = localStorage.getItem('active_merchant_id') || '';
     if (this.merchantId) {
@@ -77,6 +89,23 @@ export class ReservationManagement implements OnInit {
 
     // CARGAR BOOKINGS DEL DIA (Mock temporal hasta crear la vista completa)
     this.bookings = [];
+
+    // CARGAR BLOQUEOS
+    this.loadExceptions();
+  }
+
+  async loadExceptions() {
+    const { data, error } = await supabase
+      .from('availability_exceptions')
+      .select('*, reservable_resources(name)')
+      .eq('merchant_id', this.merchantId)
+      .order('start_datetime', { ascending: true });
+
+    if (error) {
+      console.error('Error al cargar bloqueos:', error);
+    } else {
+      this.exceptions = data || [];
+    }
   }
 
   changeTab(tab: 'calendar' | 'resources' | 'blocks' | 'reports') {
@@ -167,6 +196,99 @@ export class ReservationManagement implements OnInit {
     }
 
     this.closeResourceCreator();
+  }
+
+  // --- Block Management ---
+  openBlockCreator(block: any = null) {
+    if (block) {
+      this.isEditingBlock = true;
+      this.activeBlock = {
+        ...block,
+        start_datetime: this.formatDateForInput(block.start_datetime),
+        end_datetime: this.formatDateForInput(block.end_datetime)
+      };
+    } else {
+      this.isEditingBlock = false;
+      this.activeBlock = {
+        resource_id: null,
+        merchant_id: this.merchantId,
+        start_datetime: '',
+        end_datetime: '',
+        reason: '',
+        is_block: true
+      };
+    }
+    this.showBlockModal = true;
+  }
+
+  closeBlockCreator() {
+    this.showBlockModal = false;
+  }
+
+  private formatDateForInput(dateStr: string): string {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const tzoffset = (new Date()).getTimezoneOffset() * 60000; //offset in milliseconds
+    const localISOTime = (new Date(date.getTime() - tzoffset)).toISOString().slice(0, 16);
+    return localISOTime;
+  }
+
+  async saveBlock() {
+    if (!this.activeBlock.start_datetime || !this.activeBlock.end_datetime) {
+      this.ns.show('Las fechas son requeridas', 'warning');
+      return;
+    }
+
+    const payload = {
+      merchant_id: this.merchantId,
+      resource_id: this.activeBlock.resource_id || null, // null significa global
+      start_datetime: new Date(this.activeBlock.start_datetime).toISOString(),
+      end_datetime: new Date(this.activeBlock.end_datetime).toISOString(),
+      reason: this.activeBlock.reason,
+      is_block: this.activeBlock.is_block
+    };
+
+    if (!this.isEditingBlock) {
+      const { error } = await supabase
+        .from('availability_exceptions')
+        .insert([payload]);
+
+      if (error) {
+        this.ns.show('Error al crear bloqueo: ' + error.message, 'error');
+      } else {
+        this.ns.show('Bloqueo creado exitosamente', 'success');
+        this.loadExceptions();
+      }
+    } else {
+      const { error } = await supabase
+        .from('availability_exceptions')
+        .update(payload)
+        .eq('id', this.activeBlock.id);
+
+      if (error) {
+        this.ns.show('Error al actualizar: ' + error.message, 'error');
+      } else {
+        this.ns.show('Bloqueo actualizado', 'success');
+        this.loadExceptions();
+      }
+    }
+    this.closeBlockCreator();
+  }
+
+  async deleteBlock(id: string) {
+    if (confirm('¿Estás seguro de eliminar este bloqueo?')) {
+      const { error } = await supabase
+        .from('availability_exceptions')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        this.ns.show('Error al eliminar', 'error');
+      } else {
+        this.ns.show('Bloqueo eliminado', 'success');
+        this.loadExceptions();
+      }
+    }
   }
 
   getStatusClass(status: string) {

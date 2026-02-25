@@ -102,10 +102,10 @@ Para que el bot gestione esto nativamente en WhatsApp o Telegram sin herramienta
 - [x] Diseñar el esquema de base de datos (`reservable_resources`, `availability_schedules`, `bookings`).
 - [x] Crear funciones RPC (SQL) para cálculo de disponibilidad de alto rendimiento. Las consultas de disponibilidad son costosas, las RPCs en Postgres son ultrarrápidas y evitan que la IA "piense" mucho tiempo.
 
-### Fase 2: Módulo Backoffice para el Comercio (Dashboard) (✅ EN PROGRESO)
+### Fase 2: Módulo Backoffice para el Comercio (Dashboard) (✅ COMPLETADO)
 - [x] UI Calendario de Reservas (Vista Semanal / Mensual).
 - [x] Creador de Recursos (El comercio define sus horarios, mesas o habitaciones).
-- [ ] Sistema de bloqueo de fechas manual.
+- [x] Sistema de bloqueo de fechas manual.
 
 ### Fase 3: Integración de la Skill IA en Webhooks
 - [ ] Extender el webhook actual (Telegram/WhatsApp) para escuchar los comandos `[CHECK_AVAILABILITY]` y `[CREATE_BOOKING]`.

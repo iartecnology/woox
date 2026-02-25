@@ -83,39 +83,126 @@
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- Vista Gestión de Recursos -->
-<div class="resources-container" *ngIf="activeTab === 'resources'">
-    <div class="resources-header">
-        <h3>Tus Recursos Reservables</h3>
-        <button class="btn btn-primary" (click)="openResourceCreator()">+ Crear Recurso</button>
-    </div>
-    <p style="color: #666; margin-top:0;">Define qué es exactamente lo que alquilas o agendas (Personas, Mesas, Cabañas,
-        etc.)</p>
+        <!-- Vista Gestión de Recursos -->
+        <div class="resources-container" *ngIf="activeTab === 'resources'">
+            <div class="resources-header">
+                <h3>Tus Recursos Reservables</h3>
+                <button class="btn btn-primary" (click)="openResourceCreator()">+ Crear Recurso</button>
+            </div>
+            <p style="color: #666; margin-top:0;">Define qué es exactamente lo que alquilas o agendas (Personas, Mesas,
+                Cabañas,
+                etc.)</p>
 
-    <div class="resource-cards-grid">
-        <!-- Tarjeta de Recurso -->
-        <div class="resource-card" *ngFor="let res of resources">
-            <div class="rc-header">
-                <h4>{{ res.name }}</h4>
-                <span class="badge" [ngClass]="res.type">{{ res.type }}</span>
-            </div>
-            <div class="rc-body">
-                <p><strong>Tipo:</strong> {{ res.type }}</p>
-            </div>
-            <div class="rc-actions">
-                <button class="btn btn-outline btn-small">Editar Horarios</button>
-                <button class="btn btn-outline btn-small">Editar</button>
+            <div class="resource-cards-grid">
+                <!-- Tarjeta de Recurso -->
+                <div class="resource-card" *ngFor="let res of resources">
+                    <div class="rc-header">
+                        <h4>{{ res.name }}</h4>
+                        <span class="badge" [ngClass]="res.type">{{ res.type }}</span>
+                    </div>
+                    <div class="rc-body">
+                        <p><strong>Tipo:</strong> {{ res.type }}</p>
+                    </div>
+                    <div class="rc-actions">
+                        <button class="btn btn-outline btn-small">Editar Horarios</button>
+                        <button class="btn btn-outline btn-small">Editar</button>
+                    </div>
+                </div>
+
+                <!-- Placeholder si no hay recursos -->
+                <div class="empty-state" *ngIf="resources.length === 0">
+                    <div class="es-icon">🏢</div>
+                    <h4>No tienes recursos aún</h4>
+                    <p>Empieza creando el primer servicio o espacio disponible para reservas.</p>
+                </div>
             </div>
         </div>
 
-        <!-- Placeholder si no hay recursos -->
-        <div class="empty-state" *ngIf="resources.length === 0">
-            <div class="es-icon">🏢</div>
-            <h4>No tienes recursos aún</h4>
-            <p>Empieza creando el primer servicio o espacio disponible para reservas.</p>
+        <!-- Vista Bloqueos -->
+        <div class="blocks-container" *ngIf="activeTab === 'blocks'">
+            <div class="resources-header">
+                <h3>Bloqueos de Disponibilidad</h3>
+                <button class="btn btn-primary" (click)="openBlockCreator()">+ Agregar Bloqueo</button>
+            </div>
+            <p style="color: #666; margin-top:0;">Define fechas u horarios donde no se podrán recibir reservas (Días
+                festivos, Vacaciones, Mantenimiento).</p>
+
+            <div
+                style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top:20px;">
+                <table style="width:100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background:#F8F9FA; text-align:left; border-bottom:1px solid #DFE3E8;">
+                            <th style="padding:12px;">Recurso</th>
+                            <th style="padding:12px;">Inicio</th>
+                            <th style="padding:12px;">Fin</th>
+                            <th style="padding:12px;">Motivo</th>
+                            <th style="padding:12px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let ex of exceptions" style="border-bottom:1px solid #F1F3F4;">
+                            <td style="padding:12px;">{{ ex.reservable_resources?.name || 'Toda la Empresa' }}</td>
+                            <td style="padding:12px;">{{ ex.start_datetime | date:'MMM d, h:mm a' }}</td>
+                            <td style="padding:12px;">{{ ex.end_datetime | date:'MMM d, h:mm a' }}</td>
+                            <td style="padding:12px;">{{ ex.reason }}</td>
+                            <td style="padding:12px;">
+                                <button class="btn btn-outline btn-small" (click)="openBlockCreator(ex)">Editar</button>
+                                <button class="btn btn-outline btn-small" style="color:red;"
+                                    (click)="deleteBlock(ex.id)">Eliminar</button>
+                            </td>
+                        </tr>
+                        <tr *ngIf="exceptions.length === 0">
+                            <td colspan="5" style="padding:40px; text-align:center; color:#888;">No hay bloqueos
+                                activos.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Crear Bloqueo -->
+<div class="backdrop" *ngIf="showBlockModal" (click)="closeBlockCreator()"></div>
+<div class="modal offcanvas" [class.open]="showBlockModal" style="width: 500px;">
+    <div class="offcanvas-header">
+        <h3>{{ isEditingBlock ? 'Editar' : 'Nuevo' }} Bloqueo</h3>
+        <button class="close-btn" (click)="closeBlockCreator()">x</button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="form-group">
+            <label>¿Qué quieres bloquear?</label>
+            <select [(ngModel)]="activeBlock.resource_id" class="form-control"
+                style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;">
+                <option [ngValue]="null">🌍 Toda la Empresa (Global)</option>
+                <option *ngFor="let res of resources" [ngValue]="res.id">👉 {{ res.name }}</option>
+            </select>
+        </div>
+
+        <div style="display:flex; gap:15px; margin-top:20px;">
+            <div class="form-group" style="flex:1;">
+                <label>Desde</label>
+                <input type="datetime-local" [(ngModel)]="activeBlock.start_datetime" class="form-control"
+                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;">
+            </div>
+            <div class="form-group" style="flex:1;">
+                <label>Hasta</label>
+                <input type="datetime-local" [(ngModel)]="activeBlock.end_datetime" class="form-control"
+                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;">
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-top:20px;">
+            <label>Motivo</label>
+            <input type="text" [(ngModel)]="activeBlock.reason" class="form-control"
+                style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;"
+                placeholder="Ej: Cerrado por festivo, Almuerzo, etc.">
+        </div>
+
+        <div style="margin-top: auto; padding-top:40px;">
+            <button class="btn btn-primary" style="width: 100%; padding: 14px; font-size:16px; border-radius:10px;"
+                (click)="saveBlock()">Guardar Bloqueo</button>
         </div>
     </div>
 </div>
