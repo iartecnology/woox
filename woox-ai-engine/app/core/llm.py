@@ -5,52 +5,63 @@ import httpx
 
 class LLMService:
     def __init__(self):
-        # La API Key global se usa como fallback para el sistema o para Embeddings
-        self.global_api_key = os.getenv("GOOGLE_API_KEY")
-        if self.global_api_key:
-            genai.configure(api_key=self.global_api_key)
+        # We'll use a lazy loading pattern for genai to avoid issues with concurrent re-configs
+        pass
 
     async def get_embedding(self, text: str) -> List[float]:
         """
-        Genera un embedding usando el motor global de la plataforma para asegurar
-        que todos los vectores en Supabase sean compatibles semánticamente.
+        Genera un embedding usando el motor de la PLATAFORMA (Master Embedding Key).
+        Garantiza consistencia en toda la base de datos de vectores.
         """
+        from app.main import PLATFORM_SETTINGS
+        
+        provider = PLATFORM_SETTINGS.get("embed_provider") or "google_gemini"
+        api_key = PLATFORM_SETTINGS.get("embed_api_key") or PLATFORM_SETTINGS.get("ai_api_key")
+        model = PLATFORM_SETTINGS.get("embed_model") or "text-embedding-004"
+
+        if not api_key:
+            # Fallback a env var si la DB está vacía temporalmente
+            api_key = os.getenv("GOOGLE_API_KEY")
+
         try:
-            if not self.global_api_key:
-                raise Exception("GOOGLE_API_KEY global no configurada para Embeddings")
+            if provider == "google_gemini":
+                genai.configure(api_key=api_key)
+                result = genai.embed_content(
+                    model=f"models/{model}" if not model.startswith("models/") else model,
+                    content=text,
+                    task_type="retrieval_query"
+                )
+                return result['embedding']
             
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=text,
-                task_type="retrieval_query"
-            )
-            return result['embedding']
+            elif provider == "openai":
+                async with httpx.AsyncClient() as client:
+                    headers = {"Authorization": f"Bearer {api_key}"}
+                    payload = {"input": text, "model": model}
+                    res = await client.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload)
+                    if res.status_code == 200:
+                        return res.json()['data'][0]['embedding']
+            
+            raise Exception(f"Proveedor de embedding '{provider}' no soportado.")
+            
         except Exception as e:
             print(f"[LLM Error] Embedding failed: {str(e)}")
             raise e
 
     async def generate_response(self, system_prompt: str, context: str, user_input: str, config: Dict[str, Any]) -> str:
         """
-        Genera una respuesta usando el proveedor y API Key específico del comercio.
-        ESTO CONSUME TOKENS DEL COMERCIO, NO DE LA PLATAFORMA.
+        Genera una respuesta. 
+        - Si el comercio tiene API Key, usa esa (Paga el comercio).
+        - Si no, usa la 'Master API Key (Chat)' de la plataforma (Pagas tú).
         """
         provider = config.get("provider", "google_gemini")
-        api_key = config.get("api_key") or self.global_api_key
+        api_key = config.get("api_key")
         model_name = config.get("model", "gemini-1.5-flash")
 
         if not api_key:
-            return "Error: El comercio no tiene configurada una clave de IA."
+            return "Error: No hay una clave de IA configurada (comercio ni plataforma)."
 
         try:
-            # Lógica para Gemini
             if provider == "google_gemini" or model_name.startswith("gemini"):
-                # Configure temporary client for this request
-                # Note: genai.configure is global, so for multi-threaded/concurrent 
-                # we'd ideally use a more localized client if supported, 
-                # but for simplicity we re-configure or use raw HTTP.
-                # Since we are using Gemini Pro/Flash, let's use the SDK approach.
-                
-                # Re-config with merchant key
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(model_name)
                 
@@ -58,7 +69,6 @@ class LLMService:
                 response = model.generate_content(full_prompt)
                 return response.text
 
-            # Lógica para OpenAI (Opcional, futuro)
             elif provider == "openai" or model_name.startswith("gpt"):
                 async with httpx.AsyncClient() as client:
                     headers = {
@@ -78,8 +88,8 @@ class LLMService:
                         return data['choices'][0]['message']['content']
                     return f"Error de OpenAI: {res.status_code}"
 
-            return "Proveedor de IA no soportado aún en el motor Python."
+            return f"Proveedor '{provider}' no soportado."
 
         except Exception as e:
-            print(f"[LLM Error] Generation failed for provider {provider}: {str(e)}")
-            return "Lo siento, tuve un problema procesando tu respuesta con tu proveedor de IA."
+            print(f"[LLM Error] Generation failed: {str(e)}")
+            return "Lo siento, tuve un problema procesando tu respuesta con el proveedor de IA."

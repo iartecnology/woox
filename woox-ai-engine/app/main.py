@@ -15,12 +15,27 @@ import json
 
 # Inicializar servicios de forma única y segura
 try:
+    supabase = get_supabase()
     rag_skill = RAGSkill()
     catalog_skill = CatalogSkill()
     order_skill = OrderSkill()
     router = IntentRouter()
     llm_service = LLMService()
-    supabase = get_supabase()
+    
+    # Cache global para settings de la plataforma
+    PLATFORM_SETTINGS = {}
+
+    def refresh_platform_settings():
+        global PLATFORM_SETTINGS
+        try:
+            res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
+            if res.data:
+                PLATFORM_SETTINGS = res.data
+                print("[ENGINE] Configuración global de la plataforma cargada.")
+        except Exception as e:
+            print(f"[ENGINE ERROR] No se pudo cargar platform_settings: {str(e)}")
+
+    refresh_platform_settings()
     print("[ENGINE] Todos los servicios inicializados correctamente.")
 except Exception as e:
     print(f"[CRITICAL ERROR] Error inicializando servicios: {str(e)}")
@@ -94,13 +109,20 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
 
         # 3. Obtener Configuración de IA del Comercio (Para el token propio)
         merchant_config = fetch_merchant_ai_config(request.merchant_id)
+        
+        # Merge con settings globales si faltan datos en el comercio
+        final_config = {
+            "provider": merchant_config.get("provider") or PLATFORM_SETTINGS.get("ai_provider") or "google_gemini",
+            "api_key": merchant_config.get("api_key") or PLATFORM_SETTINGS.get("ai_api_key"),
+            "model": merchant_config.get("model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash"
+        }
 
         # 4. Generar respuesta con el LLM inyectando el contexto real filtrado
         ai_response = await llm_service.generate_response(
             system_prompt=system_prompt,
             context=context,
             user_input=request.message_text,
-            config=merchant_config
+            config=final_config
         )
         
         # 4. Post-Procesamiento (Skills Deterministas)
