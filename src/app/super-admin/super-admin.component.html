@@ -14,6 +14,9 @@
             <button class="platform-config-btn" (click)="openPlatformConfig()">
                 ⚙️ Configurar Plataforma
             </button>
+            <button class="ai-engine-monitor-btn" (click)="openAIEngineMonitor()">
+                📟 Monitor Motor IA
+            </button>
             <button class="add-merchant-btn" (click)="openModal()">
                 + Registrar Nueva Empresa
             </button>
@@ -445,6 +448,15 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="section-divider full-width">🧠 Inteligencia Artificial (Core Engine)</div>
+
+                    <div class="form-group full-width">
+                        <label>AI Engine URL</label>
+                        <input type="text" [(ngModel)]="platformConfig.ai_engine_url"
+                            placeholder="http://167.86.73.89:8000/">
+                        <small>La URL pública o interna donde corre el motor de IA (Woox AI Engine).</small>
                     </div>
 
                     <div class="section-divider full-width">🔗 Conectividad WhatsApp (Evolution API)</div>
@@ -1546,6 +1558,21 @@
                     <span *ngIf="!deleteModalConfig.isProcessing">{{ deleteModalConfig.confirmLabel }}</span>
                     <span *ngIf="deleteModalConfig.isProcessing">⌛ Procesando...</span>
                 </button>
+            </div>
+        </div>
+    </div>
+    <!-- MONITOR DE IA ENGINE (IFRAME) -->
+    <div class="modal-overlay monitor-overlay" *ngIf="showAIEngineMonitor" (click)="showAIEngineMonitor = false">
+        <div class="monitor-modal-content ai-engine-monitor" (click)="$event.stopPropagation()">
+            <div class="monitor-header">
+                <h3>📟 Monitor de Motor IA (Woox Core)</h3>
+                <div class="monitor-actions-header">
+                    <button class="refresh-iframe-btn" (click)="refreshMonitor()">🔄 Recargar</button>
+                    <button class="close-monitor-btn" (click)="showAIEngineMonitor = false">✕</button>
+                </div>
+            </div>
+            <div class="monitor-iframe-container" *ngIf="safeMonitorUrl">
+                <iframe [src]="safeMonitorUrl" frameborder="0" width="100%" height="100%"></iframe>
             </div>
         </div>
     </div>

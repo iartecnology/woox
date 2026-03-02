@@ -1,4 +1,5 @@
-import { Component, OnInit, inject, ChangeDetectorRef, NgZone } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectorRef, NgZone, Pipe, PipeTransform } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { WOOX_DB_INIT_SQL } from './db-init.constants';
 import { createClient } from '@supabase/supabase-js';
 import { CommonModule } from '@angular/common';
@@ -144,6 +145,7 @@ interface PlatformConfig {
     supabase_key?: string;
     evolution_api_url?: string;
     evolution_api_key?: string;
+    ai_engine_url?: string;
 }
 
 @Component({
@@ -364,6 +366,7 @@ export class SuperAdminComponent implements OnInit {
     private router = inject(Router);
     private cdr = inject(ChangeDetectorRef);
     private ngZone = inject(NgZone);
+    private sanitizer = inject(DomSanitizer);
 
     constructor() { }
 
@@ -612,7 +615,8 @@ export class SuperAdminComponent implements OnInit {
         supabase_url: localStorage.getItem('supabase_url') || 'https://khgegukjrtyjmonhavan.supabase.co',
         supabase_key: localStorage.getItem('supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoZ2VndWtqcnR5am1vbmhhdmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTQ4MTAsImV4cCI6MjA4NTM3MDgxMH0.V-dc1zSkU5R5hj45ihWsHR-9FWFTP4qxWyVUnTC8qdc',
         evolution_api_url: localStorage.getItem('evolution_api_url') || '',
-        evolution_api_key: localStorage.getItem('evolution_api_key') || ''
+        evolution_api_key: localStorage.getItem('evolution_api_key') || '',
+        ai_engine_url: localStorage.getItem('ai_engine_url') || 'http://167.86.73.89:8000/'
     };
 
     isValidatingSupabase = false;
@@ -632,6 +636,9 @@ export class SuperAdminComponent implements OnInit {
     showAIConfig = false;
     showOmniConfig = false;
     showBiolinkConfig = false;
+    showAIEngineMonitor = false;
+    aiEngineMonitorUrl = 'http://167.86.73.89:8000/';
+    safeMonitorUrl: SafeResourceUrl | null = null;
     isEditing = false;
     showDebugPrompt = false;
     verifyingChannel: string | null = null;
@@ -738,6 +745,24 @@ export class SuperAdminComponent implements OnInit {
             this.isPreparingSimulator = false;
             this.cdr.detectChanges();
         }
+    }
+
+    openAIEngineMonitor() {
+        const url = this.platformConfig.ai_engine_url || 'http://167.86.73.89:8000/';
+        this.safeMonitorUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+        this.showAIEngineMonitor = true;
+        this.cdr.detectChanges();
+    }
+
+    refreshMonitor() {
+        // Simple trick to reload iframe: null then back to sanitized url
+        const current = this.safeMonitorUrl;
+        this.safeMonitorUrl = null;
+        this.cdr.detectChanges();
+        setTimeout(() => {
+            this.safeMonitorUrl = current;
+            this.cdr.detectChanges();
+        }, 100);
     }
 
     async saveAIConfig() {
@@ -1581,7 +1606,8 @@ export class SuperAdminComponent implements OnInit {
         const { error } = await this.supabaseService.updatePlatformSettings({
             ...this.platformAiSettings,
             evolution_api_url: this.platformConfig.evolution_api_url,
-            evolution_api_key: this.platformConfig.evolution_api_key
+            evolution_api_key: this.platformConfig.evolution_api_key,
+            ai_engine_url: this.platformConfig.ai_engine_url
         });
 
         if (error) {
@@ -1600,6 +1626,7 @@ export class SuperAdminComponent implements OnInit {
         if (this.platformConfig.supabase_key) localStorage.setItem('supabase_key', this.platformConfig.supabase_key);
         if (this.platformConfig.evolution_api_url) localStorage.setItem('evolution_api_url', this.platformConfig.evolution_api_url);
         if (this.platformConfig.evolution_api_key) localStorage.setItem('evolution_api_key', this.platformConfig.evolution_api_key);
+        if (this.platformConfig.ai_engine_url) localStorage.setItem('ai_engine_url', this.platformConfig.ai_engine_url);
 
         this.notificationService.show('Configuración global actualizada correctamente', 'success');
         this.showPlatformConfig = false;

@@ -4102,3 +4102,105 @@ input:checked+.slider:before {
 .slider.round:before {
     border-radius: 50%;
 }
+
+/* AI ENGINE MONITOR MODAL STYLES */
+.ai-engine-monitor-btn {
+    background: #7c3aed;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+}
+
+.ai-engine-monitor-btn:hover {
+    background: #6d28d9;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(124, 58, 237, 0.3);
+}
+
+.monitor-modal-content.ai-engine-monitor {
+    width: 95vw;
+    height: 90vh;
+    max-width: 1400px;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    background: #1c1e21;
+}
+
+.monitor-header {
+    background: #2d2f34;
+    padding: 15px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #3f4147;
+}
+
+.monitor-header h3 {
+    margin: 0 !important;
+    color: #e2e8f0;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.monitor-actions-header {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.refresh-iframe-btn {
+    background: #4b5563;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.refresh-iframe-btn:hover {
+    background: #6b7280;
+}
+
+.close-monitor-btn {
+    background: #ef4444 !important;
+    color: white !important;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.close-monitor-btn:hover {
+    background: #dc2626 !important;
+    transform: scale(1.1);
+}
+
+.monitor-iframe-container {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+}
+
+.monitor-iframe-container iframe {
+    border: none;
+    background: white;
+}
