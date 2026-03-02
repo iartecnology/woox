@@ -13,9 +13,15 @@ if not supabase_key: print("[DB] ❌ SUPABASE_SERVICE_ROLE_KEY no detectada.")
 
 def get_supabase() -> Client:
     """Retorna un cliente de Supabase autenticado como Service Role."""
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     
     if not url or not key:
-        return None  # Retornar None para que el monitor lo marque como error sin crashear el motor
-    return create_client(url, key)
+        print("[DB] ❌ Error: SUPABASE_URL o KEY están vacíos después de limpiar espacios.")
+        return None
+    
+    try:
+        return create_client(url, key)
+    except Exception as e:
+        print(f"[DB] ❌ Error crítico al crear el cliente: {str(e)}")
+        return None
