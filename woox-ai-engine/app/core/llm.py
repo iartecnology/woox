@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 import httpx
 import re
 import json
+import asyncio
 
 class LLMService:
     def __init__(self):
@@ -75,39 +76,64 @@ class LLMService:
         if not api_key:
             return "Error: No hay una clave de IA configurada (comercio ni plataforma)."
 
-        try:
-            if provider == "google_gemini" or model_name.startswith("gemini"):
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel(model_name)
-                
-                full_prompt = f"{system_prompt}\n\nCONTEXTO RELEVANTE:\n{context}\n\nPREGUNTA DEL CLIENTE: {user_input}"
-                response = model.generate_content(full_prompt)
-                return response.text
-
-            elif provider == "openai" or model_name.startswith("gpt"):
-                async with httpx.AsyncClient() as client:
-                    headers = {
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json"
-                    }
-                    payload = {
-                        "model": model_name,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": f"Contexto:\n{context}\n\nPregunta: {user_input}"}
+        # Lógica de Reintentos
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                if provider == "google_gemini" or model_name.startswith("gemini"):
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel(model_name)
+                    
+                    full_prompt = f"{system_prompt}\n\nCONTEXTO RELEVANTE:\n{context}\n\nPREGUNTA DEL CLIENTE: {user_input}"
+                    
+                    # Generar con parámetros de seguridad más relajados para evitar falsos positivos
+                    response = model.generate_content(
+                        full_prompt,
+                        safety_settings=[
+                            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
                         ]
-                    }
-                    res = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
-                    if res.status_code == 200:
-                        data = res.json()
-                        return data['choices'][0]['message']['content']
-                    return f"Error de OpenAI: {res.status_code}"
+                    )
+                    
+                    if not response.text:
+                        raise Exception("Respuesta vacía del modelo (posible filtro de seguridad)")
+                        
+                    return response.text
 
-            return f"Proveedor '{provider}' no soportado."
+                elif provider == "openai" or model_name.startswith("gpt"):
+                    async with httpx.AsyncClient() as client:
+                        headers = {
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json"
+                        }
+                        payload = {
+                            "model": model_name,
+                            "messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": f"Contexto:\n{context}\n\nPregunta: {user_input}"}
+                            ]
+                        }
+                        res = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
+                        if res.status_code == 200:
+                            data = res.json()
+                            return data['choices'][0]['message']['content']
+                        raise Exception(f"Error de OpenAI: {res.status_code} - {res.text}")
 
-        except Exception as e:
-            print(f"[LLM Error] Generation failed: {str(e)}")
-            return "Lo siento, tuve un problema procesando tu respuesta con el proveedor de IA."
+                return f"Proveedor '{provider}' no soportado."
+
+            except Exception as e:
+                # Si es el último intento, dejar que explote para que el monitor lo registre
+                if attempt == max_retries:
+                    err_msg = str(e)
+                    if "FinishReason.SAFETY" in err_msg or "safety" in err_msg.lower():
+                        return "Lo siento, la política de seguridad bloqueó esta respuesta. Intentemos hablar de otro tema relacionado con el catálogo. 🛡️"
+                    raise e
+                
+                # Esperar un poco antes de reintentar (backoff simple)
+                await asyncio.sleep(1 * (attempt + 1))
+                print(f"[LLM Retry] Intento {attempt + 1} fallido: {str(e)}")
 
     async def extract_order_data(self, history: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
