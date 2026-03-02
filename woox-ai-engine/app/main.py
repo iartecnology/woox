@@ -15,7 +15,7 @@ import json
 from datetime import datetime
 from fastapi.responses import HTMLResponse
 
-# 1. ESTADO GLOBAL (SINGLETONS)
+# 1. ESTADO GLOBAL
 STATS = {
     "total_messages": 0,
     "total_errors": 0,
@@ -25,7 +25,6 @@ STATS = {
     "last_db_error": None
 }
 
-# Inicializamos variables de servicio vacías
 supabase = None
 rag_skill = None
 catalog_skill = None
@@ -35,46 +34,29 @@ llm_service = None
 PLATFORM_SETTINGS = {}
 
 # 2. APP INITIALIZATION
-app = FastAPI(
-    title="Woox AI Engine",
-    description="Orquestador de agentes Multi-Tenant para Woox",
-    version="1.3.0"
-)
+app = FastAPI(title="Woox AI Engine", version="1.3.1")
 
 def init_services():
-    """Inicializa todos los servicios de forma segura."""
     global supabase, rag_skill, catalog_skill, order_skill, router, llm_service, PLATFORM_SETTINGS
-    
-    print("[INIT] Cargando servicios del motor...")
     try:
-        # DB Connection
         supabase = get_supabase()
-        if not supabase:
-            STATS["last_db_error"] = "Error: SUPABASE_URL o KEY no configurados o inválidos."
-        
-        # Skills & Core
         rag_skill = RAGSkill()
         catalog_skill = CatalogSkill()
         order_skill = OrderSkill()
         router = IntentRouter()
         llm_service = LLMService()
 
-        # Platform Settings
         if supabase:
             try:
                 res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
                 if res.data:
                     PLATFORM_SETTINGS = res.data
-                    print("[INIT] Configuración global cargada.")
+                    STATS["last_db_error"] = None # Limpiar error si todo salió bien
             except Exception as e:
-                STATS["last_db_error"] = f"Error settings: {str(e)}"
-        
-        print("[INIT] Todo listo.")
+                STATS["last_db_error"] = f"Settings: {str(e)}"
     except Exception as e:
-        STATS["last_db_error"] = f"Fallo inicialización: {str(e)}"
-        print(f"[CRITICAL] {str(e)}")
+        STATS["last_db_error"] = f"Boot: {str(e)}"
 
-# Ejecutar inicialización al cargar el módulo
 init_services()
 
 # 3. MODELOS
@@ -90,60 +72,58 @@ class MessageRequest(BaseModel):
 async def health_check():
     global supabase, PLATFORM_SETTINGS
     
-    # Intentar reconectar si sigue fallando
+    # RE-VERIFICACIÓN EN TIEMPO REAL
     if not supabase:
         supabase = get_supabase()
     
-    if supabase and not PLATFORM_SETTINGS:
-        try:
-            res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
-            if res.data:
-                PLATFORM_SETTINGS = res.data
-        except:
-            pass
+    if supabase:
+        STATS["last_db_error"] = None # Si hay supabase, ya no hay error de llave
+        if not PLATFORM_SETTINGS:
+            try:
+                res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
+                if res.data:
+                    PLATFORM_SETTINGS = res.data
+            except Exception as e:
+                STATS["last_db_error"] = f"Fetch Settings: {str(e)}"
 
-    uptime = time.time() - STATS["start_time"]
     uptime_str = str(datetime.fromtimestamp(STATS["start_time"]))
-    
     db_status = "✅ Conectado" if supabase else "❌ Error"
     settings_status = "✅ Sincronizado" if PLATFORM_SETTINGS else "⚠️ Pendiente"
 
-    # Diagnóstico de entorno
-    critical_vars = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_API_KEY", "AUTH_SECRET"]
-    debug_info = []
-    for v in critical_vars:
-        val = os.environ.get(v, "")
-        debug_info.append(f"{'✅' if val else '❌'} {v}: {len(val)} ch")
-    
-    env_debug = " | ".join(debug_info)
+    # Diagnóstico
+    cvars = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_API_KEY", "AUTH_SECRET"]
+    env_debug = " | ".join([f"{'✅' if os.environ.get(v) else '❌'} {v}: {len(os.environ.get(v, ''))}ch" for v in cvars])
     intents_list = "".join([f"<li>{k}: {v}</li>" for k, v in STATS["intents"].items()]) or "<li>Sin mensajes</li>"
 
     html = f"""
     <html>
         <head><title>Woox Monitor</title><meta http-equiv="refresh" content="30">
         <style>
-            body {{ font-family: sans-serif; background: #f0f2f5; padding: 20px; }}
-            .card {{ background: white; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
-            .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }}
-            .stat {{ background: #f8f9fa; padding: 10px; border-radius: 5px; }}
-            .err {{ color: red; font-size: 11px; }}
-            .debug {{ background: #222; color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 11px; margin-top: 10px; }}
+            body {{ font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; }}
+            .card {{ background: white; padding: 30px; border-radius: 15px; max-width: 700px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
+            .grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; }}
+            .stat {{ background: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 5px solid #0084ff; }}
+            .stat b {{ display: block; font-size: 12px; color: #666; text-transform: uppercase; }}
+            .stat span {{ font-size: 20px; font-weight: bold; }}
+            .err {{ background: #fff5f5; color: #d93025; padding: 10px; border-radius: 5px; font-size: 12px; border: 1px solid #feb2b2; }}
+            .debug {{ background: #1c1e21; color: #00ff00; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 11px; margin-top: 20px; }}
+            h2 {{ color: #0084ff; margin-top: 0; }}
         </style>
         </head>
         <body>
             <div class="card">
-                <h2>🚀 Woox AI v1.3.0</h2>
+                <h2>🚀 Woox AI Engine <span style="font-size: 14px; background: #e7f3ff; padding: 4px 8px; border-radius: 5px;">v1.3.1</span></h2>
                 <div class="grid">
-                    <div class="stat"><b>Mensajes:</b> {STATS['total_messages']}</div>
-                    <div class="stat"><b>Errores:</b> {STATS['total_errors']}</div>
-                    <div class="stat"><b>DB:</b> {db_status}</div>
-                    <div class="stat"><b>Settings:</b> {settings_status}</div>
+                    <div class="stat"><b>Mensajes</b><span>{STATS['total_messages']}</span></div>
+                    <div class="stat"><b>Errores</b><span style="color: {'#d93025' if STATS['total_errors'] > 0 else '#1e8e3e'}">{STATS['total_errors']}</span></div>
+                    <div class="stat"><b>Base de Datos</b><span>{db_status}</span></div>
+                    <div class="stat"><b>Configuración</b><span>{settings_status}</span></div>
                 </div>
-                {f'<p class="err">Err: {STATS["last_db_error"]}</p>' if STATS["last_db_error"] else ""}
-                <p><small>Uptime: {uptime_str}</small></p>
+                {f'<div class="err"><b>⚠️ Error Detectado:</b> {STATS["last_db_error"]}</div>' if STATS["last_db_error"] else ""}
+                <p><small>Sistema iniciado el: {uptime_str}</small></p>
                 <hr>
-                <b>Intenciones:</b><ul>{intents_list}</ul>
-                <div class="debug"><b>Env:</b><br>{env_debug}</div>
+                <b>📊 Análisis de Intenciones:</b><ul>{intents_list}</ul>
+                <div class="debug"><b>🛠️ Diagnóstico de Entorno (Docker):</b><br>{env_debug}</div>
             </div>
         </body>
     </html>
@@ -185,7 +165,6 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
 
         ai_response = await llm_service.generate_response(system_prompt, context, request.message_text, final_config)
         
-        # Pedidos
         order_match = re.search(r"\[ORDER_CONFIRMED:\s*(\{.*?})\s*\]", ai_response, re.DOTALL)
         if order_match:
             try:
