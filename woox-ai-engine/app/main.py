@@ -24,6 +24,15 @@ STATS = {
     "last_message_at": None
 }
 
+# Inicializar variables de estado globales para evitar NameErrors
+supabase = None
+PLATFORM_SETTINGS = {}
+rag_skill = None
+catalog_skill = None
+order_skill = None
+router = None
+llm_service = None
+
 # Inicializar servicios de forma única y segura
 try:
     supabase = get_supabase()
@@ -33,9 +42,6 @@ try:
     router = IntentRouter()
     llm_service = LLMService()
     
-    # Cache global para settings de la plataforma
-    PLATFORM_SETTINGS = {}
-
     def refresh_platform_settings():
         global PLATFORM_SETTINGS
         try:
@@ -92,6 +98,11 @@ async def health_check():
     db_status = "✅ Conectado" if supabase else "❌ Error"
     settings_status = "✅ Sincronizado" if PLATFORM_SETTINGS else "⚠️ Pendiente"
 
+    # Preparar lista de intenciones
+    intents_html = "".join([f"<li>{k}: {v}</li>" for k, v in STATS["intents"].items()])
+    if not intents_html:
+        intents_html = "<li>Esperando mensajes...</li>"
+
     html_content = f"""
     <html>
         <head>
@@ -136,7 +147,7 @@ async def health_check():
 
                 <h2>📊 Intenciones Recientes</h2>
                 <ul>
-                    {"".join([f"<li>{k}: {v}</li>" for k, v in STATS["intents"].items()]) or "<li>Esperando mensajes...</li>"}
+                    {intents_html}
                 </ul>
 
                 <div class="footer">
@@ -151,11 +162,11 @@ async def health_check():
 
 @app.get("/api/health")
 async def api_health():
-    return {{
+    return {
         "status": "online",
         "stats": STATS,
         "platform_settings_loaded": True if PLATFORM_SETTINGS else False
-    }}
+    }
 
 @app.post("/process-message")
 async def process_message(request: MessageRequest, x_auth_token: Optional[str] = Header(None)):
