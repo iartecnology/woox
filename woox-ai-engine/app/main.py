@@ -103,6 +103,10 @@ async def health_check():
     if not intents_html:
         intents_html = "<li>Esperando mensajes...</li>"
 
+    # Depuración de variables de entorno (solo nombres para seguridad)
+    env_keys = ", ".join([k for k in os.environ.keys() if "SUPABASE" in k or "API" in k or "SECRET" in k])
+    if not env_keys: env_keys = "Ninguna llave relevante detectada"
+
     html_content = f"""
     <html>
         <head>
@@ -118,12 +122,13 @@ async def health_check():
                 .stat-card p {{ margin: 10px 0 0; font-size: 24px; font-weight: bold; }}
                 .badge {{ padding: 5px 10px; border-radius: 5px; font-size: 12px; font-weight: bold; }}
                 .success {{ background: #e7f3ff; color: #0084ff; }}
+                .debug-box {{ background: #1c1e21; color: #00ff00; padding: 15px; border-radius: 10px; margin-top: 20px; font-family: monospace; font-size: 12px; }}
                 .footer {{ margin-top: 30px; font-size: 12px; color: #888; text-align: center; }}
             </style>
         </head>
         <body>
             <div class="container">
-                <h1>🚀 Woox AI Engine <span class="badge success">v1.0.0</span></h1>
+                <h1>🚀 Woox AI Engine <span class="badge success">v1.1.0</span></h1>
                 <p>Estado del sistema: <strong>ONLINE</strong></p>
                 
                 <div class="status-grid">
@@ -149,6 +154,11 @@ async def health_check():
                 <ul>
                     {intents_html}
                 </ul>
+
+                <div class="debug-box">
+                    <strong>[Debug] Llaves detectadas en el entorno:</strong><br>
+                    {env_keys}
+                </div>
 
                 <div class="footer">
                     Woox Engine - Centralized Agent Orchestrator<br>
