@@ -1807,7 +1807,7 @@ export class SuperAdminComponent implements OnInit {
             this.startWAStatusPolling(merchant, instanceName);
 
             // 4. Configurar Webhook automáticamente
-            this.setupEvolutionWebhook(instanceName);
+            this.setupEvolutionWebhook(merchant, instanceName);
 
         } catch (error: any) {
             console.error('Evolution API Error:', error);
@@ -1862,22 +1862,23 @@ export class SuperAdminComponent implements OnInit {
         if (!merchant) return;
         const instanceName = (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
         this.notificationService.show('Sincronizando webhook...', 'info');
-        await this.setupEvolutionWebhook(instanceName);
+        await this.setupEvolutionWebhook(merchant, instanceName);
         this.notificationService.show('Webhook sincronizado correctamente', 'success');
     }
 
-    private async setupEvolutionWebhook(instanceName: string) {
+    private async setupEvolutionWebhook(merchant: Partial<Merchant>, instanceName: string) {
         const apiUrl = this.platformConfig.evolution_api_url;
         const apiKey = this.platformConfig.evolution_api_key;
         const supabaseUrl = this.platformConfig.supabase_url;
+        const merchantId = merchant.id;
 
-        if (!apiUrl || !apiKey || !supabaseUrl) {
+        if (!apiUrl || !apiKey || !supabaseUrl || !merchantId) {
             console.error('Missing config for webhook setup');
             return;
         }
 
-        // URL de nuestro nuevo Edge Function
-        const webhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook`;
+        // URL de nuestro nuevo Edge Function con merchant_id incorporado
+        const webhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook?merchant_id=${merchantId}`;
 
         try {
             const res = await fetch(`${apiUrl}/webhook/set/${instanceName}`, {

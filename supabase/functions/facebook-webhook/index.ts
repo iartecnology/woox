@@ -120,10 +120,13 @@ Deno.serve(async (req: Request) => {
         // --- LLAMADA AL MOTOR DE IA (PYTHON) ---
         let aiResponse = "";
         try {
-            const engineUrl = Deno.env.get("PYTHON_ENGINE_URL") || "https://woox-ai-engine.onrender.com";
+            // 1. Obtener la URL del motor desde los ajustes globales
+            const { data: ps } = await supabase.from("platform_settings").select("ai_engine_url").eq("id", "global").maybeSingle();
+
+            const engineUrl = ps?.ai_engine_url || Deno.env.get("PYTHON_ENGINE_URL") || "http://167.86.73.89:8000";
             const engineSecret = Deno.env.get("PYTHON_ENGINE_AUTH");
 
-            const pyRes = await fetch(`${engineUrl}/process-message`, {
+            const pyRes = await fetch(`${engineUrl.replace(/\/$/, '')}/process-message`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -143,7 +146,8 @@ Deno.serve(async (req: Request) => {
             aiResponse = pyData.response || "Lo siento, no pude procesar tu mensaje.";
 
         } catch (e: any) {
-            aiResponse = "Lo siento, mis circuitos están ocupados. 🤖✨ Intenta de nuevo pronto.";
+            console.error("[FACEBOOK ERROR]", e);
+            aiResponse = "Lo siento, mis circuitos están un poco cansados. 🤖✨ Intenta de nuevo pronto.";
         }
 
         const cleanResponse = sanitizeMarkdown(aiResponse);

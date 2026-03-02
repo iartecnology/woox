@@ -21,28 +21,66 @@ Deno.serve(async (req: Request) => {
 
     try {
         const url = new URL(req.url);
-        const merchantId = url.searchParams.get("merchant_id");
-        if (!merchantId) throw new Error("merchant_id missing");
+        let merchantId = url.searchParams.get("merchant_id");
 
         const body = await req.json();
         const data = body.data;
-        if (!data || !data.message || !data.message.conversation) return new Response("ok", { headers: corsHeaders });
+        const instanceName = body.instance; // Importante para fallback
+
+        if (!data || !data.message) {
+            console.log("[EVOLUTION] Payload sin mensaje ignorado.");
+            return new Response("ok", { headers: corsHeaders });
+        }
         if (data.fromMe) return new Response("ok", { headers: corsHeaders });
 
         const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-        // Buscar comercio
-        let { data: m } = await supabase.from("merchants").select("*").eq("id", merchantId).maybeSingle();
-        if (!m) {
-            const { data: mc } = await supabase.from("merchants").select("*").eq("merchant_code", merchantId).maybeSingle();
-            m = mc;
+        // --- BUSCAR COMERCIO ---
+        let m: any = null;
+        if (merchantId) {
+            const { data: mById } = await supabase.from("merchants").select("*").eq("id", merchantId).maybeSingle();
+            m = mById;
+            if (!m) {
+                const { data: mByCode } = await supabase.from("merchants").select("*").eq("merchant_code", merchantId).maybeSingle();
+                m = mByCode;
+            }
         }
-        if (!m) throw new Error("Merchant not found");
+
+        // Fallback: Buscar por instanceName (slug o merchant_code suelen usarse como instance name)
+        if (!m && instanceName) {
+            const { data: mBySlug } = await supabase.from("merchants").select("*").eq("slug", instanceName).maybeSingle();
+            m = mBySlug;
+            if (!m) {
+                const { data: mByCode } = await supabase.from("merchants").select("*").eq("merchant_code", instanceName).maybeSingle();
+                m = mByCode;
+            }
+        }
+
+        if (!m) {
+            console.error(`[EVOLUTION ERROR] Comercio no encontrado (ID: ${merchantId}, Instance: ${instanceName})`);
+            return new Response("ok", { headers: corsHeaders });
+        }
 
         const evolutionMessageId = data.key.id;
         const customerPhone = data.key.remoteJid.split('@')[0];
         const customerName = data.pushName || "Cliente Evolution";
-        const messageText = data.message.conversation;
+
+        // --- EXTRACCIÓN ROBUSTA DE TEXTO ---
+        let messageText = data.message.conversation || "";
+        if (!messageText && data.message.extendedTextMessage) {
+            messageText = data.message.extendedTextMessage.text || "";
+        }
+        if (!messageText && data.message.imageMessage) {
+            messageText = data.message.imageMessage.caption || "";
+        }
+        if (!messageText && data.message.videoMessage) {
+            messageText = data.message.videoMessage.caption || "";
+        }
+
+        if (!messageText) {
+            console.log("[EVOLUTION] Mensaje sin texto ignorado.");
+            return new Response("ok", { headers: corsHeaders });
+        }
 
         // Deduplicación
         const { data: existing } = await supabase.from("messages").select("id").eq("metadata->>evolution_message_id", evolutionMessageId).maybeSingle();
