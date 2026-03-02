@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  woox-ai-engine:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: woox-ai-engine
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    restart: always
+    volumes:
+      - ../app:/app/app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
