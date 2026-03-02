@@ -11,17 +11,16 @@ print(f"[DB] Buscando configuración en el entorno...")
 if not supabase_url: print("[DB] ❌ SUPABASE_URL no detectada.")
 if not supabase_key: print("[DB] ❌ SUPABASE_SERVICE_ROLE_KEY no detectada.")
 
-def get_supabase() -> Client:
-    """Retorna un cliente de Supabase autenticado como Service Role."""
+def get_supabase():
+    """Retorna (cliente, error_str)"""
     url = os.environ.get("SUPABASE_URL", "").strip()
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     
     if not url or not key:
-        print("[DB] ❌ Error: SUPABASE_URL o KEY están vacíos después de limpiar espacios.")
-        return None
+        return None, "URL o KEY vacíos en entorno"
     
     try:
-        return create_client(url, key)
+        client = create_client(url, key)
+        return client, None
     except Exception as e:
-        print(f"[DB] ❌ Error crítico al crear el cliente: {str(e)}")
-        return None
+        return None, f"Excepción create_client: {str(e)}"

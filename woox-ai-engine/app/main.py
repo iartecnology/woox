@@ -97,9 +97,12 @@ async def health_check():
     # Intentar reconectar si se perdió o no se inició
     if not supabase:
         try:
-            supabase = get_supabase()
-            if not supabase:
-                STATS["last_db_error"] = "Error desconocido inicializando cliente"
+            client, err = get_supabase()
+            if client:
+                supabase = client
+                STATS["last_db_error"] = None
+            else:
+                STATS["last_db_error"] = err
         except Exception as e:
             STATS["last_db_error"] = str(e)
     
