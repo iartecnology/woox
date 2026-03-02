@@ -38,16 +38,17 @@ llm_service = None
 try:
     global supabase, rag_skill, catalog_skill, order_skill, router, llm_service
     
-    # 1. Intentar conectar a Supabase (Puede lanzar ValueError o ConnectionError)
-    try:
-        supabase = get_supabase()
-        STATS["last_db_error"] = None
-    except Exception as e:
-        supabase = None
-        STATS["last_db_error"] = str(e)
-        print(f"[ENGINE ERROR] Supabase no disponible: {str(e)}")
+    # 1. Intentar conectar a Supabase (Seguro, no lanza excepción)
+    supabase = get_supabase()
+    if not supabase:
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        if not url or not key:
+            STATS["last_db_error"] = "Variables de entorno SUPABASE_URL o KEY faltantes."
+        else:
+            STATS["last_db_error"] = "Conexión fallida (verificar logs del contenedor)."
 
-    # 2. Inicializar habilidades (Todas asumen que supabase puede ser None)
+    # 2. Inicializar habilidades
     rag_skill = RAGSkill()
     catalog_skill = CatalogSkill()
     order_skill = OrderSkill()
@@ -69,9 +70,8 @@ try:
     refresh_platform_settings()
     print("[ENGINE] Todos los servicios inicializados correctamente.")
 except Exception as e:
-    # Error crítico en el motor (ej: error en RAGSkill init)
     STATS["total_errors"] += 1
-    STATS["last_db_error"] = f"Fallo crítico motor: {str(e)}"
+    STATS["last_db_error"] = f"Fallo inicialización motor: {str(e)}"
     print(f"[CRITICAL ERROR] Error inicializando servicios: {str(e)}")
 
 @lru_cache(maxsize=100)
@@ -112,12 +112,9 @@ async def health_check():
     
     # Intentar reconectar si se perdió o no se inició
     if not supabase:
-        try:
-            supabase = get_supabase()
+        supabase = get_supabase()
+        if supabase:
             STATS["last_db_error"] = None
-        except Exception as e:
-            supabase = None
-            STATS["last_db_error"] = str(e)
     
     if supabase and not PLATFORM_SETTINGS:
         try:
