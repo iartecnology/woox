@@ -22,5 +22,6 @@ COPY ./app ./app
 # Exponer el puerto de FastAPI
 EXPOSE 8000
 
-# Comando para iniciar con Gunicorn y workers de Uvicorn para mejor rendimiento
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "--bind", "0.0.0.0:8000"]
+# v1.4.3: Reducimos workers a 2 para evitar picos de memoria en el arranque
+# Añadimos un timeout generoso para la carga de modelos de IA
+CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "--bind", "0.0.0.0:8000", "--timeout", "120"]
