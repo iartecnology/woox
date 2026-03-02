@@ -36,7 +36,18 @@ llm_service = None
 
 # Inicializar servicios de forma única y segura
 try:
-    supabase = get_supabase()
+    global supabase, rag_skill, catalog_skill, order_skill, router, llm_service
+    
+    # 1. Intentar conectar a Supabase (Puede lanzar ValueError o ConnectionError)
+    try:
+        supabase = get_supabase()
+        STATS["last_db_error"] = None
+    except Exception as e:
+        supabase = None
+        STATS["last_db_error"] = str(e)
+        print(f"[ENGINE ERROR] Supabase no disponible: {str(e)}")
+
+    # 2. Inicializar habilidades (Todas asumen que supabase puede ser None)
     rag_skill = RAGSkill()
     catalog_skill = CatalogSkill()
     order_skill = OrderSkill()
@@ -45,6 +56,7 @@ try:
     
     def refresh_platform_settings():
         global PLATFORM_SETTINGS
+        if not supabase: return
         try:
             res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
             if res.data:
@@ -52,10 +64,14 @@ try:
                 print("[ENGINE] Configuración global de la plataforma cargada.")
         except Exception as e:
             print(f"[ENGINE ERROR] No se pudo cargar platform_settings: {str(e)}")
+            STATS["last_db_error"] = f"Error settings: {str(e)}"
 
     refresh_platform_settings()
     print("[ENGINE] Todos los servicios inicializados correctamente.")
 except Exception as e:
+    # Error crítico en el motor (ej: error en RAGSkill init)
+    STATS["total_errors"] += 1
+    STATS["last_db_error"] = f"Fallo crítico motor: {str(e)}"
     print(f"[CRITICAL ERROR] Error inicializando servicios: {str(e)}")
 
 @lru_cache(maxsize=100)
@@ -97,13 +113,10 @@ async def health_check():
     # Intentar reconectar si se perdió o no se inició
     if not supabase:
         try:
-            client, err = get_supabase()
-            if client:
-                supabase = client
-                STATS["last_db_error"] = None
-            else:
-                STATS["last_db_error"] = err
+            supabase = get_supabase()
+            STATS["last_db_error"] = None
         except Exception as e:
+            supabase = None
             STATS["last_db_error"] = str(e)
     
     if supabase and not PLATFORM_SETTINGS:
