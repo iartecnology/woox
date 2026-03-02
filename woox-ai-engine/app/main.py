@@ -11,18 +11,16 @@ import time
 import re
 import json
 
-# Inicializar servicios
-rag_skill = RAGSkill()
-catalog_skill = CatalogSkill()
-order_skill = OrderSkill()
-router = IntentRouter()
-llm_service = LLMService()
-
-# Inicializar servicios
-rag_skill = RAGSkill()
-catalog_skill = CatalogSkill()
-router = IntentRouter()
-llm_service = LLMService()
+# Inicializar servicios de forma única y segura
+try:
+    rag_skill = RAGSkill()
+    catalog_skill = CatalogSkill()
+    order_skill = OrderSkill()
+    router = IntentRouter()
+    llm_service = LLMService()
+    print("[ENGINE] Todos los servicios inicializados correctamente.")
+except Exception as e:
+    print(f"[CRITICAL ERROR] Error inicializando servicios: {str(e)}")
 
 app = FastAPI(
     title="Woox AI Engine",
@@ -114,4 +112,4 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", puerto=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
