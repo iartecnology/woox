@@ -91,6 +91,20 @@ class MessageRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def health_check():
+    global supabase, PLATFORM_SETTINGS
+    
+    # Intentar reconectar si se perdió o no se inició
+    if not supabase:
+        supabase = get_supabase()
+    
+    if supabase and not PLATFORM_SETTINGS:
+        try:
+            res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
+            if res.data:
+                PLATFORM_SETTINGS = res.data
+        except:
+            pass
+
     uptime = time.time() - STATS["start_time"]
     uptime_str = str(datetime.fromtimestamp(STATS["start_time"]))
     
