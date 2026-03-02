@@ -7,7 +7,7 @@ class RAGSkill:
         self.supabase = get_supabase()
         self.llm = LLMService()
 
-    async def search_context(self, merchant_id: str, query: str, limit: int = 3) -> str:
+    async def search_context(self, merchant_id: str, query: str, limit: int = 3, config: Optional[dict] = None) -> str:
         """
         Realiza búsqueda semántica en Supabase.
         1. Genera embedding de la query.
@@ -15,7 +15,7 @@ class RAGSkill:
         """
         try:
             # 1. Obtener Vector
-            embedding = await self.llm.get_embedding(query)
+            embedding = await self.llm.get_embedding(query, config)
             
             # 2. RPC Call (Búsqueda vectorial)
             # Nota: Usamos la función SQL 'match_semantic_context' que creamos en el plan
