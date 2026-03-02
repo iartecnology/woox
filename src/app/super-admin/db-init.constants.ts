@@ -233,6 +233,8 @@ CREATE TABLE IF NOT EXISTS platform_settings (
     embed_model TEXT DEFAULT 'text-embedding-004',
     embed_api_key TEXT,
     support_ai_enabled BOOLEAN DEFAULT true,
+    evolution_api_url TEXT,
+    evolution_api_key TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

@@ -1,6 +1,6 @@
 <div class="reservation-page">
     <div class="sidebar">
-        <div class="brand">Woox Reservas</div>
+        <div class="brand">{{ merchantName }}</div>
         <nav>
             <a routerLink="/crm">← Volver al CRM</a>
             <a href="javascript:void(0)" [class.active]="activeTab === 'calendar'" (click)="changeTab('calendar')">📅
@@ -15,88 +15,252 @@
     </div>
 
     <div class="main-content">
-        <header class="topbar">
-            <h2>Gestión de Citas (Vista de Recepción)</h2>
-            <div class="actions">
-                <button class="btn btn-outline" (click)="changeView('month')"
-                    [class.active]="currentView === 'month'">Mes</button>
-                <button class="btn btn-outline" (click)="changeView('week')"
-                    [class.active]="currentView === 'week'">Semana</button>
-                <button class="btn btn-primary" (click)="changeView('day')"
-                    [class.active]="currentView === 'day'">Día</button>
-            </div>
-        </header>
-
-        <!-- KPIs Dashboard -->
-        <div class="kpi-grid">
-            <div class="kpi-card">
-                <h3>Citas Hoy</h3>
-                <div class="value">{{ kpis.todayTotal }}</div>
-                <div class="subtitle">{{ kpis.todayPending }} Pendientes</div>
-            </div>
-            <div class="kpi-card">
-                <h3>Tasa de Asistencia</h3>
-                <div class="value">{{ kpis.attendanceRate }}%</div>
-                <div class="subtitle">Últimos 7 días</div>
-            </div>
-            <div class="kpi-card">
-                <h3>Top Servicio</h3>
-                <div class="value-text">{{ kpis.topService }}</div>
-            </div>
-            <div class="kpi-card">
-                <h3>Agendadas por IA</h3>
-                <div class="value">{{ kpis.aiBookedRate }}%</div>
-                <div class="subtitle">Automatización nivel Woox</div>
-            </div>
-        </div>
-
-        <!-- Vista Calendario Día (Super Dashboard) -->
-        <div class="calendar-container" *ngIf="currentView === 'day'">
-            <div class="calendar-header-nav">
-                <button class="btn btn-icon" (click)="navigateDate(-1)">←</button>
-                <h3>{{ currentDate | date:'fullDate' }}</h3>
-                <button class="btn btn-icon" (click)="navigateDate(1)">→</button>
-            </div>
-
-            <div class="calendar-grid">
-                <!-- Columna de Horas -->
-                <div class="time-column">
-                    <div class="header-cell">Hora</div>
-                    <div class="time-cell" *ngFor="let time of timeSlots">
-                        {{ time }}
-                    </div>
+        <!-- Pestaña: Calendario -->
+        <div *ngIf="activeTab === 'calendar'">
+            <header class="topbar">
+                <h2>{{ merchantName }} - Agenda</h2>
+                <div class="actions">
+                    <button class="btn btn-primary" (click)="openManualBooking()">+ Agendar Cita</button>
+                    <button class="btn btn-outline" (click)="changeView('month')"
+                        [class.active]="currentView === 'month'">Mes</button>
+                    <button class="btn btn-outline" (click)="changeView('week')"
+                        [class.active]="currentView === 'week'">Semana</button>
+                    <button class="btn btn-outline" (click)="changeView('day')"
+                        [class.active]="currentView === 'day'">Día</button>
+                    <button class="btn btn-primary" (click)="changeView('list')"
+                        [class.active]="currentView === 'list'">Lista</button>
                 </div>
+            </header>
 
-                <!-- Columnas por Recurso (Ej: Doctores) -->
-                <div class="resource-column" *ngFor="let res of resources">
-                    <div class="header-cell">{{ res.name }}</div>
+            <!-- KPIs Dashboard -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <h3>Citas Hoy</h3>
+                    <div class="value">{{ kpis.todayTotal }}</div>
+                    <div class="subtitle">{{ kpis.todayPending }} Pendientes</div>
+                </div>
+                <div class="kpi-card">
+                    <h3>Tasa de Asistencia</h3>
+                    <div class="value">{{ kpis.attendanceRate }}%</div>
+                    <div class="subtitle">Últimos 7 días</div>
+                </div>
+                <div class="kpi-card">
+                    <h3>Top Servicio</h3>
+                    <div class="value-text">{{ kpis.topService }}</div>
+                </div>
+                <div class="kpi-card">
+                    <h3>Agendadas por IA</h3>
+                    <div class="value">{{ kpis.aiBookedRate }}%</div>
+                    <div class="subtitle">Automatización nivel Woox</div>
+                </div>
+            </div>
 
-                    <div class="slot-cell" *ngFor="let time of timeSlots" (dblclick)="openBookingDetails(null)">
-                        <ng-container *ngFor="let booking of getBookingsForSlow(res.id, time)">
-                            <div class="booking-card" [ngClass]="getStatusClass(booking.status)"
-                                (click)="openBookingDetails(booking)">
-                                <strong>{{ booking.customerName }}</strong>
-                                <span>{{ booking.service }}</span>
-                            </div>
+            <!-- Navegación de Fecha -->
+            <div class="calendar-container">
+                <div class="calendar-header-nav">
+                    <button class="btn btn-icon" (click)="navigateDate(-1)">←</button>
+                    <h3>
+                        <ng-container [ngSwitch]="currentView">
+                            <span *ngSwitchCase="'day'">{{ currentDate | date:'fullDate' }}</span>
+                            <span *ngSwitchCase="'week'">{{ weekDays[0] | date:'MMM d' }} - {{ weekDays[6] | date:'MMM
+                                d, y' }}</span>
+                            <span *ngSwitchCase="'month'">{{ currentDate | date:'MMMM y' }}</span>
                         </ng-container>
+                    </h3>
+                    <button class="btn btn-icon" (click)="navigateDate(1)">→</button>
+                </div>
+
+                <!-- Vista Calendario Día (Super Dashboard) -->
+                <div *ngIf="currentView === 'day'">
+
+                    <div class="calendar-grid">
+                        <!-- Columna de Horas -->
+                        <div class="time-column">
+                            <div class="header-cell">Hora</div>
+                            <div class="time-cell" *ngFor="let time of timeSlots">
+                                {{ time }}
+                            </div>
+                        </div>
+
+                        <!-- Columnas por Recurso (Ej: Doctores) -->
+                        <div class="resource-column" *ngFor="let res of resources">
+                            <div class="header-cell">{{ res.name }}</div>
+
+                            <div class="slot-cell" *ngFor="let time of timeSlots" (dblclick)="openBookingDetails(null)">
+                                <ng-container *ngFor="let booking of getBookingsForSlow(res.id, time)">
+                                    <div class="booking-card" [ngClass]="getStatusClass(booking.status)"
+                                        (click)="openBookingDetails(booking)">
+                                        <strong>{{ booking.customerName }}</strong>
+                                        <span>{{ booking.service }}</span>
+                                    </div>
+                                </ng-container>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista Semana -->
+                <div *ngIf="currentView === 'week'">
+                    <div class="calendar-grid">
+                        <div class="time-column">
+                            <div class="header-cell">Día</div>
+                            <div class="time-cell" *ngFor="let day of weekDays" style="height: 100px;">
+                                {{ day | date:'EEE d' }}
+                            </div>
+                        </div>
+                        <div class="resource-column" *ngFor="let res of resources">
+                            <div class="header-cell">{{ res.name }}</div>
+                            <div class="slot-cell" *ngFor="let day of weekDays" style="height: 100px;">
+                                <!-- Aquí se mostrarían las citas de la semana resumidas -->
+                                <div style="font-size: 11px; color: #888; text-align: center; margin-top: 30px;">
+                                    Ver citas diarias
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista Mes -->
+                <div *ngIf="currentView === 'month'">
+                    <div class="month-grid">
+                        <div class="month-day-header" *ngFor="let d of ['Dom','Lun','Mar','Mie','Jue','Vie','Sab']">
+                            {{d}}
+                        </div>
+                        <div class="month-day" *ngFor="let m of monthDays" [class.other-month]="!m.isCurrentMonth"
+                            [class.today]="(m.date | date:'shortDate') === (today | date:'shortDate')">
+                            <span class="day-number">{{ m.date | date:'d' }}</span>
+                            <div class="day-events">
+                                <!-- Placeholders de eventos -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista Lista Cronológica (Booking List) -->
+                <div *ngIf="currentView === 'list'">
+                    <div
+                        style="background:white; padding:15px; border-radius:12px; margin-bottom:15px; display:flex; gap:10px; align-items:center;">
+                        <span style="font-size:20px;">🔍</span>
+                        <input type="text" [(ngModel)]="bookingSearchTerm"
+                            placeholder="Buscar por cliente o servicio..."
+                            style="border:none; outline:none; font-size:16px; width:100%;">
+                    </div>
+
+                    <div
+                        style="background:white; border-radius:12px; overflow:hidden; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+                        <table style="width:100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background:#F8F9FA; text-align:left; border-bottom:1px solid #DFE3E8;">
+                                    <th style="padding:15px; font-size:13px;">Hora</th>
+                                    <th style="padding:15px; font-size:13px;">Cliente</th>
+                                    <th style="padding:15px; font-size:13px;">Servicio</th>
+                                    <th style="padding:15px; font-size:13px;">Estado</th>
+                                    <th style="padding:15px; font-size:13px; text-align:right;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr *ngFor="let b of filteredBookings" style="border-bottom:1px solid #F1F3F4;">
+                                    <td style="padding:15px;"><strong>{{ b.time }}</strong></td>
+                                    <td style="padding:15px;">{{ b.customerName }}</td>
+                                    <td style="padding:15px;">{{ b.service }}</td>
+                                    <td style="padding:15px;">
+                                        <span class="status-badge" [ngClass]="getStatusClass(b.status)"
+                                            style="font-size:11px; padding:4px 8px;">
+                                            {{ getStatusText(b.status) }}
+                                        </span>
+                                    </td>
+                                    <td style="padding:15px; text-align:right;">
+                                        <button class="btn btn-outline btn-small" (click)="openBookingDetails(b)">Ver
+                                            Detalles</button>
+                                    </td>
+                                </tr>
+                                <tr *ngIf="filteredBookings.length === 0">
+                                    <td colspan="5" style="padding:40px; text-align:center; color:#888;">No se
+                                        encontraron citas para este día o búsqueda.</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Vista Gestión de Recursos -->
         <div class="resources-container" *ngIf="activeTab === 'resources'">
             <div class="resources-header">
-                <h3>Tus Recursos Reservables</h3>
-                <button class="btn btn-primary" (click)="openResourceCreator()">+ Crear Recurso</button>
+                <div>
+                    <h3>Mis Recursos y Espacios</h3>
+                    <p style="color:#666; font-size:14px;">Define lo que tus clientes pueden reservar (Mesas,
+                        Habitación, Profesionales).</p>
+                    <div
+                        style="margin-top:10px; background:#F1F3F4; padding:8px 15px; border-radius:8px; display:flex; align-items:center; gap:10px; max-width:400px;">
+                        <span>🔍</span>
+                        <input type="text" [(ngModel)]="searchTerm" placeholder="Buscar recurso..."
+                            style="background:transparent; border:none; outline:none; width:100%; font-size:14px;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="btn btn-outline" (click)="showWizard = true">✨ Plantillas</button>
+                    <div class="layout-toggle">
+                        <button class="btn btn-icon" [class.active]="resourceLayout === 'grid'"
+                            (click)="resourceLayout = 'grid'" title="Vista Cuadrícula">🔲</button>
+                        <button class="btn btn-icon" [class.active]="resourceLayout === 'list'"
+                            (click)="resourceLayout = 'list'" title="Vista Lista">≡</button>
+                    </div>
+                    <button class="btn btn-primary" (click)="openResourceCreator()">+ Crear Recurso</button>
+                </div>
             </div>
-            <p style="color: #666; margin-top:0;">Define qué es exactamente lo que alquilas o agendas (Personas, Mesas,
+
+            <!-- Wizard Modal -->
+            <div class="backdrop" *ngIf="showWizard" (click)="showWizard = false"></div>
+            <div class="wizard-modal" *ngIf="showWizard">
+                <h2>¿Qué tipo de negocio tienes?</h2>
+                <p>Selecciona una plantilla para configurar tus recursos automáticamente.</p>
+                <div class="template-grid">
+                    <div class="template-card" (click)="applyTemplate('restaurant')">
+                        <div class="icon">🍽️</div>
+                        <h4>Restaurante</h4>
+                        <p>Crea mesas con capacidades (Pax) y zonas diferenciadas.</p>
+                    </div>
+                    <div class="template-card" (click)="applyTemplate('hotel')">
+                        <div class="icon">🏨</div>
+                        <h4>Hotel</h4>
+                        <p>Gestiona tipos de habitación (Estándar, Suite) por noche.</p>
+                    </div>
+                    <div class="template-card" (click)="applyTemplate('airbnb')">
+                        <div class="icon">🏡</div>
+                        <h4>Airbnb / Renta</h4>
+                        <p>Alquila propiedades completas (Cabañas, Apartamentos).</p>
+                    </div>
+                    <div class="template-card" (click)="applyTemplate('beauty')">
+                        <div class="icon">💄</div>
+                        <h4>Salud / Belleza</h4>
+                        <p>Agrega profesionales con servicios y duraciones fijas.</p>
+                    </div>
+                    <div class="template-card" (click)="applyTemplate('coworking')">
+                        <div class="icon">💻</div>
+                        <h4>Coworking</h4>
+                        <p>Escritorios (Hot Desks), Salas de juntas y oficinas.</p>
+                    </div>
+                    <div class="template-card" (click)="applyTemplate('sports')">
+                        <div class="icon">🎾</div>
+                        <h4>Canchas / Deporte</h4>
+                        <p>Alquiler de canchas de pádel, fútbol o tenis por hora.</p>
+                    </div>
+                    <div class="template-card" (click)="applyTemplate('medical')">
+                        <div class="icon">🩺</div>
+                        <h4>Salud / Médico</h4>
+                        <p>Consultorio médico con citas de duración específica.</p>
+                    </div>
+                </div>
+            </div>
+            <p style="color: #666; margin-top:0;">Define qué es exactamente lo que alquilas o agendas (Personas,
+                Mesas,
                 Cabañas,
                 etc.)</p>
 
-            <div class="resource-cards-grid">
-                <!-- Tarjeta de Recurso -->
-                <div class="resource-card" *ngFor="let res of resources">
+            <!-- Vista Cuadrícula (Cards) -->
+            <div class="resource-cards-grid" *ngIf="resourceLayout === 'grid' && filteredResources.length > 0">
+                <div class="resource-card" *ngFor="let res of filteredResources">
                     <div class="rc-header">
                         <h4>{{ res.name }}</h4>
                         <span class="badge" [ngClass]="res.type">{{ res.type }}</span>
@@ -105,17 +269,51 @@
                         <p><strong>Tipo:</strong> {{ res.type }}</p>
                     </div>
                     <div class="rc-actions">
-                        <button class="btn btn-outline btn-small">Editar Horarios</button>
-                        <button class="btn btn-outline btn-small">Editar</button>
+                        <button class="btn btn-outline btn-small" (click)="openResourceCreator(res)">Editar</button>
+                        <button class="btn btn-outline btn-small" style="color:red;"
+                            (click)="deleteResource(res.id)">Eliminar</button>
                     </div>
                 </div>
+            </div>
 
-                <!-- Placeholder si no hay recursos -->
-                <div class="empty-state" *ngIf="resources.length === 0">
-                    <div class="es-icon">🏢</div>
-                    <h4>No tienes recursos aún</h4>
-                    <p>Empieza creando el primer servicio o espacio disponible para reservas.</p>
-                </div>
+            <!-- Vista Lista (Table) -->
+            <div class="resource-list-view" *ngIf="resourceLayout === 'list' && filteredResources.length > 0">
+                <table class="woox-table"
+                    style="width:100%; background:white; border-radius:12px; overflow:hidden; border-collapse: collapse; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                    <thead>
+                        <tr style="background:#F8F9FA; text-align:left; border-bottom:1px solid #DFE3E8;">
+                            <th style="padding:15px; font-size:13px; color:#666;">Recurso</th>
+                            <th style="padding:15px; font-size:13px; color:#666;">Tipo</th>
+                            <th style="padding:15px; font-size:13px; color:#666;">Capacidad</th>
+                            <th style="padding:15px; font-size:13px; color:#666;">Precio Base</th>
+                            <th style="padding:15px; text-align:right; font-size:13px; color:#666;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let res of filteredResources" style="border-bottom:1px solid #F1F3F4;">
+                            <td style="padding:15px;">
+                                <strong style="color:#111;">{{ res.name }}</strong>
+                            </td>
+                            <td style="padding:15px;"><span class="badge" [ngClass]="res.type">{{ res.type }}</span>
+                            </td>
+                            <td style="padding:15px; color:#666;">{{ res.capacity }} pax</td>
+                            <td style="padding:15px; color:#666;">${{ res.base_price }}</td>
+                            <td style="padding:15px; text-align:right;">
+                                <button class="btn btn-outline btn-small"
+                                    (click)="openResourceCreator(res)">Editar</button>
+                                <button class="btn btn-outline btn-small" style="color:red; margin-left:8px;"
+                                    (click)="deleteResource(res.id)">Eliminar</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Placeholder si no hay recursos -->
+            <div class="empty-state" *ngIf="filteredResources.length === 0">
+                <div class="es-icon">🏢</div>
+                <h4>No se encontraron recursos</h4>
+                <p>Intenta con otra búsqueda o crea uno nuevo.</p>
             </div>
         </div>
 
@@ -125,7 +323,8 @@
                 <h3>Bloqueos de Disponibilidad</h3>
                 <button class="btn btn-primary" (click)="openBlockCreator()">+ Agregar Bloqueo</button>
             </div>
-            <p style="color: #666; margin-top:0;">Define fechas u horarios donde no se podrán recibir reservas (Días
+            <p style="color: #666; margin-top:0;">Define fechas u horarios donde no se podrán recibir reservas
+                (Días
                 festivos, Vacaciones, Mantenimiento).</p>
 
             <div
@@ -142,7 +341,8 @@
                     </thead>
                     <tbody>
                         <tr *ngFor="let ex of exceptions" style="border-bottom:1px solid #F1F3F4;">
-                            <td style="padding:12px;">{{ ex.reservable_resources?.name || 'Toda la Empresa' }}</td>
+                            <td style="padding:12px;">{{ ex.reservable_resources?.name || 'Toda la Empresa' }}
+                            </td>
                             <td style="padding:12px;">{{ ex.start_datetime | date:'MMM d, h:mm a' }}</td>
                             <td style="padding:12px;">{{ ex.end_datetime | date:'MMM d, h:mm a' }}</td>
                             <td style="padding:12px;">{{ ex.reason }}</td>
@@ -160,147 +360,324 @@
                 </table>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- Modal Crear Bloqueo -->
-<div class="backdrop" *ngIf="showBlockModal" (click)="closeBlockCreator()"></div>
-<div class="modal offcanvas" [class.open]="showBlockModal" style="width: 500px;">
-    <div class="offcanvas-header">
-        <h3>{{ isEditingBlock ? 'Editar' : 'Nuevo' }} Bloqueo</h3>
-        <button class="close-btn" (click)="closeBlockCreator()">x</button>
-    </div>
-    <div class="offcanvas-body">
-        <div class="form-group">
-            <label>¿Qué quieres bloquear?</label>
-            <select [(ngModel)]="activeBlock.resource_id" class="form-control"
-                style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;">
-                <option [ngValue]="null">🌍 Toda la Empresa (Global)</option>
-                <option *ngFor="let res of resources" [ngValue]="res.id">👉 {{ res.name }}</option>
-            </select>
-        </div>
-
-        <div style="display:flex; gap:15px; margin-top:20px;">
-            <div class="form-group" style="flex:1;">
-                <label>Desde</label>
-                <input type="datetime-local" [(ngModel)]="activeBlock.start_datetime" class="form-control"
-                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;">
+        <!-- Vista Reportes -->
+        <div class="reports-container" *ngIf="activeTab === 'reports'">
+            <div class="reports-header" style="margin-bottom: 24px;">
+                <h3>Análisis y Reportes</h3>
+                <p style="color: #666;">Visualiza el rendimiento de tus recursos y la eficiencia de la IA.</p>
             </div>
-            <div class="form-group" style="flex:1;">
-                <label>Hasta</label>
-                <input type="datetime-local" [(ngModel)]="activeBlock.end_datetime" class="form-control"
-                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;">
+
+            <div class="kpi-grid">
+                <div class="kpi-card" style="border-top: 4px solid #0066FF;">
+                    <h3>Ocupación Promedio</h3>
+                    <div class="value">78%</div>
+                    <div class="subtitle">+5% vs mes anterior</div>
+                </div>
+                <div class="kpi-card" style="border-top: 4px solid #137333;">
+                    <h3>Ingresos Estimados</h3>
+                    <div class="value">$2.4M</div>
+                    <div class="subtitle">Este mes</div>
+                </div>
+                <div class="kpi-card" style="border-top: 4px solid #F29900;">
+                    <h3>Ahorro de Tiempo IA</h3>
+                    <div class="value">42hs</div>
+                    <div class="subtitle">En gestión de citas</div>
+                </div>
+                <div class="kpi-card" style="border-top: 4px solid #D93025;">
+                    <h3>Cancelaciones</h3>
+                    <div class="value">3.2%</div>
+                    <div class="subtitle">Tasa muy baja 🔥</div>
+                </div>
             </div>
-        </div>
 
-        <div class="form-group" style="margin-top:20px;">
-            <label>Motivo</label>
-            <input type="text" [(ngModel)]="activeBlock.reason" class="form-control"
-                style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;"
-                placeholder="Ej: Cerrado por festivo, Almuerzo, etc.">
-        </div>
-
-        <div style="margin-top: auto; padding-top:40px;">
-            <button class="btn btn-primary" style="width: 100%; padding: 14px; font-size:16px; border-radius:10px;"
-                (click)="saveBlock()">Guardar Bloqueo</button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Crear/Editar Recurso -->
-<div class="backdrop" *ngIf="showResourceModal" (click)="closeResourceCreator()"></div>
-<div class="modal offcanvas" [class.open]="showResourceModal" style="width: 500px;">
-    <div class="offcanvas-header">
-        <h3>{{ isEditingResource ? 'Editar' : 'Nuevo' }} Recurso</h3>
-        <button class="close-btn" (click)="closeResourceCreator()">x</button>
-    </div>
-    <div class="offcanvas-body">
-        <div class="form-group">
-            <label>Nombre del Recurso</label>
-            <input type="text" [(ngModel)]="activeResource.name" class="form-control"
-                placeholder="Ej: Dr. Pérez, Mesa 4, Estándar Double">
-        </div>
-        <div class="form-group">
-            <label>Tipo (Estructura de la Reserva)</label>
-            <select [(ngModel)]="activeResource.type" class="form-control">
-                <option value="service">💆 Servicio/Profesional (Duración Fija - Ej: Corte 45min)</option>
-                <option value="table">🍽️ Mesa/Espacio Físico (Capacidad múltiple)</option>
-                <option value="property">🏘️ Propiedad Única (Ej: Airbnb Cabaña VIP)</option>
-                <option value="room_type">🏨 Tipo de Habitación (Inventario múltiple - Ej: 10 Suites)</option>
-            </select>
-            <small class="text-muted">Esto le enseña a la Inteligencia Artificial de Woox cómo negociar la cita.</small>
-        </div>
-
-        <div class="form-row" *ngIf="activeResource.type === 'service'">
-            <div class="form-group half">
-                <label>Duración (Minutos)</label>
-                <input type="number" [(ngModel)]="activeResource.duration_minutes" class="form-control">
-            </div>
-            <div class="form-group half">
-                <label>Colchón Limpieza (Min)</label>
-                <input type="number" [(ngModel)]="activeResource.buffer_time_minutes" class="form-control">
+            <div
+                style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top:20px;">
+                <h4>Actividad Reciente</h4>
+                <table style="width:100%; border-collapse: collapse; margin-top:15px;">
+                    <thead>
+                        <tr style="background:#F8F9FA; text-align:left; border-bottom:1px solid #DFE3E8;">
+                            <th style="padding:12px;">Fecha</th>
+                            <th style="padding:12px;">Canal</th>
+                            <th style="padding:12px;">Acción</th>
+                            <th style="padding:12px;">Resultado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom:1px solid #F1F3F4;">
+                            <td style="padding:12px;">Hace 5 min</td>
+                            <td style="padding:12px;">WhatsApp (IA)</td>
+                            <td style="padding:12px;">Consulta disponibilidad</td>
+                            <td style="padding:12px;"><span class="badge confirmed"
+                                    style="background:#E6F4EA; color:#137333; padding:4px 8px; border-radius:4px; font-size:11px;">Confirmada</span>
+                            </td>
+                        </tr>
+                        <tr style="border-bottom:1px solid #F1F3F4;">
+                            <td style="padding:12px;">Hace 12 min</td>
+                            <td style="padding:12px;">Web Widget</td>
+                            <td style="padding:12px;">Nueva Reserva</td>
+                            <td style="padding:12px;"><span class="badge pending"
+                                    style="background:#FEF7E0; color:#B06000; padding:4px 8px; border-radius:4px; font-size:11px;">Pendiente</span>
+                            </td>
+                        </tr>
+                        <tr style="border-bottom:1px solid #F1F3F4;">
+                            <td style="padding:12px;">Hace 1 hora</td>
+                            <td style="padding:12px;">Manual (Admin)</td>
+                            <td style="padding:12px;">Bloqueo Recurso</td>
+                            <td style="padding:12px;"><span class="badge"
+                                    style="background:#F1F3F4; color:#5F6368; padding:4px 8px; border-radius:4px; font-size:11px;">Bloqueado</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
-
-        <div class="form-row" *ngIf="activeResource.type !== 'service'">
-            <div class="form-group half">
-                <label>Capacidad (Personas)</label>
-                <input type="number" [(ngModel)]="activeResource.capacity" class="form-control" placeholder="Ej: 4">
+        <!-- Modal Crear Bloqueo -->
+        <div class="backdrop" *ngIf="showBlockModal" (click)="closeBlockCreator()"></div>
+        <div class="modal offcanvas" [class.open]="showBlockModal">
+            <div class="offcanvas-header">
+                <h3>{{ isEditingBlock ? 'Editar' : 'Nuevo' }} Bloqueo</h3>
+                <button class="close-btn" (click)="closeBlockCreator()">x</button>
             </div>
-        </div>
+            <div class="offcanvas-body">
+                <div class="form-group">
+                    <label>¿Qué quieres bloquear?</label>
+                    <select [(ngModel)]="activeBlock.resource_id" class="form-control"
+                        style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;">
+                        <option [ngValue]="null">🌍 Toda la Empresa (Global)</option>
+                        <option *ngFor="let res of resources" [ngValue]="res.id">👉 {{ res.name }}</option>
+                    </select>
+                </div>
 
-        <div class="form-group">
-            <label>Precio Base</label>
-            <input type="number" [(ngModel)]="activeResource.base_price" class="form-control" placeholder="0">
-        </div>
+                <div style="display:flex; gap:15px; margin-top:20px;">
+                    <div class="form-group" style="flex:1;">
+                        <label>Desde</label>
+                        <input type="datetime-local" [(ngModel)]="activeBlock.start_datetime" class="form-control"
+                            style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;">
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label>Hasta</label>
+                        <input type="datetime-local" [(ngModel)]="activeBlock.end_datetime" class="form-control"
+                            style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;">
+                    </div>
+                </div>
 
-        <div class="form-group mt-auto">
-            <button class="btn btn-primary w-100" style="padding: 12px; font-size:16px;"
-                (click)="saveResource()">Guardar Recurso</button>
-        </div>
-    </div>
-</div>
+                <div class="form-group" style="margin-top:20px;">
+                    <label>Motivo</label>
+                    <input type="text" [(ngModel)]="activeBlock.reason" class="form-control"
+                        style="width:100%; padding:10px; border-radius:8px; border:1px solid #DFE3E8;"
+                        placeholder="Ej: Cerrado por festivo, Almuerzo, etc.">
+                </div>
 
-<!-- Modal / Offcanvas Details -->
-<div class="backdrop" *ngIf="selectedBooking" (click)="closeDetails()"></div>
-<div class="offcanvas" [class.open]="selectedBooking !== null">
-    <div class="offcanvas-header">
-        <h3>Detalles de la Cita</h3>
-        <button class="close-btn" (click)="closeDetails()">x</button>
-    </div>
-
-    <div class="offcanvas-body" *ngIf="selectedBooking">
-        <div class="customer-info">
-            <div class="avatar">{{ selectedBooking.customerName.charAt(0) }}</div>
-            <div class="info">
-                <h4>{{ selectedBooking.customerName }}</h4>
-                <p>Tel: +57 300 000 0000</p>
-                <p>Historial: 3era Cita</p>
+                <div style="margin-top: auto; padding-top:40px;">
+                    <button class="btn btn-primary"
+                        style="width: 100%; padding: 14px; font-size:16px; border-radius:10px;"
+                        (click)="saveBlock()">Guardar Bloqueo</button>
+                </div>
             </div>
         </div>
 
-        <div class="status-badge" [ngClass]="getStatusClass(selectedBooking.status)">
-            {{ getStatusText(selectedBooking.status) }}
+        <!-- Modal Crear/Editar Recurso -->
+        <div class="backdrop" *ngIf="showResourceModal" (click)="closeResourceCreator()"></div>
+        <div class="modal offcanvas" [class.open]="showResourceModal">
+            <div class="offcanvas-header">
+                <h3>{{ isEditingResource ? 'Editar' : 'Nuevo' }} Recurso</h3>
+                <button class="close-btn" (click)="closeResourceCreator()">x</button>
+            </div>
+            <div class="offcanvas-body">
+                <div class="form-group">
+                    <label>Nombre del Recurso</label>
+                    <input type="text" [(ngModel)]="activeResource.name" class="form-control"
+                        placeholder="Ej: Dr. Pérez, Mesa 4, Estándar Double">
+                </div>
+                <div class="form-group">
+                    <label>Tipo (Estructura de la Reserva)</label>
+                    <select [(ngModel)]="activeResource.type" class="form-control">
+                        <option value="service">💆 Servicio/Profesional (Duración Fija - Ej: Corte 45min)</option>
+                        <option value="table">🍽️ Mesa/Espacio Físico (Capacidad múltiple)</option>
+                        <option value="property">🏘️ Propiedad Única (Ej: Airbnb Cabaña VIP)</option>
+                        <option value="room_type">🏨 Tipo de Habitación (Inventario múltiple - Ej: 10 Suites)</option>
+                    </select>
+                    <small class="text-muted">Esto le enseña a la Inteligencia Artificial de Woox cómo negociar la
+                        cita.</small>
+                </div>
+
+                <div class="form-row" *ngIf="activeResource.type === 'service'">
+                    <div class="form-group half">
+                        <label>Duración (Minutos)</label>
+                        <input type="number" [(ngModel)]="activeResource.duration_minutes" class="form-control">
+                    </div>
+                    <div class="form-group half">
+                        <label>Colchón Limpieza (Min)</label>
+                        <input type="number" [(ngModel)]="activeResource.buffer_time_minutes" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-row" *ngIf="activeResource.type !== 'service'">
+                    <div class="form-group half">
+                        <label>Capacidad (Personas)</label>
+                        <input type="number" [(ngModel)]="activeResource.capacity" class="form-control"
+                            placeholder="Ej: 4">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        {{ activeResource.type === 'room_type' || activeResource.type === 'property' ? 'Precio por
+                        Noche' : 'Precio Base' }}
+                    </label>
+                    <input type="number" [(ngModel)]="activeResource.base_price" class="form-control" placeholder="0">
+                </div>
+
+                <!-- LISTA DE SERVICIOS (SUB-SERVICIOS) -->
+                <div class="services-list-section"
+                    style="margin-top: 24px; padding: 15px; background: #F8F9FA; border-radius: 12px; border: 1px dashed #DFE3E8;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h5 style="margin:0; font-size:14px; color:#444;">📋 Servicios Disponibles</h5>
+                        <button class="btn btn-outline btn-small" (click)="addServiceToResource()"
+                            style="font-size:11px;">+ Agregar Servicio</button>
+                    </div>
+
+                    <div *ngFor="let s of activeResource.services; let i = index"
+                        style="background:white; padding:12px; border-radius:8px; margin-bottom:10px; border:1px solid #EEE; position:relative;">
+                        <button (click)="removeServiceFromResource(i)"
+                            style="position:absolute; top:5px; right:5px; border:none; background:transparent; color:#D93025; cursor:pointer; font-size:12px;">✕</button>
+
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <label style="font-size:11px;">Servicio (Ej: Limpieza, Extracción)</label>
+                            <input type="text" [(ngModel)]="s.name" class="form-control"
+                                style="height:32px; font-size:12px;">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half" style="margin-bottom:0;">
+                                <label style="font-size:11px;">Minutos</label>
+                                <input type="number" [(ngModel)]="s.duration_minutes" class="form-control"
+                                    style="height:32px; font-size:12px;">
+                            </div>
+                            <div class="form-group half" style="margin-bottom:0;">
+                                <label style="font-size:11px;">Precio</label>
+                                <input type="number" [(ngModel)]="s.price" class="form-control"
+                                    style="height:32px; font-size:12px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div *ngIf="activeResource.services?.length === 0"
+                        style="text-align:center; padding:10px; color:#888; font-size:12px;">
+                        Define servicios personalizados para este profesional.
+                    </div>
+                </div>
+
+                <div class="form-group mt-auto">
+                    <button class="btn btn-primary w-100" style="padding: 12px; font-size:16px;"
+                        (click)="saveResource()">
+                        Guardar Recurso
+                    </button>
+                </div>
+            </div>
         </div>
 
-        <div class="service-details">
-            <p><strong>Servicio:</strong> {{ selectedBooking.service }}</p>
-            <p><strong>Hora:</strong> {{ selectedBooking.time }} ({{ selectedBooking.durationMinutes }} min)</p>
+        <!-- Modal / Offcanvas Details -->
+        <div class="backdrop" *ngIf="selectedBooking" (click)="closeDetails()"></div>
+        <div class="offcanvas" [class.open]="selectedBooking !== null">
+            <div class="offcanvas-header">
+                <h3>Detalles de la Cita</h3>
+                <button class="close-btn" (click)="closeDetails()">x</button>
+            </div>
+
+            <div class="offcanvas-body" *ngIf="selectedBooking">
+                <div class="customer-info">
+                    <div class="avatar">{{ selectedBooking.customerName.charAt(0) }}</div>
+                    <div class="info">
+                        <h4>{{ selectedBooking.customerName }}</h4>
+                        <p>Tel: +57 300 000 0000</p>
+                        <p>Historial: 3era Cita</p>
+                    </div>
+                </div>
+
+                <div class="status-badge" [ngClass]="getStatusClass(selectedBooking.status)">
+                    {{ getStatusText(selectedBooking.status) }}
+                </div>
+
+                <div class="service-details">
+                    <p><strong>Servicio:</strong> {{ selectedBooking.service }}</p>
+                    <p><strong>Hora:</strong> {{ selectedBooking.time }} ({{ selectedBooking.durationMinutes }} min)</p>
+                </div>
+
+                <!-- Chat integration preview -->
+                <div class="chat-preview">
+                    <h5>🤖 Historial de IA (WhatsApp)</h5>
+                    <div class="chat-bubble user">Necesito cita para mañana</div>
+                    <div class="chat-bubble ai">¡Tengo disponibilidad a las {{ selectedBooking.time }}!</div>
+                    <div class="chat-bubble user">Dale, a esa hora perfecto.</div>
+                    <div class="chat-bubble ai">¡Reserva confirmada!</div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-outline">Reprogramar</button>
+                    <button class="btn btn-danger">Cancelar (Liberar)</button>
+                    <button class="btn btn-warning">No Asistió</button>
+                </div>
+            </div>
         </div>
 
-        <!-- Chat integration preview -->
-        <div class="chat-preview">
-            <h5>🤖 Historial de IA (WhatsApp)</h5>
-            <div class="chat-bubble user">Necesito cita para mañana</div>
-            <div class="chat-bubble ai">¡Tengo disponibilidad a las {{ selectedBooking.time }}!</div>
-            <div class="chat-bubble user">Dale, a esa hora perfecto.</div>
-            <div class="chat-bubble ai">¡Reserva confirmada!</div>
-        </div>
+        <!-- Modal Agendar Cita Manual -->
+        <div class="backdrop" *ngIf="showManualBookingModal" (click)="closeManualBooking()"></div>
+        <div class="modal offcanvas" [class.open]="showManualBookingModal">
+            <div class="offcanvas-header">
+                <h3>Agendar Nueva Cita</h3>
+                <button class="close-btn" (click)="closeManualBooking()">x</button>
+            </div>
+            <div class="offcanvas-body">
+                <div class="form-group">
+                    <label>Nombre del Cliente</label>
+                    <input type="text" [(ngModel)]="activeManualBooking.customer_name" class="form-control"
+                        placeholder="Ej: Juan Pérez">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="text" [(ngModel)]="activeManualBooking.customer_phone" class="form-control"
+                        placeholder="Ej: +57 300 123 4567">
+                </div>
+                <div class="form-group">
+                    <label>Recurso / Especialista</label>
+                    <select [(ngModel)]="activeManualBooking.resource_id" (change)="onManualResourceChange()"
+                        class="form-control">
+                        <option *ngFor="let res of resources" [ngValue]="res.id">{{ res.name }}</option>
+                    </select>
+                </div>
+                <div class="form-group" *ngIf="activeResourceServices.length > 0">
+                    <label>Servicio Específico</label>
+                    <select [(ngModel)]="activeManualBooking.service_id" (change)="onManualServiceChange()"
+                        class="form-control">
+                        <option [ngValue]="null">--- Seleccionar Servicio ---</option>
+                        <option *ngFor="let s of activeResourceServices" [ngValue]="s.id">
+                            {{ s.name }} ({{ s.duration_minutes }} min) - ${{ s.price }}
+                        </option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group half">
+                        <label>Fecha</label>
+                        <input type="date" [(ngModel)]="activeManualBooking.start_date" class="form-control">
+                    </div>
+                    <div class="form-group half">
+                        <label>Hora</label>
+                        <input type="time" [(ngModel)]="activeManualBooking.start_time" class="form-control">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Número de Personas (Pax)</label>
+                    <input type="number" [(ngModel)]="activeManualBooking.pax" class="form-control">
+                </div>
 
-        <div class="action-buttons">
-            <button class="btn btn-outline">Reprogramar</button>
-            <button class="btn btn-danger">Cancelar (Liberar)</button>
-            <button class="btn btn-warning">No Asistió</button>
+                <div class="form-group mt-auto">
+                    <button class="btn btn-primary w-100" style="padding: 12px; font-size:16px;"
+                        (click)="saveManualBooking()">
+                        Confirmar Reserva Manual
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>

@@ -128,6 +128,10 @@ interface Merchant {
     industry_type?: string;
     ollama_base_url?: string;
     lmstudio_base_url?: string;
+    wa_connector_type?: 'meta' | 'web_qr';
+    wa_status?: string;
+    wa_qr_code?: string;
+    wa_last_connection?: string;
 }
 
 interface PlatformConfig {
@@ -138,6 +142,8 @@ interface PlatformConfig {
     language: string;
     supabase_url?: string;
     supabase_key?: string;
+    evolution_api_url?: string;
+    evolution_api_key?: string;
 }
 
 @Component({
@@ -392,6 +398,9 @@ export class SuperAdminComponent implements OnInit {
 
             if (platformResult.data) {
                 this.platformAiSettings = { ...this.platformAiSettings, ...platformResult.data };
+                // Sincronizar con platformConfig para el modal
+                this.platformConfig.evolution_api_url = platformResult.data.evolution_api_url;
+                this.platformConfig.evolution_api_key = platformResult.data.evolution_api_key;
             }
 
             this.updateMerchantsView();
@@ -483,9 +492,10 @@ export class SuperAdminComponent implements OnInit {
                 }
             } else if (provider === 'ollama') {
                 const baseUrl = this.selectedMerchant.ollama_base_url || 'http://localhost:11434';
-                const response = await fetch(`${baseUrl}/api/tags`, {
-                    headers: { 'ngrok-skip-browser-warning': 'true' }
-                });
+                const headers: any = { 'ngrok-skip-browser-warning': 'true' };
+                if (this.selectedMerchant.ai_api_key) headers['Authorization'] = `Bearer ${this.selectedMerchant.ai_api_key}`;
+
+                const response = await fetch(`${baseUrl}/api/tags`, { headers });
                 if (response.ok) {
                     const contentType = response.headers.get('content-type');
                     if (!contentType || !contentType.includes('application/json')) {
@@ -600,12 +610,17 @@ export class SuperAdminComponent implements OnInit {
         currency: localStorage.getItem('platform_currency') || 'COP',
         language: localStorage.getItem('platform_language') || 'es',
         supabase_url: localStorage.getItem('supabase_url') || 'https://khgegukjrtyjmonhavan.supabase.co',
-        supabase_key: localStorage.getItem('supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoZ2VndWtqcnR5am1vbmhhdmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTQ4MTAsImV4cCI6MjA4NTM3MDgxMH0.V-dc1zSkU5R5hj45ihWsHR-9FWFTP4qxWyVUnTC8qdc'
+        supabase_key: localStorage.getItem('supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoZ2VndWtqcnR5am1vbmhhdmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTQ4MTAsImV4cCI6MjA4NTM3MDgxMH0.V-dc1zSkU5R5hj45ihWsHR-9FWFTP4qxWyVUnTC8qdc',
+        evolution_api_url: localStorage.getItem('evolution_api_url') || '',
+        evolution_api_key: localStorage.getItem('evolution_api_key') || ''
     };
 
     isValidatingSupabase = false;
     supabaseStatus: 'none' | 'success' | 'error' = 'none';
     dbNeedsInitialization = false;
+    isValidatingEvolution = false;
+    evolutionStatus: 'none' | 'success' | 'error' = 'none';
+    private waStatusInterval: any;
 
     showModal = false;
     showCodeModal = false;
@@ -634,7 +649,9 @@ export class SuperAdminComponent implements OnInit {
         embed_provider: 'google_gemini',
         embed_model: 'text-embedding-004',
         embed_api_key: '',
-        support_ai_enabled: false
+        support_ai_enabled: false,
+        evolution_api_url: '',
+        evolution_api_key: ''
     };
 
     platformFeatures: any = {};
@@ -1016,7 +1033,13 @@ export class SuperAdminComponent implements OnInit {
             localStorage.setItem('merchant_slug', merchant.slug);
             localStorage.setItem('merchant_industry_type', merchant.industry_type || 'retail');
             this.notificationService.show(`Bienvenido a ${merchant.name}`, 'success');
-            this.router.navigate(['/chats']);
+
+            // Redirigir según el tipo de industria
+            if (merchant.industry_type === 'reservations') {
+                this.router.navigate(['/reservations']);
+            } else {
+                this.router.navigate(['/chats']);
+            }
         });
     }
 
@@ -1387,6 +1410,10 @@ export class SuperAdminComponent implements OnInit {
             this.suggestMerchantCode();
         }
 
+        if (!this.selectedMerchant.wa_connector_type) {
+            this.selectedMerchant.wa_connector_type = 'meta';
+        }
+
         this.showOmniConfig = true;
         this.cdr.detectChanges();
     }
@@ -1444,7 +1471,9 @@ export class SuperAdminComponent implements OnInit {
                 }
             } else if (provider === 'ollama') {
                 const url = `${ollamaUrl}/api/tags`;
-                const resp = await fetch(url);
+                const headers: any = { 'ngrok-skip-browser-warning': 'true' };
+                if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+                const resp = await fetch(url, { headers });
                 if (resp.ok) {
                     const data = await resp.json();
                     freshModels = (data.models || []).map((m: any) => ({
@@ -1519,7 +1548,9 @@ export class SuperAdminComponent implements OnInit {
                     .map((m: any) => ({ id: m.id, name: m.id }));
             } else if (provider === 'ollama') {
                 const url = `${ollamaUrl}/api/tags`;
-                const resp = await fetch(url);
+                const headers: any = { 'ngrok-skip-browser-warning': 'true' };
+                if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+                const resp = await fetch(url, { headers });
                 const data = await resp.json();
                 freshModels = (data.models || [])
                     .filter((m: any) => m.name.includes('embed') || m.name.includes('llama'))
@@ -1548,7 +1579,9 @@ export class SuperAdminComponent implements OnInit {
     async savePlatformConfig() {
         // Guardar en la base de datos (Persistencia real)
         const { error } = await this.supabaseService.updatePlatformSettings({
-            ...this.platformAiSettings
+            ...this.platformAiSettings,
+            evolution_api_url: this.platformConfig.evolution_api_url,
+            evolution_api_key: this.platformConfig.evolution_api_key
         });
 
         if (error) {
@@ -1565,6 +1598,8 @@ export class SuperAdminComponent implements OnInit {
 
         if (this.platformConfig.supabase_url) localStorage.setItem('supabase_url', this.platformConfig.supabase_url);
         if (this.platformConfig.supabase_key) localStorage.setItem('supabase_key', this.platformConfig.supabase_key);
+        if (this.platformConfig.evolution_api_url) localStorage.setItem('evolution_api_url', this.platformConfig.evolution_api_url);
+        if (this.platformConfig.evolution_api_key) localStorage.setItem('evolution_api_key', this.platformConfig.evolution_api_key);
 
         this.notificationService.show('Configuración global actualizada correctamente', 'success');
         this.showPlatformConfig = false;
@@ -1609,6 +1644,34 @@ export class SuperAdminComponent implements OnInit {
         }
     }
 
+    async testEvolutionConnection() {
+        if (!this.platformConfig.evolution_api_url || !this.platformConfig.evolution_api_key) {
+            this.notificationService.show('Ingresa URL y API Key de Evolution para probar', 'warning');
+            return;
+        }
+
+        this.isValidatingEvolution = true;
+        this.evolutionStatus = 'none';
+
+        try {
+            const resp = await fetch(`${this.platformConfig.evolution_api_url}/instance/fetchInstances`, {
+                method: 'GET',
+                headers: { 'apikey': this.platformConfig.evolution_api_key }
+            });
+
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+            this.evolutionStatus = 'success';
+            this.notificationService.show('¡Conexión con Evolution API exitosa!', 'success');
+        } catch (error: any) {
+            this.evolutionStatus = 'error';
+            this.notificationService.show('Error con Evolution: ' + error.message, 'error');
+        } finally {
+            this.isValidatingEvolution = false;
+            this.cdr.detectChanges();
+        }
+    }
+
     resetSupabaseConfig() {
         localStorage.removeItem('supabase_url');
         localStorage.removeItem('supabase_key');
@@ -1632,6 +1695,248 @@ export class SuperAdminComponent implements OnInit {
 
     // Implementación movida arriba por orden lógico de flujo de IA
     // Anteriormente aquí estaba saveAIConfig (863-872)
+
+    // --- WhatsApp Web/QR Management (Evolution API Integration) ---
+    async generateWAQR(merchant: Partial<Merchant>) {
+        if (!merchant) return;
+
+        const apiUrl = this.platformConfig.evolution_api_url;
+        const apiKey = this.platformConfig.evolution_api_key;
+
+        if (!apiUrl || !apiKey) {
+            this.notificationService.show('Error: Por favor configura la URL y API Key de Evolution API en Configuración de Plataforma.', 'error');
+            return;
+        }
+
+        console.log('✨ Connecting to Evolution API for', merchant.name);
+        merchant.wa_status = 'pairing';
+        this.notificationService.show('Iniciando instancia en Evolution API...', 'info');
+
+        const instanceName = (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+
+        try {
+            // 0. LIMPIEZA: Intentar eliminar la instancia si ya existe para evitar conflictos de "ghost sessions"
+            // Esto soluciona el error de "No se pudo vincular dispositivo"
+            console.log('🧹 Cleaning up old session for', instanceName);
+            await fetch(`${apiUrl}/instance/delete/${instanceName}`, {
+                method: 'DELETE',
+                headers: { 'apikey': apiKey }
+            }).catch(() => { }); // Ignorar si no existe
+
+            // 1. Intentar crear la instancia
+            // Evolution API v2 requiere 'integration': 'baileys'
+            const createRes = await fetch(`${apiUrl}/instance/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': apiKey
+                },
+                body: JSON.stringify({
+                    instanceName: instanceName,
+                    token: '',
+                    integration: 'WHATSAPP-BAILEYS',
+                    qrcode: true
+                })
+            });
+
+            const createData = await createRes.json();
+            console.log('Evolution API Create:', createData);
+
+            // Si la instancia ya existe (403), continuamos al paso de conexión
+            if (createRes.status !== 201 && createRes.status !== 200 && createRes.status !== 403) {
+                throw new Error(createData.response?.message || createData.message || 'Error al crear instancia');
+            }
+
+            // 2. Obtener el QR
+            this.notificationService.show('Obteniendo código QR...', 'info');
+            const connectRes = await fetch(`${apiUrl}/instance/connect/${instanceName}`, {
+                method: 'GET',
+                headers: { 'apikey': apiKey }
+            });
+
+            const connectData = await connectRes.json();
+            console.log('Evolution API Connect Data:', connectData);
+
+            // Evolution API puede devolver el QR en 'base64' o 'code'
+            const qrRaw = connectData.base64 || connectData.code;
+
+            if (qrRaw) {
+                const qrBase64 = qrRaw.startsWith('data:image')
+                    ? qrRaw
+                    : `data:image/png;base64,${qrRaw}`;
+
+                merchant.wa_qr_code = qrBase64;
+                this.notificationService.show('¡QR Generado! Escanea ahora.', 'success');
+            } else if (connectData.instance?.status === 'connected') {
+                merchant.wa_status = 'connected';
+                this.notificationService.show('¡WhatsApp ya está conectado!', 'success');
+            } else {
+                throw new Error(connectData.message || 'No se pudo obtener el QR. Verifica que la instancia no esté ya conectada.');
+            }
+
+            this.cdr.detectChanges();
+
+            // 3. Iniciar Polling de Estado para detectar el escaneo
+            this.startWAStatusPolling(merchant, instanceName);
+
+            // 4. Configurar Webhook automáticamente
+            this.setupEvolutionWebhook(instanceName);
+
+        } catch (error: any) {
+            console.error('Evolution API Error:', error);
+            this.notificationService.show('Error con Evolution API: ' + error.message, 'error');
+            merchant.wa_status = 'disconnected';
+        }
+    }
+
+    private startWAStatusPolling(merchant: Partial<Merchant>, instanceName: string) {
+        if (this.waStatusInterval) clearInterval(this.waStatusInterval);
+
+        const apiUrl = this.platformConfig.evolution_api_url;
+        const apiKey = this.platformConfig.evolution_api_key;
+
+        if (!apiUrl || !apiKey) return;
+
+        this.waStatusInterval = setInterval(async () => {
+            try {
+                const res = await fetch(`${apiUrl}/instance/connectionState/${instanceName}`, {
+                    method: 'GET',
+                    headers: { 'apikey': apiKey as string }
+                });
+                const data = await res.json();
+
+                console.log(`[Polling] ${instanceName} context:`, data);
+
+                if (data.instance?.state === 'open' || data.instance?.status === 'connected') {
+                    console.log('✅ WhatsApp Connected detected via polling');
+                    merchant.wa_status = 'connected';
+                    merchant.wa_qr_code = ''; // Limpiar QR
+                    merchant.wa_last_connection = new Date().toISOString();
+
+                    // Guardar en DB para que sea permanente
+                    await this.supabaseService.updateMerchant(merchant.id!, {
+                        wa_status: 'connected',
+                        wa_last_connection: merchant.wa_last_connection,
+                        wa_connector_type: 'web_qr',
+                        wa_session_id: instanceName
+                    });
+
+                    this.notificationService.show('¡WhatsApp conectado correctamente!', 'success');
+                    this.cdr.detectChanges();
+                    clearInterval(this.waStatusInterval);
+                }
+            } catch (e) {
+                console.error('Error polling WA status:', e);
+            }
+        }, 3000); // Cada 3 segundos
+    }
+
+    async syncEvolutionWebhook(merchant: Partial<Merchant>) {
+        if (!merchant) return;
+        const instanceName = (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+        this.notificationService.show('Sincronizando webhook...', 'info');
+        await this.setupEvolutionWebhook(instanceName);
+        this.notificationService.show('Webhook sincronizado correctamente', 'success');
+    }
+
+    private async setupEvolutionWebhook(instanceName: string) {
+        const apiUrl = this.platformConfig.evolution_api_url;
+        const apiKey = this.platformConfig.evolution_api_key;
+        const supabaseUrl = this.platformConfig.supabase_url;
+
+        if (!apiUrl || !apiKey || !supabaseUrl) {
+            console.error('Missing config for webhook setup');
+            return;
+        }
+
+        // URL de nuestro nuevo Edge Function
+        const webhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook`;
+
+        try {
+            const res = await fetch(`${apiUrl}/webhook/set/${instanceName}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': apiKey as string
+                },
+                body: JSON.stringify({
+                    enabled: true,
+                    url: webhookUrl,
+                    webhook_by_events: false,
+                    events: [
+                        "MESSAGES_UPSERT",
+                        "CONNECTION_UPDATE",
+                        "MESSAGES_UPDATE"
+                    ]
+                })
+            });
+            const data = await res.json();
+            console.log('🌐 Evolution Webhook Setup:', data);
+            console.log('🌐 Webhook configurado en:', webhookUrl);
+        } catch (e) {
+            console.error('Error configurando webhook:', e);
+        }
+    }
+
+    async disconnectWA(merchant: Partial<Merchant>) {
+        if (!merchant) return;
+
+        this.deleteModalConfig = {
+            title: '¿DESCONECTAR WHATSAPP?',
+            message: `Vas a cerrar la sesión de WhatsApp para "${merchant.name}". Se detendrá la recepción de mensajes y el bot de IA dejará de responder en este canal.`,
+            confirmLabel: 'Desconectar WhatsApp',
+            icon: '🔌',
+            isProcessing: false,
+            action: async () => {
+                this.deleteModalConfig.isProcessing = true;
+                const apiUrl = this.platformConfig.evolution_api_url;
+                const apiKey = this.platformConfig.evolution_api_key;
+                const instanceName = (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+
+                merchant.wa_status = 'disconnected';
+                merchant.wa_qr_code = '';
+                merchant.wa_last_connection = undefined;
+
+                try {
+                    // Cerrar sesión real en la API
+                    if (apiUrl && apiKey) {
+                        this.notificationService.show('Cerrando sesión en servidor...', 'info');
+                        await fetch(`${apiUrl}/instance/logout/${instanceName}`, {
+                            method: 'DELETE',
+                            headers: { 'apikey': apiKey }
+                        });
+                        await fetch(`${apiUrl}/instance/delete/${instanceName}`, {
+                            method: 'DELETE',
+                            headers: { 'apikey': apiKey }
+                        });
+                    }
+
+                    // Actualizar en DB
+                    await this.supabaseService.updateMerchant(merchant.id!, {
+                        wa_status: 'disconnected',
+                        wa_qr_code: '',
+                        wa_last_connection: undefined
+                    });
+
+                    this.notificationService.show('Sesión de WhatsApp cerrada correctamente', 'warning');
+                    this.showDeleteConfirmModal = false;
+                } catch (error: any) {
+                    console.error('Error disconnecting WA:', error);
+                    this.notificationService.show('Error al cerrar sesión: ' + error.message, 'error');
+                } finally {
+                    this.deleteModalConfig.isProcessing = false;
+                }
+
+                if (this.waStatusInterval) {
+                    clearInterval(this.waStatusInterval);
+                    this.waStatusInterval = null;
+                }
+
+                this.cdr.detectChanges();
+            }
+        };
+        this.showDeleteConfirmModal = true;
+    }
 
     async saveOmniConfig() {
         if (!this.currentManagingMerchant) return;
@@ -1894,10 +2199,21 @@ export class SuperAdminComponent implements OnInit {
     }
 
     deleteAgent(id: string) {
-        if (confirm('¿Eliminar este agente? Esta acción no se puede deshacer.')) {
-            this.agents = this.agents.filter(a => a.id !== id);
-            this.saveAgentsToLocalStorage();
-        }
+        const agent = this.agents.find(a => a.id === id);
+        this.deleteModalConfig = {
+            title: '¿ELIMINAR AGENTE?',
+            message: `Estás a punto de eliminar al agente "${agent?.name || 'este agente'}". Esta acción no se puede deshacer.`,
+            confirmLabel: 'Eliminar Agente',
+            icon: '🗑️',
+            isProcessing: false,
+            action: async () => {
+                this.agents = this.agents.filter(a => a.id !== id);
+                this.saveAgentsToLocalStorage();
+                this.notificationService.show('Agente eliminado del almacenamiento local', 'warning');
+                this.showDeleteConfirmModal = false;
+            }
+        };
+        this.showDeleteConfirmModal = true;
     }
 
     saveAgentsToLocalStorage() {
@@ -2393,15 +2709,32 @@ Tenemos Hamburguesas, Pizzas, Sushi, Opciones Saludables y Bebidas.
     }
 
     async deleteGlobalUser(userId: string) {
-        if (!confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.')) return;
-
-        const { error } = await this.supabaseService.deleteProfile(userId);
-        if (!error) {
-            this.notificationService.show('Usuario eliminado', 'warning');
-            await this.loadAllUsers();
-        } else {
-            this.notificationService.show('Error al eliminar usuario', 'error');
-        }
+        const user = this.filteredUsers.find(u => u.id === userId);
+        this.deleteModalConfig = {
+            title: '¿ELIMINAR USUARIO?',
+            message: `¿Estás seguro de que deseas eliminar al usuario "${user?.full_name || 'este usuario'}"? Perderá el acceso a la plataforma de forma inmediata.`,
+            confirmLabel: 'Eliminar Usuario',
+            icon: '👤',
+            isProcessing: false,
+            action: async () => {
+                this.deleteModalConfig.isProcessing = true;
+                try {
+                    const { error } = await this.supabaseService.deleteProfile(userId);
+                    if (!error) {
+                        this.notificationService.show('Usuario eliminado correctamente', 'warning');
+                        await this.loadAllUsers();
+                        this.showDeleteConfirmModal = false;
+                    } else {
+                        throw error;
+                    }
+                } catch (err: any) {
+                    this.notificationService.show('Error al eliminar usuario: ' + err.message, 'error');
+                } finally {
+                    this.deleteModalConfig.isProcessing = false;
+                }
+            }
+        };
+        this.showDeleteConfirmModal = true;
     }
 
     async runTestOrderInsertion() {

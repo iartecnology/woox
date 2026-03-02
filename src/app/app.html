@@ -154,11 +154,17 @@
                     Viendo: {{ merchantName }}
                 </div>
 
+                <a *ngIf="merchantIndustryType === 'reservations'" routerLink="/reservations" routerLinkActive="active"
+                    (click)="closeSidebar()">
+                    <span class="icon">📅</span>
+                    <span>Reservas</span>
+                </a>
                 <a routerLink="/chats" routerLinkActive="active" (click)="closeSidebar()">
                     <span class="icon">💬</span>
                     <span>Chats</span>
                 </a>
-                <a routerLink="/orders" routerLinkActive="active" (click)="closeSidebar()">
+                <a *ngIf="merchantIndustryType !== 'reservations'" routerLink="/orders" routerLinkActive="active"
+                    (click)="closeSidebar()">
                     <span class="icon">🛵</span>
                     <span>Pedidos</span>
                 </a>
@@ -174,7 +180,8 @@
                     <span class="icon">📢</span>
                     <span>Campañas</span>
                 </a>
-                <a routerLink="/delivery" routerLinkActive="active" (click)="closeSidebar()">
+                <a *ngIf="merchantIndustryType !== 'reservations'" routerLink="/delivery" routerLinkActive="active"
+                    (click)="closeSidebar()">
                     <span class="icon">🚚</span>
                     <span>Reparto</span>
                 </a>

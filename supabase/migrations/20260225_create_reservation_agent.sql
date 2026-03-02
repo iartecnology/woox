@@ -3,6 +3,14 @@
 -- Crea un agente especializado y pre-configura sus habilidades.
 -- ============================================================
 
+-- 0. Asegurar que la tabla agents tenga la columna slug
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='agents' AND column_name='slug') THEN
+        ALTER TABLE public.agents ADD COLUMN slug TEXT UNIQUE;
+    END IF;
+END $$;
+
 DO $$
 DECLARE
     v_agent_id UUID;
@@ -23,7 +31,9 @@ BEGIN
     )
     ON CONFLICT (slug) DO UPDATE SET 
         personality = EXCLUDED.personality,
-        system_prompt = EXCLUDED.system_prompt
+        system_prompt = EXCLUDED.system_prompt,
+        description = EXCLUDED.description,
+        welcome_message = EXCLUDED.welcome_message
     RETURNING id INTO v_agent_id;
 
     -- 2. Obtener IDs de las skills

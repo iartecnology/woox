@@ -35,10 +35,19 @@ Deno.serve(async (req) => {
                     telegram_bot_token,
                     whatsapp_token,
                     whatsapp_phone_number_id,
-                    facebook_page_token
+                    facebook_page_token,
+                    wa_connector_type,
+                    wa_status,
+                    wa_session_id
                 )
             `)
             .eq('id', conversation_id)
+            .single();
+
+        // 1.5 Obtener configuración global de Evolution API
+        const { data: platformSettings } = await supabase
+            .from('platform_settings')
+            .select('evolution_api_url, evolution_api_key')
             .single();
 
         if (convErr || !rawConv) {
@@ -46,88 +55,135 @@ Deno.serve(async (req) => {
             throw new Error(`Conversation not found: ${conversation_id}`);
         }
 
-        // Supabase sometimes returns joins as an object or as a single-item array
         const conv: any = rawConv;
-        const merchant = Array.isArray(conv.merchant) ? conv.merchant[0] : conv.merchant;
-        const customer = Array.isArray(conv.customer) ? conv.customer[0] : conv.customer;
+        const merchant = conv.merchant;
+        const customer = conv.customer;
 
         const channel = conv.channel;
-        const botToken = merchant?.telegram_bot_token;
-        const chatId = customer?.telegram_chat_id;
-        const waToken = merchant?.whatsapp_token;
-        const waPhoneId = merchant?.whatsapp_phone_number_id;
-        const waCustomerPhone = customer?.whatsapp_phone;
-        const fbToken = merchant?.facebook_page_token;
-        const fbUserId = customer?.facebook_user_id;
+        const waConnectorType = merchant?.wa_connector_type || 'meta';
+        const waStatus = merchant?.wa_status;
 
-        console.log(`[Deliver] Channel: ${channel}, WA_Phone: ${waCustomerPhone}, Has_Token: ${!!waToken}, Has_PhoneID: ${!!waPhoneId}`);
+        // --- MEDIDAS ANTI-BAN: HUMANIZACIÓN ---
+        // 1. Simulación de Tiempo de Escritura (reducido a la mitad)
+        const typingSpeedMs = Math.min(Math.max(content.length * 25, 750), 2500); // Entre 0.75s y 2.5s
+        const randomDelay = Math.floor(Math.random() * 1000); // Delay extra aleatorio hasta 1s
+
+        console.log(`[Anti-Ban] Mensaje de ${content.length} chars. Esperando ${typingSpeedMs + randomDelay}ms para simular humano...`);
 
         if (channel === 'telegram') {
-            if (!botToken || !chatId) {
-                throw new Error("Telegram configuration missing (bot token or chat id)");
-            }
+            const botToken = merchant?.telegram_bot_token;
+            const chatId = customer?.telegram_chat_id;
+            if (!botToken || !chatId) throw new Error("Telegram config missing");
 
-            console.log(`[Deliver] Enviando a Telegram (${chatId}): ${content}`);
+            // Simular "Escribiendo..." en Telegram
+            await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: chatId, action: "typing" })
+            });
+
+            await new Promise(r => setTimeout(r, typingSpeedMs + randomDelay));
 
             const telRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    chat_id: chatId,
-                    text: content,
-                    parse_mode: "Markdown"
-                })
+                body: JSON.stringify({ chat_id: chatId, text: content, parse_mode: "Markdown" })
             });
 
             const telData = await telRes.json();
-            if (!telData.ok) {
-                throw new Error(`Telegram API Error: ${JSON.stringify(telData)}`);
-            }
-
             return new Response(JSON.stringify({ ok: true, provider_response: telData }), {
                 headers: { ...corsHeaders, "Content-Type": "application/json" }
             });
         }
 
         if (channel === 'whatsapp') {
-            if (!waToken || !waPhoneId || !waCustomerPhone) {
-                throw new Error("WhatsApp configuration missing (token, phone id or customer phone)");
+            const waPhoneId = merchant?.whatsapp_phone_number_id;
+            const waCustomerPhone = customer?.whatsapp_phone;
+            if (!waCustomerPhone) throw new Error("Customer WhatsApp phone missing");
+
+            if (waConnectorType === 'web_qr') {
+                // --- Lógica para WhatsApp WEB QR (No oficial) ---
+                if (waStatus !== 'connected') {
+                    throw new Error("WhatsApp QR Connector is not connected. Please scan QR in Admin.");
+                }
+
+                console.log(`[Deliver] Enviando vía WEB QR (${waCustomerPhone})`);
+
+                const evolutionUrl = platformSettings?.evolution_api_url;
+                const evolutionKey = platformSettings?.evolution_api_key;
+                const instanceName = merchant?.wa_session_id;
+
+                if (!evolutionUrl || !evolutionKey || !instanceName) {
+                    throw new Error("Evolution API configuration or Instance Name missing");
+                }
+
+                // Simular delay de escritura
+                await new Promise(r => setTimeout(r, typingSpeedMs + randomDelay));
+
+                const evoRes = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "apikey": evolutionKey
+                    },
+                    body: JSON.stringify({
+                        number: waCustomerPhone,
+                        text: content,
+                        delay: 1200, // Re-aprovechar delay interno de Evolution si se quiere
+                        linkPreview: true
+                    })
+                });
+
+                const evoData = await evoRes.json();
+
+                if (!evoRes.ok) {
+                    throw new Error(`Evolution API Error: ${evoData.message || evoRes.statusText}`);
+                }
+
+                return new Response(JSON.stringify({ ok: true, method: 'web_qr', status: 'delivered', provider_response: evoData }), {
+                    headers: { ...corsHeaders, "Content-Type": "application/json" }
+                });
+
+            } else {
+                // --- Lógica para WhatsApp Meta API (Oficial) ---
+                const waToken = merchant?.whatsapp_token;
+                if (!waToken || !waPhoneId) throw new Error("WhatsApp Meta config missing");
+
+                // En Cloud API no hay un "typing" oficial directo para el usuario, 
+                // pero el delay en el envío ayuda a no saturar los límites de Meta.
+                await new Promise(r => setTimeout(r, typingSpeedMs + randomDelay));
+
+                const waRes = await fetch(`https://graph.facebook.com/v22.0/${waPhoneId}/messages`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${waToken}` },
+                    body: JSON.stringify({
+                        messaging_product: "whatsapp",
+                        to: waCustomerPhone,
+                        type: "text",
+                        text: { body: content }
+                    })
+                });
+
+                const waData = await waRes.json();
+                return new Response(JSON.stringify({ ok: true, provider_response: waData }), {
+                    headers: { ...corsHeaders, "Content-Type": "application/json" }
+                });
             }
-
-            console.log(`[Deliver] Enviando a WhatsApp (${waCustomerPhone}): ${content}`);
-
-            const waRes = await fetch(`https://graph.facebook.com/v22.0/${waPhoneId}/messages`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${waToken}`
-                },
-                body: JSON.stringify({
-                    messaging_product: "whatsapp",
-                    to: waCustomerPhone,
-                    type: "text",
-                    text: { body: content }
-                })
-            });
-
-            const waData = await waRes.json();
-            if (!waRes.ok) {
-                const errMsg = waData.error?.message || JSON.stringify(waData);
-                console.error(`[Deliver] WhatsApp API Error: ${errMsg}`);
-                throw new Error(`WhatsApp: ${errMsg}`);
-            }
-
-            return new Response(JSON.stringify({ ok: true, provider_response: waData }), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
         }
 
         if (channel === 'facebook') {
-            if (!fbToken || !fbUserId) {
-                throw new Error("Facebook configuration missing (page token or user id)");
-            }
+            const fbToken = merchant?.facebook_page_token;
+            const fbUserId = customer?.facebook_user_id;
+            if (!fbToken || !fbUserId) throw new Error("Facebook config missing");
 
-            console.log(`[Deliver] Enviando a Facebook Messenger (${fbUserId})`);
+            // Simular "Typing..." en Messenger
+            await fetch(`https://graph.facebook.com/v22.0/me/messages?access_token=${fbToken}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ recipient: { id: fbUserId }, sender_action: "typing_on" })
+            });
+
+            await new Promise(r => setTimeout(r, typingSpeedMs + randomDelay));
 
             const fbRes = await fetch(`https://graph.facebook.com/v22.0/me/messages?access_token=${fbToken}`, {
                 method: "POST",
@@ -139,12 +195,6 @@ Deno.serve(async (req) => {
             });
 
             const fbData = await fbRes.json();
-            if (!fbRes.ok) {
-                const errMsg = fbData.error?.message || JSON.stringify(fbData);
-                console.error(`[Deliver] Facebook API Error: ${errMsg}`);
-                throw new Error(`Facebook: ${errMsg}`);
-            }
-
             return new Response(JSON.stringify({ ok: true, provider_response: fbData }), {
                 headers: { ...corsHeaders, "Content-Type": "application/json" }
             });

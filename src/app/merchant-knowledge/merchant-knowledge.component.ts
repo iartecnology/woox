@@ -476,8 +476,10 @@ export class MerchantKnowledgeComponent implements OnInit {
                 const data = await resp.json();
                 return data.data?.[0]?.embedding || null;
             } else if (provider === 'ollama') {
+                const headers: any = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' };
+                if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
                 const resp = await fetch(`${ollamaUrl}/api/embeddings`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: headers,
                     body: JSON.stringify({ model, prompt: text })
                 });
                 const data = await resp.json();

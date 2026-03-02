@@ -18,8 +18,9 @@ export class ReservationManagement implements OnInit {
   private ns = inject(NotificationService);
 
   activeTab: 'calendar' | 'resources' | 'blocks' | 'reports' = 'calendar';
-  currentView: 'day' | 'week' | 'month' = 'day';
+  currentView: 'day' | 'week' | 'month' | 'list' = 'day';
   currentDate: Date = new Date();
+  today: Date = new Date();
 
   // Mock KPIs
   kpis = {
@@ -36,9 +37,14 @@ export class ReservationManagement implements OnInit {
     '13:00', '14:00', '15:00', '16:00', '17:00'
   ];
   bookings: any[] = [];
+  searchTerm: string = '';
+  bookingSearchTerm: string = '';
+  weekDays: Date[] = [];
+  monthDays: any[] = []; // { date: Date, isCurrentMonth: boolean }[]
 
   selectedBooking: any = null;
   merchantId: string = '';
+  merchantName: string = '';
 
   // Resource Creator State
   showResourceModal: boolean = false;
@@ -49,7 +55,8 @@ export class ReservationManagement implements OnInit {
     duration_minutes: 45,
     buffer_time_minutes: 15,
     capacity: 1,
-    base_price: 0
+    base_price: 0,
+    services: [] // Nueva lista de sub-servicios
   };
 
   // Blocks (Exceptions) State
@@ -64,11 +71,138 @@ export class ReservationManagement implements OnInit {
     is_block: true
   };
 
-  ngOnInit() {
+  // Manual Booking State
+  showManualBookingModal: boolean = false;
+  activeManualBooking: any = {
+    customer_name: '',
+    customer_phone: '',
+    resource_id: null,
+    start_date: '',
+    start_time: '',
+    pax: 1,
+    service_id: null
+  };
+
+  activeResourceServices: any[] = [];
+
+  // Wizard & Layout State
+  showWizard: boolean = false;
+  resourceLayout: 'grid' | 'list' = 'grid';
+
+  async ngOnInit() {
     this.merchantId = localStorage.getItem('active_merchant_id') || '';
+    this.merchantName = localStorage.getItem('merchant_name') || 'Mi Negocio';
+
     if (this.merchantId) {
+      this.fetchMerchantInfo(); // Cargar en background para refrescar
       this.loadRealData();
     }
+  }
+
+  async fetchMerchantInfo() {
+    const { data, error } = await supabase
+      .from('merchants')
+      .select('name')
+      .eq('id', this.merchantId)
+      .single();
+
+    if (data) {
+      this.merchantName = data.name;
+    } else {
+      console.warn('No se pudo cargar la info del comercio');
+      this.merchantName = 'Mi Comercio';
+    }
+  }
+
+  // --- TEMPLATE WIZARD LOGIC ---
+  async applyTemplate(type: 'restaurant' | 'hotel' | 'airbnb' | 'beauty' | 'coworking' | 'sports' | 'medical') {
+    if (!this.merchantId) {
+      this.ns.show('No se encontró un ID de comercio activo. Por favor, recarga la página.', 'error');
+      return;
+    }
+    const confirmMsg = '¿Deseas aplicar esta plantilla? Se crearán recursos de ejemplo para tu negocio.';
+    if (!confirm(confirmMsg)) return;
+
+    if (type === 'restaurant') {
+      // Crear mesas
+      const tables = [
+        { name: 'Mesa 01 (Terraza)', type: 'table', capacity: 2, base_price: 20000 },
+        { name: 'Mesa 02 (Terraza)', type: 'table', capacity: 4, base_price: 40000 },
+        { name: 'Mesa VIP 01', type: 'table', capacity: 6, base_price: 150000 },
+      ];
+      for (const t of tables) {
+        const { error } = await supabase.from('reservable_resources').insert([{ ...t, merchant_id: this.merchantId }]);
+        if (error) console.error('Error insertando mesa:', error);
+      }
+    } else if (type === 'hotel') {
+      const rooms = [
+        { name: 'Habitación Estándar', type: 'room_type', capacity: 2, base_price: 180000 },
+        { name: 'Junior Suite', type: 'room_type', capacity: 3, base_price: 250000 },
+        { name: 'Suite Presidencial', type: 'room_type', capacity: 4, base_price: 600000 },
+      ];
+      for (const r of rooms) {
+        const { error } = await supabase.from('reservable_resources').insert([{ ...r, merchant_id: this.merchantId }]);
+        if (error) console.error('Error insertando habitación:', error);
+      }
+    } else if (type === 'airbnb') {
+      const properties = [
+        { name: 'Cabaña Alpina (Bosque)', type: 'property', capacity: 4, base_price: 450000 },
+        { name: 'Apartamento Vista al Mar', type: 'property', capacity: 2, base_price: 320000 },
+      ];
+      for (const p of properties) {
+        const { error } = await supabase.from('reservable_resources').insert([{ ...p, merchant_id: this.merchantId }]);
+        if (error) console.error('Error insertando propiedad:', error);
+      }
+    } else if (type === 'beauty') {
+      const { data: res } = await supabase.from('reservable_resources').insert({
+        name: 'Estilista Principal',
+        type: 'service',
+        merchant_id: this.merchantId
+      }).select().single();
+
+      if (res) {
+        const { error } = await supabase.from('resource_services').insert([
+          { resource_id: res.id, name: 'Corte de Dama', duration_minutes: 45, price: 65000 },
+          { resource_id: res.id, name: 'Cepillado', duration_minutes: 30, price: 25000 }
+        ]);
+        if (error) console.error('Error insertando servicios beauty:', error);
+      }
+    } else if (type === 'coworking') {
+      const spaces = [
+        { name: 'Hot Desk - Zona A', type: 'table', capacity: 1, base_price: 15000 },
+        { name: 'Sala de Juntas (8 pax)', type: 'table', capacity: 8, base_price: 85000 },
+        { name: 'Oficina Privada 101', type: 'property', capacity: 4, base_price: 250000 },
+      ];
+      for (const s of spaces) {
+        await supabase.from('reservable_resources').insert([{ ...s, merchant_id: this.merchantId }]);
+      }
+    } else if (type === 'sports') {
+      const courts = [
+        { name: 'Cancha de Pádel 1', type: 'table', capacity: 4, base_price: 120000 },
+        { name: 'Cancha de Pádel 2', type: 'table', capacity: 4, base_price: 120000 },
+        { name: 'Cancha de Fútbol 5', type: 'table', capacity: 10, base_price: 180000 },
+      ];
+      for (const c of courts) {
+        await supabase.from('reservable_resources').insert([{ ...c, merchant_id: this.merchantId }]);
+      }
+    } else if (type === 'medical') {
+      const { data: doc } = await supabase.from('reservable_resources').insert({
+        name: 'Dr. Alejandro Martínez (Med. General)',
+        type: 'service',
+        merchant_id: this.merchantId
+      }).select().single();
+
+      if (doc) {
+        await supabase.from('resource_services').insert([
+          { resource_id: doc.id, name: 'Consulta Médica', duration_minutes: 20, price: 90000 },
+          { resource_id: doc.id, name: 'Lectura de Exámenes', duration_minutes: 15, price: 45000 }
+        ]);
+      }
+    }
+
+    this.ns.show('Plantilla aplicada con éxito', 'success');
+    this.showWizard = false;
+    this.loadRealData();
   }
 
   async loadRealData() {
@@ -81,14 +215,32 @@ export class ReservationManagement implements OnInit {
       .order('created_at', { ascending: true });
 
     if (resError) {
-      console.error('Error al cargar recursos:', resError);
-      this.ns.show('Error al cargar recursos del comercio.', 'error');
+      console.error('ERROR CRÍTICO SUPABASE (Recursos):', resError);
+      this.ns.show(`Error de base de datos: ${resError.message}. Verifica si las tablas existen.`, 'error');
     } else {
       this.resources = resData || [];
     }
 
-    // CARGAR BOOKINGS DEL DIA (Mock temporal hasta crear la vista completa)
-    this.bookings = [];
+    // CARGAR BOOKINGS REALEZ DE SUPABASE
+    const { data: bookData, error: bookError } = await supabase
+      .from('bookings')
+      .select('*, reservable_resources(name), customers(full_name)')
+      .eq('merchant_id', this.merchantId)
+      .in('status', ['confirmed', 'pending', 'completed']);
+
+    if (bookError) {
+      console.error('Error al cargar bookings:', bookError);
+    } else {
+      this.bookings = (bookData || []).map(b => ({
+        id: b.id,
+        resourceId: b.resource_id,
+        customerName: b.customers?.full_name || 'Sin Nombre',
+        service: b.reservable_resources?.name || 'Reserva',
+        time: b.start_time.split('T')[1].substring(0, 5), // 'HH:MM'
+        status: b.status,
+        date: b.start_time.split('T')[0]
+      }));
+    }
 
     // CARGAR BLOQUEOS
     this.loadExceptions();
@@ -112,12 +264,86 @@ export class ReservationManagement implements OnInit {
     this.activeTab = tab;
   }
 
-  changeView(view: 'day' | 'week' | 'month') {
+  changeView(view: 'day' | 'week' | 'month' | 'list') {
     this.currentView = view;
+    this.updateCalendarData();
+  }
+
+  updateCalendarData() {
+    if (this.currentView === 'week') {
+      this.generateWeekDays();
+    } else if (this.currentView === 'month') {
+      this.generateMonthDays();
+    }
+  }
+
+  generateWeekDays() {
+    const start = new Date(this.currentDate);
+    const day = start.getDay();
+    start.setDate(start.getDate() - day); // Ir al domingo
+
+    this.weekDays = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      this.weekDays.push(d);
+    }
+  }
+
+  generateMonthDays() {
+    const startOfMonth = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
+    const endOfMonth = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 0);
+
+    const start = new Date(startOfMonth);
+    start.setDate(start.getDate() - start.getDay()); // Ir al domingo previo
+
+    const end = new Date(endOfMonth);
+    if (end.getDay() < 6) {
+      end.setDate(end.getDate() + (6 - end.getDay())); // Ir al sábado siguiente
+    }
+
+    this.monthDays = [];
+    const curr = new Date(start);
+    while (curr <= end) {
+      this.monthDays.push({
+        date: new Date(curr),
+        isCurrentMonth: curr.getMonth() === this.currentDate.getMonth()
+      });
+      curr.setDate(curr.getDate() + 1);
+    }
   }
 
   getBookingsForSlow(resourceId: string, time: string) {
-    return this.bookings.filter(b => b.resourceId === resourceId && b.time === time);
+    const targetDate = this.currentDate.toISOString().split('T')[0];
+    return this.bookings.filter(b => b.resourceId === resourceId && b.time === time && b.date === targetDate);
+  }
+
+  // Getters para filtros
+  get filteredResources() {
+    if (!this.searchTerm) return this.resources;
+    return this.resources.filter(r =>
+      r.name.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+      r.type.toLowerCase().includes(this.searchTerm.toLowerCase())
+    );
+  }
+
+  get filteredBookings() {
+    let filtered = this.bookings;
+
+    // Filtro por fecha (solo si no es vista mes)
+    if (this.currentView !== 'month') {
+      const dateStr = this.currentDate.toISOString().split('T')[0];
+      filtered = filtered.filter(b => b.date === dateStr);
+    }
+
+    if (this.bookingSearchTerm) {
+      const term = this.bookingSearchTerm.toLowerCase();
+      filtered = filtered.filter(b =>
+        b.customerName.toLowerCase().includes(term) ||
+        b.service.toLowerCase().includes(term)
+      );
+    }
+    return filtered;
   }
 
   openBookingDetails(booking: any) {
@@ -129,10 +355,25 @@ export class ReservationManagement implements OnInit {
   }
 
   // --- Resource Management ---
-  openResourceCreator(resource: any = null) {
+  async openResourceCreator(resource: any = null) {
+    this.showResourceModal = true;
+
     if (resource) {
       this.isEditingResource = true;
-      this.activeResource = { ...resource };
+      this.activeResource = {
+        ...resource,
+        services: []
+      };
+
+      // Cargar los servicios reales de este recurso en segundo plano
+      const { data, error } = await supabase
+        .from('resource_services')
+        .select('*')
+        .eq('resource_id', resource.id);
+
+      if (!error && data) {
+        this.activeResource.services = data;
+      }
     } else {
       this.isEditingResource = false;
       this.activeResource = {
@@ -141,10 +382,26 @@ export class ReservationManagement implements OnInit {
         duration_minutes: 45,
         buffer_time_minutes: 15,
         capacity: 1,
-        base_price: 0
+        base_price: 0,
+        services: []
       };
     }
-    this.showResourceModal = true;
+  }
+
+  async deleteResource(id: string) {
+    if (!confirm('¿Estás seguro de eliminar este recurso? Se borrarán sus servicios y disponibilidad asociada.')) return;
+
+    const { error } = await supabase
+      .from('reservable_resources')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      this.ns.show('Error al eliminar: ' + error.message, 'error');
+    } else {
+      this.ns.show('Recurso eliminado', 'success');
+      this.loadRealData();
+    }
   }
 
   closeResourceCreator() {
@@ -168,34 +425,71 @@ export class ReservationManagement implements OnInit {
       is_active: true
     };
 
+    let resourceId = this.isEditingResource ? this.activeResource.id : null;
+
     if (!this.isEditingResource) {
-      // Create
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('reservable_resources')
-        .insert([payload]);
+        .insert([payload])
+        .select()
+        .single();
 
       if (error) {
         this.ns.show('Error al crear recurso: ' + error.message, 'error');
-      } else {
-        this.ns.show('Recurso creado exitosamente', 'success');
-        this.loadRealData();
+        return;
       }
+      resourceId = data.id;
+      this.ns.show('Recurso creado exitosamente', 'success');
     } else {
-      // Update
       const { error } = await supabase
         .from('reservable_resources')
         .update(payload)
-        .eq('id', this.activeResource.id);
+        .eq('id', resourceId);
 
       if (error) {
         this.ns.show('Error al actualizar: ' + error.message, 'error');
-      } else {
-        this.ns.show('Recurso actualizado', 'success');
-        this.loadRealData();
+        return;
+      }
+      this.ns.show('Recurso actualizado', 'success');
+    }
+
+    // --- MANEJAR SUB-SERVICIOS ---
+    if (resourceId && this.activeResource.services) {
+      // 1. Borrar servicios anteriores si estamos editando
+      if (this.isEditingResource) {
+        await supabase.from('resource_services').delete().eq('resource_id', resourceId);
+      }
+
+      // 2. Insertar los nuevos (si hay)
+      if (this.activeResource.services.length > 0) {
+        const servicesToInsert = this.activeResource.services.map((s: any) => ({
+          resource_id: resourceId,
+          name: s.name,
+          duration_minutes: s.duration_minutes,
+          price: s.price,
+          is_active: true
+        }));
+
+        const { error: sErr } = await supabase.from('resource_services').insert(servicesToInsert);
+        if (sErr) console.error('Error insertando servicios:', sErr);
       }
     }
 
+    this.loadRealData();
     this.closeResourceCreator();
+  }
+
+  addServiceToResource() {
+    if (!this.activeResource.services) this.activeResource.services = [];
+    this.activeResource.services.push({
+      name: '',
+      duration_minutes: 30,
+      price: 0
+    });
+  }
+
+  removeServiceFromResource(index: number) {
+    this.activeResource.services.splice(index, 1);
   }
 
   // --- Block Management ---
@@ -275,6 +569,115 @@ export class ReservationManagement implements OnInit {
     this.closeBlockCreator();
   }
 
+  // --- Manual Booking ---
+  openManualBooking() {
+    this.activeManualBooking = {
+      customer_name: '',
+      customer_phone: '',
+      resource_id: this.resources.length > 0 ? this.resources[0].id : null,
+      start_date: new Date().toISOString().split('T')[0],
+      start_time: '09:00',
+      pax: 1,
+      service_id: null
+    };
+    this.onManualResourceChange();
+    this.showManualBookingModal = true;
+  }
+
+  async onManualResourceChange() {
+    this.activeResourceServices = [];
+    this.activeManualBooking.service_id = null;
+
+    if (this.activeManualBooking.resource_id) {
+      const { data } = await supabase
+        .from('resource_services')
+        .select('*')
+        .eq('resource_id', this.activeManualBooking.resource_id)
+        .eq('is_active', true);
+
+      this.activeResourceServices = data || [];
+    }
+  }
+
+  onManualServiceChange() {
+    const service = this.activeResourceServices.find(s => s.id === this.activeManualBooking.service_id);
+    if (service) {
+      // Opcional: Podríamos mostrar el precio o la duración estimada en la UI
+    }
+  }
+
+  closeManualBooking() {
+    this.showManualBookingModal = false;
+  }
+
+  async saveManualBooking() {
+    if (!this.activeManualBooking.customer_name || !this.activeManualBooking.resource_id) {
+      this.ns.show('Nombre de cliente y recurso son obligatorios', 'warning');
+      return;
+    }
+
+    // 1. Asegurar / Crear Cliente
+    let customerId: string;
+    const { data: custData, error: custError } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('merchant_id', this.merchantId)
+      .eq('phone', this.activeManualBooking.customer_phone)
+      .maybeSingle();
+
+    if (custData) {
+      customerId = custData.id;
+    } else {
+      const { data: newCust, error: newCustErr } = await supabase
+        .from('customers')
+        .insert({
+          merchant_id: this.merchantId,
+          full_name: this.activeManualBooking.customer_name,
+          phone: this.activeManualBooking.customer_phone
+        })
+        .select('id')
+        .single();
+
+      if (newCustErr) {
+        this.ns.show('Error creando cliente: ' + newCustErr.message, 'error');
+        return;
+      }
+      customerId = newCust.id;
+    }
+
+    // 2. Crear Reserva
+    const resource = this.resources.find(r => r.id === this.activeManualBooking.resource_id);
+    const service = this.activeResourceServices.find(s => s.id === this.activeManualBooking.service_id);
+
+    // Priorizamos la duración del servicio, si no la del recurso
+    const duration = service?.duration_minutes || resource?.duration_minutes || 60;
+
+    const start = new Date(`${this.activeManualBooking.start_date}T${this.activeManualBooking.start_time}`);
+    const end = new Date(start.getTime() + duration * 60000);
+
+    const { error: bookError } = await supabase
+      .from('bookings')
+      .insert({
+        merchant_id: this.merchantId,
+        customer_id: customerId,
+        resource_id: this.activeManualBooking.resource_id,
+        service_id: this.activeManualBooking.service_id,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        status: 'confirmed',
+        pax: this.activeManualBooking.pax,
+        channel: 'manual'
+      });
+
+    if (bookError) {
+      this.ns.show('Error al crear reserva: ' + bookError.message, 'error');
+    } else {
+      this.ns.show('Reserva manual creada con éxito', 'success');
+      this.loadRealData();
+      this.closeManualBooking();
+    }
+  }
+
   async deleteBlock(id: string) {
     if (confirm('¿Estás seguro de eliminar este bloqueo?')) {
       const { error } = await supabase
@@ -312,8 +715,15 @@ export class ReservationManagement implements OnInit {
   }
 
   navigateDate(change: number) {
-    this.currentDate.setDate(this.currentDate.getDate() + change);
-    this.currentDate = new Date(this.currentDate); // trigger cd
+    if (this.currentView === 'day') {
+      this.currentDate.setDate(this.currentDate.getDate() + change);
+    } else if (this.currentView === 'week') {
+      this.currentDate.setDate(this.currentDate.getDate() + (change * 7));
+    } else if (this.currentView === 'month') {
+      this.currentDate.setMonth(this.currentDate.getMonth() + change);
+    }
+    this.currentDate = new Date(this.currentDate);
+    this.updateCalendarData();
   }
 }
 

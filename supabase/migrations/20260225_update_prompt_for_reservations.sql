@@ -61,18 +61,36 @@ BEGIN
     FROM merchant_context_blocks WHERE merchant_id = p_merchant_id;
 
     -- 6. Ensamblar
-    v_final_prompt := '### TU ROL: Asistente Concierge de ' || v_merchant.name || E'.\n\n' ||
+    v_final_prompt := '### CONTEXTO TEMPORAL:\n- Fecha y Hora actual: ' || TO_CHAR(timezone('utc'::text, now()), 'Day, DD Month YYYY HH24:MI') || E' UTC\n\n' ||
+                      '### TU ROL: Asistente Concierge de ' || v_merchant.name || E'.\n\n' ||
                       '### IDENTIDAD BASE:\n- Personalidad: ' || v_personality || E'.\n- Saludo: ' || v_welcome || E'\n\n';
 
     IF v_merchant.agent_system_prompt IS NOT NULL THEN
         v_final_prompt := v_final_prompt || '### LÓGICA MAESTRA (AGENTE):\n' || v_merchant.agent_system_prompt || E'\n\n';
     END IF;
 
+    -- Inyectar Protocolo de Industria (Automático)
+    IF v_merchant.industry_type IS NOT NULL THEN
+        DECLARE
+            v_proto_slug TEXT := 'proto_' || v_merchant.industry_type;
+            v_proto_prompt TEXT;
+        BEGIN
+            -- Corrección: si es 'reservations' suele ser general (o lo mapeamos a medical si es clínica)
+            -- Pero si el industry_type ya es 'restaurant', 'hotel', etc.
+            SELECT system_prompt_fragment INTO v_proto_prompt FROM skills_catalog WHERE slug = v_proto_slug;
+            IF v_proto_prompt IS NOT NULL THEN
+                v_final_prompt := v_final_prompt || '### PROTOCOLO DE ' || UPPER(v_merchant.industry_type) || E':\n' || v_proto_prompt || E'\n\n';
+            END IF;
+        END;
+    END IF;
+
+    -- Inyectar Habilidades Habilitadas (Motores Técnicos)
     FOR v_skill_record IN 
         SELECT sc.slug, sc.system_prompt_fragment 
         FROM agent_skills ask
         JOIN skills_catalog sc ON ask.skill_id = sc.id
         WHERE ask.agent_id = v_merchant.agent_id AND ask.is_enabled = true
+          AND sc.slug NOT LIKE 'proto_%' -- Los protocolos ya se inyectaron arribax
     LOOP
         v_final_prompt := v_final_prompt || '### HABILIDAD: ' || v_skill_record.slug || E'\n' || v_skill_record.system_prompt_fragment || E'\n\n';
     END LOOP;

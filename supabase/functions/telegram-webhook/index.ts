@@ -142,9 +142,10 @@ Deno.serve(async (req: Request) => {
         if (messages.length > 0 && messages[0].role === "model") messages.shift();
 
         // System prompt desde la DB (fuente única)
-        const systemPrompt = compiledPrompt || `Eres el asistente de ${m.name}. Ayuda al cliente con su pedido.`;
+        let systemPrompt = compiledPrompt || `Eres el asistente de ${m.name}. Ayuda al cliente con su pedido.`;
 
-
+        // 🔴 REFUERZO OBLIGATORIO: recordatorio técnico para todos los LLMs
+        systemPrompt += `\n\n---\n🚨 INSTRUCCIÓN TÉCNICA CRÍTICA - OBLIGATORIA (NO IGNORAR):\n\nCuando el cliente CONFIRME sus datos personales (nombre, dirección, teléfono), DEBES incluir en ese mismo mensaje el siguiente comando JSON exacto:\n\n[ORDER_CONFIRMED: {"customer_name": "NOMBRE_REAL", "address": "DIRECCIÓN_REAL", "phone": "TELÉFONO_REAL", "total": TOTAL_NUMERO, "items": [{"name": "PRODUCTO", "price": PRECIO, "qty": CANTIDAD}]}]\n\nREGLAS:\n- El comando va en el MISMO mensaje en que confirmas el pedido. NUNCA en un mensaje separado.\n- NUNCA uses "..." como valor. Si no tienes el dato, NO confirmes el pedido todavía.\n- El campo "total" es solo el número (sin $). Ejemplo: 56000.\n- SIEMPRE incluye el array "items" con cada producto pedido.\n- Esta instrucción tiene PRIORIDAD MÁXIMA sobre cualquier otra.`;
 
         // Agregar el mensaje actual
         messages.push({
@@ -276,7 +277,8 @@ Deno.serve(async (req: Request) => {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "ngrok-skip-browser-warning": "true"
+                        "ngrok-skip-browser-warning": "true",
+                        "Authorization": m.ai_api_key ? `Bearer ${m.ai_api_key}` : ""
                     },
                     body: JSON.stringify({
                         model: modelName,
@@ -304,7 +306,8 @@ Deno.serve(async (req: Request) => {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "ngrok-skip-browser-warning": "true"
+                        "ngrok-skip-browser-warning": "true",
+                        "Authorization": m.ai_api_key ? `Bearer ${m.ai_api_key}` : ""
                     },
                     body: JSON.stringify({
                         model: modelName,
@@ -325,7 +328,13 @@ Deno.serve(async (req: Request) => {
                 aiResponse = lmData.choices?.[0]?.message?.content || "Lo siento, no pude procesar tu mensaje.";
 
             } else {
-                const cleanModelName = modelName.includes('/') ? modelName.split('/').pop() : modelName;
+                let cleanModelName = (modelName || 'gemini-1.5-flash').includes('/') ? modelName.split('/').pop() : modelName;
+
+                // Corrección de typos comunes (ej: gemini-2.5-flash)
+                if (cleanModelName === 'gemini-2.5-flash' || cleanModelName === 'gemini-2.1-flash' || !cleanModelName) {
+                    cleanModelName = 'gemini-1.5-flash';
+                }
+
                 const isGemmaModel = cleanModelName!.toLowerCase().startsWith('gemma');
 
                 // Asegurar alternancia de roles
@@ -352,6 +361,10 @@ Deno.serve(async (req: Request) => {
                             generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
                         })
                     });
+
+                    if (!geminiRes.ok && geminiRes.status === 429) {
+                        throw new Error("QUOTA_EXCEEDED: Se ha agotado la cuota de tu IA Gemini. Verifica tu plan en Google AI Studio.");
+                    }
                 } else {
                     // Gemma: NO soporta system_instruction → inyectamos el prompt en el primer mensaje
                     console.log("[DEBUG] Gemma model detected — injecting system prompt into first message");
@@ -382,9 +395,25 @@ Deno.serve(async (req: Request) => {
                 aiResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "Lo siento, no pude procesar tu mensaje.";
             }
             console.log("[DEBUG] AI response success, length:", aiResponse.length);
-        } catch (err: any) {
-            console.error("[AI GLOBAL ERROR]:", err.message);
-            aiResponse = "Disculpa, hay un problema con el modelo de IA seleccionado. Por favor verifica tu configuración.";
+        } catch (e: any) {
+            console.error("[AI Exception]", e);
+            if (e.message.startsWith("QUOTA_EXCEEDED")) {
+                aiResponse = "Oops! 😅 Mi cuota diaria de energía se ha agotado. Por favor, avisa al administrador para que verifique el plan de IA o intenta de nuevo más tarde. 🔋✨";
+            } else {
+                aiResponse = "Lo siento, mis circuitos están un poco cansados en este momento y tengo problemas técnicos. 🤖✨ Por favor, intenta de nuevo en un ratito o espera a que uno de nuestros asesores te atienda.";
+            }
+
+            if (conversation?.id) {
+                try {
+                    await supabase.from("messages").insert({
+                        conversation_id: conversation.id,
+                        sender_type: "ai",
+                        content: `🔧 *Error Técnico Interno (No visible para el cliente):*\n\n${e.message}`
+                    });
+                } catch (dbErr) {
+                    console.error("Error saving crash log to DB:", dbErr);
+                }
+            }
         }
 
         // === PROCESAR RESPUESTA DE IA ===
@@ -415,10 +444,10 @@ Deno.serve(async (req: Request) => {
                     delivery_address: info.address,
                     status: 'pending',
                     closing_agent_type: 'ai'
-                }).select('id').single();
+                }).select('id, order_number').single();
 
                 if (order) {
-                    orderConfirmationText = `\n\n🚀 *¡Pedido registrado!*\n🆔 *Orden #${order.id.split('-')[0].toUpperCase()}*`;
+                    orderConfirmationText = `\n\n🚀 *¡Pedido registrado!*\n🆔 *Orden #${order.order_number}*`;
 
                     if (info.items && Array.isArray(info.items)) {
                         const itemsToInsert = info.items.map((it: any) => {

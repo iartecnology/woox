@@ -447,6 +447,36 @@
                         </div>
                     </div>
 
+                    <div class="section-divider full-width">🔗 Conectividad WhatsApp (Evolution API)</div>
+
+                    <div class="form-group full-width">
+                        <label>Evolution API Base URL</label>
+                        <input type="text" [(ngModel)]="platformConfig.evolution_api_url"
+                            placeholder="https://evolucion.tudominio.com">
+                        <small>La URL principal de tu instancia de Evolution API (donde se crean las
+                            instancias).</small>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Global API Key</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="password" [(ngModel)]="platformConfig.evolution_api_key" style="flex: 1;"
+                                placeholder="Clave global de Evolution API">
+                            <button class="action-btn" (click)="testEvolutionConnection()"
+                                [disabled]="isValidatingEvolution"
+                                style="white-space: nowrap; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;">
+                                {{ isValidatingEvolution ? '🕒 Probando...' : '🔍 Probar' }}
+                            </button>
+                        </div>
+                        <small *ngIf="evolutionStatus === 'success'"
+                            style="color: #059669; font-weight: 600; margin-top: 4px; display: block;">✅ Conexión
+                            Exitosa</small>
+                        <small *ngIf="evolutionStatus === 'error'"
+                            style="color: #dc2626; font-weight: 600; margin-top: 4px; display: block;">❌ Error de
+                            Conexión</small>
+                        <small>Tu API Key global configurada en la variable de entorno de Evolution API.</small>
+                    </div>
+
                     <div class="section-divider full-width">🤖 Motor de Chat IA (Copiloto)</div>
                     <div class="form-group full-width">
                         <p class="desc">IA principal para el asistente interno y generación automática de prompts.</p>
@@ -957,15 +987,20 @@
                         <div class="label-with-action">
                             <label>
                                 <span class="channel-icon">📱</span>
-                                WhatsApp Meta API Config
+                                WhatsApp Connection
                             </label>
-                            <button class="help-action-btn" (click)="verifyChannel('whatsapp')"
-                                [disabled]="verifyingChannel === 'whatsapp'">
-                                {{ verifyingChannel === 'whatsapp' ? '⏳ Verificando...' : '⚡ Probar Conexión' }}
-                            </button>
+                            <div class="connector-selector">
+                                <button class="toggle-btn"
+                                    [class.active]="selectedMerchant.wa_connector_type !== 'web_qr'"
+                                    (click)="selectedMerchant.wa_connector_type = 'meta'">Meta API</button>
+                                <button class="toggle-btn"
+                                    [class.active]="selectedMerchant.wa_connector_type === 'web_qr'"
+                                    (click)="selectedMerchant.wa_connector_type = 'web_qr'">WhatsApp Web (QR)</button>
+                            </div>
                         </div>
 
-                        <div class="sub-form-whatsapp">
+                        <!-- Opción 1: Meta API -->
+                        <div class="sub-form-whatsapp" *ngIf="selectedMerchant.wa_connector_type !== 'web_qr'">
                             <div class="token-input-wrapper mb-10">
                                 <label class="inner-label">Access Token (Permanent)</label>
                                 <input [type]="tokenVisibility['whatsapp'] ? 'text' : 'password'"
@@ -994,6 +1029,53 @@
                                 <label class="inner-label">Webhook Verify Token (Configúralo en Meta)</label>
                                 <input type="text" [(ngModel)]="selectedMerchant.whatsapp_verify_token"
                                     [placeholder]="selectedMerchant.merchant_code || 'woox_secret_token_123'">
+                            </div>
+
+                            <button class="test-conn-btn mt-10" (click)="verifyChannel('whatsapp')"
+                                [disabled]="verifyingChannel === 'whatsapp'">
+                                {{ verifyingChannel === 'whatsapp' ? '⏳ Verificando...' : '⚡ Probar Conexión Meta' }}
+                            </button>
+                        </div>
+
+                        <!-- Opción 2: Web QR -->
+                        <div class="sub-form-whatsapp qr-connection-box"
+                            *ngIf="selectedMerchant.wa_connector_type === 'web_qr'">
+                            <div class="qr-status-header">
+                                <span class="status-badge"
+                                    [class.connected]="selectedMerchant.wa_status === 'connected'">
+                                    {{ selectedMerchant.wa_status === 'connected' ? '● Conectado' : '○ Desconectado' }}
+                                </span>
+                                <button class="refresh-qr-btn" (click)="generateWAQR(selectedMerchant)">
+                                    {{ selectedMerchant.wa_qr_code ? '🔄 Regenerar QR' : '✨ Vincular Cuenta' }}
+                                </button>
+                                <button class="action-btn-small" *ngIf="selectedMerchant.wa_status === 'connected'"
+                                    (click)="syncEvolutionWebhook(selectedMerchant)" title="Sincronizar Webhook">
+                                    🔗 Sincronizar
+                                </button>
+                                <button class="action-btn-danger" *ngIf="selectedMerchant.wa_status === 'connected'"
+                                    (click)="disconnectWA(selectedMerchant)" title="Desconectar">
+                                    🚫
+                                </button>
+                            </div>
+
+                            <div class="qr-container"
+                                *ngIf="selectedMerchant.wa_qr_code && selectedMerchant.wa_status !== 'connected'">
+                                <div class="qr-placeholder" *ngIf="!selectedMerchant.wa_qr_code">
+                                    <span class="icon">📷</span>
+                                    <p>Haz clic en "Vincular Cuenta" para generar el código QR</p>
+                                </div>
+                                <div class="qr-image-wrapper" *ngIf="selectedMerchant.wa_qr_code">
+                                    <img [src]="selectedMerchant.wa_qr_code" alt="WhatsApp QR Code">
+                                    <p class="qr-instructions">Escanea este código desde WhatsApp > Dispositivos
+                                        vinculados</p>
+                                </div>
+                            </div>
+
+                            <div class="connected-info" *ngIf="selectedMerchant.wa_status === 'connected'">
+                                <div class="success-icon">✅</div>
+                                <p>Tu cuenta está vinculada correctamente.</p>
+                                <button class="disconnect-btn"
+                                    (click)="disconnectWA(selectedMerchant)">Desconectar</button>
                             </div>
                         </div>
 

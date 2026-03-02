@@ -597,6 +597,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       // Añadir bypass de ngrok solo para proveedores locales/túneles
       if (this.aiProvider === 'ollama' || this.aiProvider === 'lmstudio') {
         headers['ngrok-skip-browser-warning'] = 'true';
+        if (this.aiApiKey) headers['Authorization'] = `Bearer ${this.aiApiKey}`;
       }
 
       if (isOpenAI) {

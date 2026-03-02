@@ -12,7 +12,10 @@ function sanitizeMarkdown(text: string): string {
     sanitized = sanitized.replace(/\(DESCRIPCIÓN REAL:.*?\)/gi, "");
     sanitized = sanitized.replace(/\[DISPONIBLE\]/gi, "");
     sanitized = sanitized.replace(/\[AGOTADO\]/gi, "");
-    sanitized = sanitized.replace(/\[ORDER_CONFIRMED:.*?\]/gi, "");
+
+    // Limpiar etiquetas de carrito y restos de JSON que a veces la IA escupe por error
+    sanitized = sanitized.replace(/\[UPDATE_CART:.*?\]/gi, "");
+    sanitized = sanitized.replace(/^\s*[}\]]+\s*$/gm, "");
 
     return sanitized.trim();
 }
@@ -189,48 +192,130 @@ Deno.serve(async (req: Request) => {
         const modelName = m.ai_model || 'gemini-1.5-flash';
 
         try {
-            const cleanModel = modelName.split('/').pop();
-            let geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${m.ai_api_key}`, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    system_instruction: { parts: [{ text: systemPrompt }] },
-                    contents: chatMessages,
-                    generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
-                })
-            });
+            const provider = m.ai_provider || 'google_gemini';
 
-            if (!geminiRes.ok) {
-                const blended = JSON.parse(JSON.stringify(chatMessages));
-                blended[0].parts[0].text = systemPrompt + "\n\n" + blended[0].parts[0].text;
-                geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${m.ai_api_key}`, {
-                    method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ contents: blended, generationConfig: { temperature: 0.3, maxOutputTokens: 2048 } })
+            if (provider === 'openai') {
+                const res = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${m.ai_api_key}` },
+                    body: JSON.stringify({
+                        model: modelName || 'gpt-4o-mini',
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            ...chatMessages.map(msg => ({ role: msg.role === "model" ? "assistant" : "user", content: msg.parts[0].text }))
+                        ]
+                    })
                 });
-            }
-            const data = await geminiRes.json();
-            aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "Lo siento, tuve un error.";
-        } catch (e) {
-            aiResponse = "Error conectando con la IA.";
-        }
+                if (!res.ok) throw new Error(`OpenAI Error: ${await res.text()}`);
+                const data = await res.json();
+                aiResponse = data.choices?.[0]?.message?.content || "Sin respuesta de OpenAI.";
 
-        // Limpiar artefactos de comandos antes de procesar
-        aiResponse = aiResponse.replace(/^\s*[}\]]+\s*$/gm, "").trim();
-        aiResponse = aiResponse.replace(/\[UPDATE[_ ]CART:[^\]]*\]/g, "").trim();
+            } else if (provider === 'ollama') {
+                const ollamaUrl = m.ollama_base_url || 'http://localhost:11434';
+                const res = await fetch(`${ollamaUrl}/api/chat`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true",
+                        "Authorization": m.ai_api_key ? `Bearer ${m.ai_api_key}` : ""
+                    },
+                    body: JSON.stringify({
+                        model: modelName,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            ...chatMessages.map(msg => ({ role: msg.role === "model" ? "assistant" : "user", content: msg.parts[0].text }))
+                        ],
+                        stream: false
+                    })
+                });
+                if (!res.ok) throw new Error(`Ollama Error: ${await res.text()}`);
+                const data = await res.json();
+                aiResponse = data.message?.content || "Sin respuesta de Ollama.";
+
+            } else if (provider === 'lmstudio') {
+                const lmUrl = m.lmstudio_base_url || 'http://localhost:1234/v1';
+                const res = await fetch(`${lmUrl}/chat/completions`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true",
+                        "Authorization": m.ai_api_key ? `Bearer ${m.ai_api_key}` : ""
+                    },
+                    body: JSON.stringify({
+                        model: modelName,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            ...chatMessages.map(msg => ({ role: msg.role === "model" ? "assistant" : "user", content: msg.parts[0].text }))
+                        ],
+                        temperature: 0.5,
+                        max_tokens: 2048
+                    })
+                });
+                if (!res.ok) throw new Error(`LM Studio Error: ${await res.text()}`);
+                const data = await res.json();
+                aiResponse = data.choices?.[0]?.message?.content || "Sin respuesta de LM Studio.";
+
+            } else {
+                const cleanModel = modelName.split('/').pop();
+                let geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${m.ai_api_key}`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        system_instruction: { parts: [{ text: systemPrompt }] },
+                        contents: chatMessages,
+                        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
+                    })
+                });
+
+                if (!geminiRes.ok) {
+                    const blended = JSON.parse(JSON.stringify(chatMessages));
+                    blended[0].parts[0].text = systemPrompt + "\n\n" + blended[0].parts[0].text;
+                    geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${m.ai_api_key}`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ contents: blended, generationConfig: { temperature: 0.3, maxOutputTokens: 2048 } })
+                    });
+                }
+                const data = await geminiRes.json();
+                aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "Lo siento, tuve un error.";
+            }
+        } catch (e: any) {
+            console.error("[AI Exception]", e.message);
+            aiResponse = "Lo siento, mis circuitos están un poco cansados en este momento y tengo problemas técnicos. 🤖✨ Por favor, intenta de nuevo en un ratito o espera a que uno de nuestros asesores te atienda.";
+
+            if (conversation?.id) {
+                try {
+                    await supabase.from("messages").insert({
+                        conversation_id: conversation.id,
+                        sender_type: "ai",
+                        content: `🔧 *Error Técnico Interno (No visible para el cliente):*\n\n${e.message}`
+                    });
+                } catch (dbErr) {
+                    console.error("Error saving crash log to DB:", dbErr);
+                }
+            }
+        }
 
         // 4. Procesar Pedido
         if (aiResponse.includes("[ORDER_CONFIRMED:")) {
-            const match = aiResponse.match(/\[ORDER_CONFIRMED:\s*({.*?})\]/s);
+            const match = aiResponse.match(/\[ORDER_CONFIRMED:\s*(\{[\s\S]*\})\s*\]/);
             if (match) {
                 try {
                     const info = JSON.parse(match[1]);
-                    aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:.*?\]/s, "").trim();
-                    await supabase.from("orders").insert({
+                    aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*\}\s*\]/, "").trim();
+                    const { data: order } = await supabase.from("orders").insert({
                         merchant_id: merchantIdInternal, customer_id: customer.id, conversation_id: conversation.id,
                         total: Number(info.total) || 0, delivery_address: info.address, channel: 'facebook'
-                    });
-                } catch (e) { }
+                    }).select('order_number').single();
+                    if (order) {
+                        aiResponse += `\n\n✅ *Orden #${order.order_number} registrada.*`;
+                    }
+                } catch (e) {
+                    aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*\}\s*\]/, "").trim();
+                }
             }
         }
+
+        aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED[^\]]*\]/g, "").trim();
+        aiResponse = aiResponse.replace(/^\s*[}\]]+\s*$/gm, "");
 
         // 5. Enviar Messenger
         const cleanResponse = sanitizeMarkdown(aiResponse);

@@ -12,7 +12,10 @@ function sanitizeMarkdown(text: string): string {
     sanitized = sanitized.replace(/\(DESCRIPCIÓN REAL:.*?\)/gi, "");
     sanitized = sanitized.replace(/\[DISPONIBLE\]/gi, "");
     sanitized = sanitized.replace(/\[AGOTADO\]/gi, "");
-    sanitized = sanitized.replace(/\[ORDER_CONFIRMED:.*?\]/gi, "");
+
+    // Limpiar etiquetas de carrito y restos de JSON que a veces la IA escupe por error
+    sanitized = sanitized.replace(/\[UPDATE_CART:.*?\]/gi, "");
+    sanitized = sanitized.replace(/^\s*[}\]]+\s*$/gm, "");
 
     return sanitized.trim();
 }
@@ -261,15 +264,21 @@ Deno.serve(async (req: Request) => {
         const categoriesList = [...new Set(products?.map((p: any) => p.category?.name || "Otros"))].join(", ");
 
         // 3. === PROMPT CENTRALIZADO (Single Source of Truth) ===
-        // Obtener el prompt compilado desde la base de datos (incluye skills, catálogo, reglas de pedido, etc.)
-        let systemPrompt = '';
         const { data: compiledPrompt } = await supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantIdInternal });
-        if (compiledPrompt) {
-            systemPrompt = compiledPrompt;
-        } else {
-            // Fallback mínimo si el RPC falla
-            systemPrompt = `Eres el asistente virtual de ${m.name}. Ayuda al cliente a realizar su pedido de forma natural. Categorías disponibles: ${categoriesList}.`;
-        }
+
+        // 🔴 REFUERZO OBLIGATORIO: Recordatorio técnico de comandos para todos los LLMs
+        const reinforcement = `🚨 INSTRUCCIÓN TÉCNICA CRÍTICA (MÁXIMA PRIORIDAD):
+Cuando el cliente CONFIRME sus datos (diga "Si", "Correcto", "Ok", etc.) o te proporcione Nombre/Dirección/Teléfono, DEBES incluir en ese mismo mensaje el siguiente comando JSON exacto:
+
+[ORDER_CONFIRMED: {"customer_name": "NOMBRE", "address": "DIRECCIÓN", "phone": "TELÉFONO", "total": TOTAL_NUMERO, "items": [{"name": "PRODUCTO", "price": PRECIO, "qty": CANTIDAD}]}]
+
+REGLAS DE ORO:
+1. El comando va dentro del mensaje de texto, nunca solo.
+2. "total" es solo el número.
+3. SIEMPRE incluye los "items" con nombre, precio y qty.
+4. NUNCA uses "..." como valor.`;
+
+        const systemPrompt = reinforcement + "\n\n" + (compiledPrompt || `Eres el asistente virtual de ${m.name}. Ayuda al cliente a realizar su pedido de forma natural. Categorías disponibles: ${categoriesList}.`) + "\n\n" + reinforcement;
 
         chatMessages.push({ role: "user", parts: [{ text: messageText }] });
 
@@ -328,7 +337,8 @@ Deno.serve(async (req: Request) => {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "ngrok-skip-browser-warning": "true"
+                        "ngrok-skip-browser-warning": "true",
+                        "Authorization": m.ai_api_key ? `Bearer ${m.ai_api_key}` : ""
                     },
                     body: JSON.stringify({
                         model: modelName,
@@ -356,7 +366,8 @@ Deno.serve(async (req: Request) => {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "ngrok-skip-browser-warning": "true"
+                        "ngrok-skip-browser-warning": "true",
+                        "Authorization": m.ai_api_key ? `Bearer ${m.ai_api_key}` : ""
                     },
                     body: JSON.stringify({
                         model: modelName,
@@ -378,7 +389,12 @@ Deno.serve(async (req: Request) => {
 
             } else {
                 // Google AI Studio (Gemini / Gemma)
-                const cleanModelName = modelName.includes('/') ? modelName.split('/').pop() : modelName;
+                let cleanModelName = modelName?.includes('/') ? modelName.split('/').pop() : (modelName || 'gemini-1.5-flash');
+
+                // Corrección de typos comunes (ej: gemini-2.5-flash)
+                if (cleanModelName === 'gemini-2.5-flash' || cleanModelName === 'gemini-2.1-flash') {
+                    cleanModelName = 'gemini-1.5-flash';
+                }
 
                 // Intentar primero con system_instruction
                 let geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModelName}:generateContent?key=${m.ai_api_key}`, {
@@ -392,6 +408,10 @@ Deno.serve(async (req: Request) => {
                 });
 
                 if (!geminiRes.ok) {
+                    const errText = await geminiRes.text();
+                    if (geminiRes.status === 429) {
+                        throw new Error("QUOTA_EXCEEDED: Se ha agotado la cuota de tu IA Gemini. Verifica tu plan en Google AI Studio.");
+                    }
                     console.log("[DEBUG] Fallback: Merging system prompt due to API error (maybe model doesn't support system_instruction)...");
 
                     // Fallback: Fusionar system prompt en el primer mensaje
@@ -414,6 +434,9 @@ Deno.serve(async (req: Request) => {
 
                 if (!geminiRes.ok) {
                     const errText = await geminiRes.text();
+                    if (geminiRes.status === 429) {
+                        throw new Error("QUOTA_EXCEEDED: Se ha agotado la cuota de tu IA Gemini. Verifica tu plan en Google AI Studio.");
+                    }
                     console.error("[GEMINI FINAL ERROR]", geminiRes.status, errText);
                     throw new Error(`Gemini error: ${geminiRes.status} - ${errText}`);
                 }
@@ -424,42 +447,96 @@ Deno.serve(async (req: Request) => {
 
         } catch (e: any) {
             console.error("[AI Exception]", e);
-            aiResponse = "Lo siento, estoy teniendo problemas técnicos con mi cerebro digital. (" + e.message + ")";
-        }
 
-        // Limpiar artefactos de comandos antes de procesar
-        aiResponse = aiResponse.replace(/^\s*[}\]]+\s*$/gm, "").trim();
-        aiResponse = aiResponse.replace(/\[UPDATE[_ ]CART:[^\]]*\]/g, "").trim();
+            if (e.message.startsWith("QUOTA_EXCEEDED")) {
+                aiResponse = "Oops! 😅 Mi cuota diaria de energía se ha agotado. Por favor, avisa al administrador para que verifique el plan de IA o intenta de nuevo más tarde. 🔋✨";
+            } else {
+                aiResponse = "Lo siento, mis circuitos están un poco cansados en este momento y tengo problemas técnicos. 🤖✨ Por favor, intenta de nuevo en un ratito o espera a que uno de nuestros asesores te atienda.";
+            }
 
-        // Procesar Pedidos
-        if (aiResponse.includes("[ORDER_CONFIRMED:")) {
-            // 4. IA Logic
-            // ... (Lógica de pedidos existente)
-            const orderMatch = aiResponse.match(/\[ORDER_CONFIRMED:\s*({.*?})\]/s);
-            if (orderMatch) {
+            if (conversation?.id) {
                 try {
-                    const info = JSON.parse(orderMatch[1]);
-                    aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:.*?\]/s, "").trim();
-
-                    const { data: order, error: orderErr } = await supabase.from("orders").insert({
-                        merchant_id: merchantIdInternal,
-                        customer_id: customer.id,
+                    await supabase.from("messages").insert({
                         conversation_id: conversation.id,
-                        total: Number(info.total) || 0,
-                        delivery_address: info.address || 'WhatsApp Address',
-                        status: 'pending',
-                        channel: 'whatsapp'
-                    }).select('id').single();
-
-                    if (orderErr) console.error("Error creating order:", orderErr);
-                    if (order) aiResponse += `\n\n✅ *Pedido #${order.id.split('-')[0].toUpperCase()} registrado.*`;
-                } catch (e) {
-                    console.error("Error parsing order JSON:", e);
+                        sender_type: "ai",
+                        content: `🔧 *Error Técnico Interno (No visible para el cliente):*\n\n${e.message}`
+                    });
+                } catch (dbErr) {
+                    console.error("Error saving crash log to DB:", dbErr);
                 }
             }
         }
 
+        // Procesar Pedidos
+        const orderMatch = aiResponse.match(/\[ORDER_CONFIRMED:\s*(\{[\s\S]*\})\s*\]/);
+        if (orderMatch) {
+            try {
+                const info = JSON.parse(orderMatch[1].trim());
+                aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*\}\s*\]/, "").trim();
+
+                // 1. Actualizar datos del cliente
+                const customerUpdates: any = {};
+                if (info.customer_name) customerUpdates.full_name = info.customer_name;
+                if (info.phone) customerUpdates.phone = info.phone;
+
+                if (Object.keys(customerUpdates).length > 0) {
+                    await supabase.from("customers").update(customerUpdates).eq("id", customer.id);
+                }
+
+                // 2. Crear la orden
+                const { data: order, error: orderErr } = await supabase.from("orders").insert({
+                    merchant_id: merchantIdInternal,
+                    customer_id: customer.id,
+                    conversation_id: conversation.id,
+                    total: Number(info.total) || 0,
+                    delivery_address: info.address || 'WhatsApp Address',
+                    status: 'pending',
+                    channel: 'whatsapp',
+                    closing_agent_type: 'ai'
+                }).select('id, order_number').single();
+
+                if (!orderErr && order) {
+                    aiResponse += `\n\n🚀 *¡Pedido registrado!*\n🆔 *Orden #${order.order_number}*`;
+
+                    // 3. Insertar Detalle
+                    if (info.items && Array.isArray(info.items)) {
+                        const { data: products } = await supabase.from("products").select("id, name").eq("merchant_id", merchantIdInternal);
+
+                        const itemsToInsert = info.items.map((it: any) => {
+                            const matchedProduct = products?.find((p: any) => p.name.toLowerCase() === String(it.name).toLowerCase());
+                            return {
+                                order_id: order.id,
+                                product_id: matchedProduct?.id || null,
+                                product_name: String(it.name),
+                                quantity: Number(it.qty || 1),
+                                unit_price: Number(it.price || 0),
+                                subtotal: Number((it.qty || 1) * (it.price || 0))
+                            };
+                        });
+                        await supabase.from("order_items").insert(itemsToInsert);
+                    }
+                } else if (orderErr) {
+                    console.error("Error creating order:", orderErr);
+                }
+            } catch (e) {
+                console.error("Error parsing order JSON:", e);
+                aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*\}\s*\]/, "").trim();
+            }
+        }
+
+        // Limpiar etiqueta residual por seguridad si hubo formato erróneo
+        aiResponse = aiResponse.replace(/\[ORDER_CONFIRMED[^\]]*\]/g, "").trim();
+        aiResponse = aiResponse.replace(/^\s*[}\]]+\s*$/gm, "").trim();
+
+        // 🛡️ GUARDIA: fallback si la IA solo envió el comando técnico y nada más
+        if (!aiResponse || aiResponse.length < 5) {
+            aiResponse = "✅ ¡Listo! Tu pedido ha sido registrado con éxito. En breve nuestro equipo lo preparará. ¡Gracias! 🍔👑";
+        }
+
         const cleanResponse = sanitizeMarkdown(aiResponse);
+
+        // No enviar mensajes vacíos
+        if (!cleanResponse.trim()) return new Response("ok", { headers: corsHeaders });
 
         // 5. Enviar a WhatsApp
         if (!m.whatsapp_phone_number_id || !m.whatsapp_token) {

@@ -68,9 +68,9 @@ CREATE TABLE IF NOT EXISTS public.bookings (
 );
 
 -- Índices para optimizar las consultas de disponibilidad y cruce de fechas (Vital para la IA)
-CREATE INDEX idx_bookings_resource_dates ON public.bookings(resource_id, start_time, end_time);
-CREATE INDEX idx_bookings_merchant_status ON public.bookings(merchant_id, status);
-CREATE INDEX idx_availability_resource_day ON public.availability_schedules(resource_id, day_of_week);
+CREATE INDEX IF NOT EXISTS idx_bookings_resource_dates ON public.bookings(resource_id, start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_bookings_merchant_status ON public.bookings(merchant_id, status);
+CREATE INDEX IF NOT EXISTS idx_availability_resource_day ON public.availability_schedules(resource_id, day_of_week);
 
 -- Habilitar RLS (Row Level Security) - Políticas básicas (pueden ajustarse luego)
 ALTER TABLE public.reservable_resources ENABLE ROW LEVEL SECURITY;
@@ -79,7 +79,18 @@ ALTER TABLE public.availability_exceptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
 -- Políticas temporales para ambiente de desarrollo (se recomienda ajustar en prod)
-CREATE POLICY "Permitir todo a usuarios autenticados reservable_resources" ON public.reservable_resources FOR ALL USING (true);
-CREATE POLICY "Permitir todo a usuarios autenticados availability_schedules" ON public.availability_schedules FOR ALL USING (true);
-CREATE POLICY "Permitir todo a usuarios autenticados availability_exceptions" ON public.availability_exceptions FOR ALL USING (true);
-CREATE POLICY "Permitir todo a usuarios autenticados bookings" ON public.bookings FOR ALL USING (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Permitir todo a usuarios autenticados reservable_resources') THEN
+        CREATE POLICY "Permitir todo a usuarios autenticados reservable_resources" ON public.reservable_resources FOR ALL USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Permitir todo a usuarios autenticados availability_schedules') THEN
+        CREATE POLICY "Permitir todo a usuarios autenticados availability_schedules" ON public.availability_schedules FOR ALL USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Permitir todo a usuarios autenticados availability_exceptions') THEN
+        CREATE POLICY "Permitir todo a usuarios autenticados availability_exceptions" ON public.availability_exceptions FOR ALL USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Permitir todo a usuarios autenticados bookings') THEN
+        CREATE POLICY "Permitir todo a usuarios autenticados bookings" ON public.bookings FOR ALL USING (true);
+    END IF;
+END $$;
