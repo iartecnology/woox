@@ -208,24 +208,38 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         context_extra = ""
         
         if current_intent == "ORDER_CONFIRMATION":
-            add_log(f"🛒 Detectada confirmación de pedido para {request.merchant_id}")
+            add_log(f"🛒 Confirmación en proceso para {request.merchant_id}")
             order_data = await llm_service.extract_order_data(history_context + f"\nCliente: {request.message_text}", ai_config)
+            
             if order_data and order_data.get("items"):
-                add_log(f"📦 Datos extraídos: {len(order_data['items'])} items.")
-                order_result = await order_skill.register_order(
-                    request.merchant_id, 
-                    request.customer_id, 
-                    request.conversation_id, 
-                    order_data
-                )
-                context_extra = f"\n### ACCIÓN REALIZADA: PEDIDO REGISTRADO EN DB ###\n{order_result}\nResponde al cliente confirmando que todo está listo y menciónale su número de orden si aparece arriba."
+                if order_data.get("is_complete"):
+                    add_log("📦 Pedido completo. Registrando...")
+                    order_result = await order_skill.register_order(
+                        request.merchant_id, 
+                        request.customer_id, 
+                        request.conversation_id, 
+                        order_data
+                    )
+                    context_extra = f"\n### ACCIÓN REALIZADA: PEDIDO REGISTRADO ###\n{order_result}\nInstrucción: Confirma al cliente que su pedido procesado con éxito y menciónale su número de orden."
+                else:
+                    add_log("💬 Faltan datos del cliente.")
+                    missing = []
+                    if not order_data.get("customer_name"): missing.append("nombre completo")
+                    if not order_data.get("address"): missing.append("dirección de entrega")
+                    if not order_data.get("phone"): missing.append("teléfono")
+                    
+                    context_extra = f"\n### NOTA: PEDIDO NO CERRADO ###\nFaltan datos obligatorios: {', '.join(missing)}. \nInstrucción: Agradece la confirmación pero pide amablemente los datos que faltan para poder generar el pedido. NO inventes un número de orden."
             else:
-                add_log("⚠️ No se pudieron extraer datos válidos del pedido.")
+                add_log("⚠️ Intento de confirmación sin carrito claro.")
+                context_extra = "\n### NOTA ### El cliente quiere confirmar pero el historial no muestra qué productos quiere. Pídele que elija algo del menú primero."
 
         elif current_intent == "KNOWLEDGE_QUERY":
             context_extra = await rag_skill.search_context(request.merchant_id, request.message_text, config=ai_config)
 
-        # 5. Generación Final
+        # 5. Generación Final (Evitar saludos repetidos)
+        if history_context:
+            system_prompt += "\nNOTA: Es una conversación en curso. NO saludes de nuevo ni digas '¡Hola!', ve directo a lo que pide el cliente de forma amable."
+
         full_context = (history_context + "\n" + context_extra).strip()
         ai_response = await llm_service.generate_response(system_prompt, full_context, request.message_text, ai_config)
         

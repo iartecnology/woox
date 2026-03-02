@@ -120,32 +120,40 @@ class LLMService:
         if not api_key: return None
 
         extraction_prompt = f"""
-        Analiza el siguiente historial de chat y extrae los datos del pedido en formato JSON estricto.
-        No incluyas explicaciones, solo el JSON.
-        
-        Campos requeridos:
-        - items: lista de objetos {{"name": str, "qty": int, "price": float}}
-        - total: float
-        - customer_name: str
-        - address: str
-        - phone: str
-        
+        Analiza el historial de chat y extrae los datos del pedido en formato JSON.
+        IMPORTANTE: Solo incluye valores si el cliente los ha proporcionado claramente. 
+        Si no hay dirección o teléfono, deja el campo como null o string vacío.
+
+        Esquema JSON:
+        {{
+            "items": [{{ "name": str, "qty": int, "price": float }}],
+            "total": float,
+            "customer_name": str,
+            "address": str,
+            "phone": str,
+            "is_complete": bool  // true solo si tiene items, nombre, dirección y teléfono
+        }}
+
         HISTORIAL:
         {history}
-        
+
         JSON:
         """
 
         try:
+            target_model = config.get("model", "gemini-1.5-flash")
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(model_name)
+            model = genai.GenerativeModel(target_model)
             response = model.generate_content(extraction_prompt)
             
-            # Limpiar respuesta para obtener solo el JSON
             raw_text = response.text
             json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                data = json.loads(json_match.group())
+                # Validación extra de completitud
+                required = ["customer_name", "address", "phone"]
+                data["is_complete"] = all(data.get(f) and len(str(data.get(f))) > 3 for f in required) and len(data.get("items", [])) > 0
+                return data
             return None
         except Exception as e:
             print(f"[LLM Extraction Error] {str(e)}")
