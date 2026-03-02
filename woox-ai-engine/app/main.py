@@ -15,7 +15,7 @@ import json
 from datetime import datetime
 from fastapi.responses import HTMLResponse
 
-# Contadores para el monitor (en memoria)
+# 1. ESTADO GLOBAL (SINGLETONS)
 STATS = {
     "total_messages": 0,
     "total_errors": 0,
@@ -25,281 +25,176 @@ STATS = {
     "last_db_error": None
 }
 
-# Inicializar variables de estado globales para evitar NameErrors
+# Inicializamos variables de servicio vacías
 supabase = None
-PLATFORM_SETTINGS = {}
 rag_skill = None
 catalog_skill = None
 order_skill = None
 router = None
 llm_service = None
+PLATFORM_SETTINGS = {}
 
-# Inicializar servicios de forma única y segura
-try:
-    global supabase, rag_skill, catalog_skill, order_skill, router, llm_service
-    
-    # 1. Intentar conectar a Supabase (Seguro, no lanza excepción)
-    supabase = get_supabase()
-    if not supabase:
-        url = os.environ.get("SUPABASE_URL", "")
-        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-        if not url or not key:
-            STATS["last_db_error"] = "Variables de entorno SUPABASE_URL o KEY faltantes."
-        else:
-            STATS["last_db_error"] = "Conexión fallida (verificar logs del contenedor)."
-
-    # 2. Inicializar habilidades
-    rag_skill = RAGSkill()
-    catalog_skill = CatalogSkill()
-    order_skill = OrderSkill()
-    router = IntentRouter()
-    llm_service = LLMService()
-    
-    def refresh_platform_settings():
-        global PLATFORM_SETTINGS
-        if not supabase: return
-        try:
-            res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
-            if res.data:
-                PLATFORM_SETTINGS = res.data
-                print("[ENGINE] Configuración global de la plataforma cargada.")
-        except Exception as e:
-            print(f"[ENGINE ERROR] No se pudo cargar platform_settings: {str(e)}")
-            STATS["last_db_error"] = f"Error settings: {str(e)}"
-
-    refresh_platform_settings()
-    print("[ENGINE] Todos los servicios inicializados correctamente.")
-except Exception as e:
-    STATS["total_errors"] += 1
-    STATS["last_db_error"] = f"Fallo inicialización motor: {str(e)}"
-    print(f"[CRITICAL ERROR] Error inicializando servicios: {str(e)}")
-
-@lru_cache(maxsize=100)
-def fetch_merchant_ai_config(merchant_id: str):
-    """
-    Obtiene la configuración específica de IA del comercio.
-    """
-    try:
-        res = supabase.from_("merchants").select("ai_provider, ai_model, ai_api_key").eq("id", merchant_id).single().execute()
-        if res.data:
-            return {
-                "provider": res.data.get("ai_provider"),
-                "model": res.data.get("ai_model"),
-                "api_key": res.data.get("ai_api_key")
-            }
-        return {}
-    except Exception as e:
-        print(f"[ENGINE ERROR] Failed to fetch merchant config: {str(e)}")
-        return {}
-
+# 2. APP INITIALIZATION
 app = FastAPI(
     title="Woox AI Engine",
     description="Orquestador de agentes Multi-Tenant para Woox",
-    version="1.0.0"
+    version="1.3.0"
 )
 
-# Modelo para la petición que vendrá de Supabase
+def init_services():
+    """Inicializa todos los servicios de forma segura."""
+    global supabase, rag_skill, catalog_skill, order_skill, router, llm_service, PLATFORM_SETTINGS
+    
+    print("[INIT] Cargando servicios del motor...")
+    try:
+        # DB Connection
+        supabase = get_supabase()
+        if not supabase:
+            STATS["last_db_error"] = "Error: SUPABASE_URL o KEY no configurados o inválidos."
+        
+        # Skills & Core
+        rag_skill = RAGSkill()
+        catalog_skill = CatalogSkill()
+        order_skill = OrderSkill()
+        router = IntentRouter()
+        llm_service = LLMService()
+
+        # Platform Settings
+        if supabase:
+            try:
+                res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
+                if res.data:
+                    PLATFORM_SETTINGS = res.data
+                    print("[INIT] Configuración global cargada.")
+            except Exception as e:
+                STATS["last_db_error"] = f"Error settings: {str(e)}"
+        
+        print("[INIT] Todo listo.")
+    except Exception as e:
+        STATS["last_db_error"] = f"Fallo inicialización: {str(e)}"
+        print(f"[CRITICAL] {str(e)}")
+
+# Ejecutar inicialización al cargar el módulo
+init_services()
+
+# 3. MODELOS
 class MessageRequest(BaseModel):
     merchant_id: str
     conversation_id: str
     customer_id: str
     message_text: str
-    platform: str # 'whatsapp', 'telegram', etc.
+    platform: str
 
+# 4. ENDPOINTS
 @app.get("/", response_class=HTMLResponse)
 async def health_check():
     global supabase, PLATFORM_SETTINGS
     
-    # Intentar reconectar si se perdió o no se inició
+    # Intentar reconectar si sigue fallando
     if not supabase:
         supabase = get_supabase()
-        if supabase:
-            STATS["last_db_error"] = None
     
     if supabase and not PLATFORM_SETTINGS:
         try:
             res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
             if res.data:
                 PLATFORM_SETTINGS = res.data
-                STATS["last_db_error"] = None
-        except Exception as e:
-            STATS["last_db_error"] = f"Error settings: {str(e)}"
+        except:
+            pass
 
     uptime = time.time() - STATS["start_time"]
     uptime_str = str(datetime.fromtimestamp(STATS["start_time"]))
     
-    # Determinar estado de servicios
     db_status = "✅ Conectado" if supabase else "❌ Error"
     settings_status = "✅ Sincronizado" if PLATFORM_SETTINGS else "⚠️ Pendiente"
 
-    # Preparar lista de intenciones
-    intents_html = "".join([f"<li>{k}: {v}</li>" for k, v in STATS["intents"].items()])
-    if not intents_html:
-        intents_html = "<li>Esperando mensajes...</li>"
-
-    # Depuración detallada de variables
+    # Diagnóstico de entorno
     critical_vars = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_API_KEY", "AUTH_SECRET"]
     debug_info = []
     for v in critical_vars:
         val = os.environ.get(v, "")
-        status = "✅" if val else "❌"
-        debug_info.append(f"{status} {v}: {len(val)} caracteres")
+        debug_info.append(f"{'✅' if val else '❌'} {v}: {len(val)} ch")
     
-    env_debug = "<br>".join(debug_info)
+    env_debug = " | ".join(debug_info)
+    intents_list = "".join([f"<li>{k}: {v}</li>" for k, v in STATS["intents"].items()]) or "<li>Sin mensajes</li>"
 
-    html_content = f"""
+    html = f"""
     <html>
-        <head>
-            <title>Woox AI Monitor</title>
-            <meta http-equiv="refresh" content="30">
-            <style>
-                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; color: #1c1e21; margin: 0; padding: 20px; }}
-                .container {{ max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-                h1 {{ color: #0084ff; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
-                .status-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }}
-                .stat-card {{ background: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 5px solid #0084ff; }}
-                .stat-card h3 {{ margin: 0; font-size: 14px; text-transform: uppercase; color: #666; }}
-                .stat-card p {{ margin: 10px 0 0; font-size: 24px; font-weight: bold; }}
-                .badge {{ padding: 5px 10px; border-radius: 5px; font-size: 12px; font-weight: bold; }}
-                .success {{ background: #e7f3ff; color: #0084ff; }}
-                .debug-box {{ background: #1c1e21; color: #00ff00; padding: 15px; border-radius: 10px; margin-top: 20px; font-family: monospace; font-size: 12px; }}
-                .footer {{ margin-top: 30px; font-size: 12px; color: #888; text-align: center; }}
-            </style>
+        <head><title>Woox Monitor</title><meta http-equiv="refresh" content="30">
+        <style>
+            body {{ font-family: sans-serif; background: #f0f2f5; padding: 20px; }}
+            .card {{ background: white; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+            .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }}
+            .stat {{ background: #f8f9fa; padding: 10px; border-radius: 5px; }}
+            .err {{ color: red; font-size: 11px; }}
+            .debug {{ background: #222; color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 11px; margin-top: 10px; }}
+        </style>
         </head>
         <body>
-            <div class="container">
-                <h1>🚀 Woox AI Engine <span class="badge success">v1.2.0</span></h1>
-                <p>Estado del sistema: <strong>ONLINE</strong></p>
-                
-                <div class="status-grid">
-                    <div class="stat-card">
-                        <h3>Mensajes Procesados</h3>
-                        <p>{STATS["total_messages"]}</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Errores del Motor</h3>
-                        <p style="color: {'#d93025' if STATS['total_errors'] > 0 else '#1e8e3e'}">{STATS["total_errors"]}</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Uptime</h3>
-                        <p style="font-size: 14px;">Iniciado el: {uptime_str}</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Servicios Core</h3>
-                        <p style="font-size: 14px;">DB: {db_status}<br>Settings: {settings_status}</p>
-                        {f'<small style="color:#d93025; font-size:10px;">Err: {STATS["last_db_error"]}</small>' if STATS["last_db_error"] else ""}
-                    </div>
+            <div class="card">
+                <h2>🚀 Woox AI v1.3.0</h2>
+                <div class="grid">
+                    <div class="stat"><b>Mensajes:</b> {STATS['total_messages']}</div>
+                    <div class="stat"><b>Errores:</b> {STATS['total_errors']}</div>
+                    <div class="stat"><b>DB:</b> {db_status}</div>
+                    <div class="stat"><b>Settings:</b> {settings_status}</div>
                 </div>
-
-                <h2>📊 Intenciones Recientes</h2>
-                <ul>
-                    {intents_html}
-                </ul>
-
-                <div class="debug-box">
-                    <strong>[Debug] Estado de Variables de Entorno:</strong><br>
-                    {env_debug}
-                </div>
-
-                <div class="footer">
-                    Woox Engine - Centralized Agent Orchestrator<br>
-                    IP: {os.getenv("PORT", "8000")} | Timestamp: {datetime.now()}
-                </div>
+                {f'<p class="err">Err: {STATS["last_db_error"]}</p>' if STATS["last_db_error"] else ""}
+                <p><small>Uptime: {uptime_str}</small></p>
+                <hr>
+                <b>Intenciones:</b><ul>{intents_list}</ul>
+                <div class="debug"><b>Env:</b><br>{env_debug}</div>
             </div>
         </body>
     </html>
     """
-    return HTMLResponse(content=html_content)
+    return HTMLResponse(content=html)
 
 @app.get("/api/health")
 async def api_health():
-    return {
-        "status": "online",
-        "stats": STATS,
-        "platform_settings_loaded": True if PLATFORM_SETTINGS else False
-    }
+    return {"status": "online", "stats": STATS, "db": bool(supabase)}
 
 @app.post("/process-message")
 async def process_message(request: MessageRequest, x_auth_token: Optional[str] = Header(None)):
-    # 1. Validar Token de seguridad (AUTH_SECRET en .env)
     expected_token = os.getenv("AUTH_SECRET")
     if expected_token and x_auth_token != expected_token:
         raise HTTPException(status_code=401, detail="No autorizado")
 
     try:
         STATS["total_messages"] += 1
-        STATS["last_message_at"] = time.time()
-        print(f"[ENGINE] Recibido mensaje de {request.merchant_id} en {request.platform}")
-        
-        # 1. Clasificar Intención
         intent = router.classify(request.message_text)
         STATS["intents"][intent] = STATS["intents"].get(intent, 0) + 1
-        print(f"[ENGINE] Intención detectada: {intent}")
         
         context = ""
-        system_prompt = "Eres un asistente experto de Woox. Responde basándote solo en el contexto proporcionado."
+        system_prompt = "Eres un asistente experto de Woox."
         
-        # 2. Ejecutar Skill según Intención
         if intent == "CATALOG_QUERY":
             context = await catalog_skill.get_catalog(request.merchant_id)
-            system_prompt = "Eres un vendedor amable de Woox. Usa el catálogo para recomendar productos y ayudar al cliente."
         elif intent == "KNOWLEDGE_QUERY":
             context = await rag_skill.search_context(request.merchant_id, request.message_text)
-            system_prompt = "Eres un asistente informativo de Woox. Responde con precisión técnica basada en los manuales."
-        elif intent == "GREETING":
-            system_prompt = "Eres un anfitrión amable de Woox. Saluda cálidamente y menciona que puedes ayudar con el menú o preguntas."
 
-        # 3. Obtener Configuración de IA del Comercio (Para el token propio)
-        merchant_config = fetch_merchant_ai_config(request.merchant_id)
+        # Configuración IA
+        merchant_res = supabase.from_("merchants").select("ai_provider, ai_model, ai_api_key").eq("id", request.merchant_id).single().execute()
+        m_config = merchant_res.data if merchant_res.data else {}
         
-        # Merge con settings globales si faltan datos en el comercio
         final_config = {
-            "provider": merchant_config.get("provider") or PLATFORM_SETTINGS.get("ai_provider") or "google_gemini",
-            "api_key": merchant_config.get("api_key") or PLATFORM_SETTINGS.get("ai_api_key"),
-            "model": merchant_config.get("model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash"
+            "provider": m_config.get("ai_provider") or PLATFORM_SETTINGS.get("ai_provider") or "google_gemini",
+            "api_key": m_config.get("ai_api_key") or PLATFORM_SETTINGS.get("ai_api_key"),
+            "model": m_config.get("ai_model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash"
         }
 
-        # 4. Generar respuesta con el LLM inyectando el contexto real filtrado
-        ai_response = await llm_service.generate_response(
-            system_prompt=system_prompt,
-            context=context,
-            user_input=request.message_text,
-            config=final_config
-        )
+        ai_response = await llm_service.generate_response(system_prompt, context, request.message_text, final_config)
         
-        # 4. Post-Procesamiento (Skills Deterministas)
-        # Buscar [ORDER_CONFIRMED: {...}]
+        # Pedidos
         order_match = re.search(r"\[ORDER_CONFIRMED:\s*(\{.*?})\s*\]", ai_response, re.DOTALL)
-        final_confirmation = ""
-        
         if order_match:
             try:
-                order_json = order_match.group(1).strip()
-                # Limpiar texto de la IA quitando el comando técnico
-                ai_response = re.sub(r"\[ORDER_CONFIRMED:\s*\{.*?\}\s*\]", "", ai_response, flags=re.DOTALL).strip()
-                
-                # Ejecutar Habilidad de Pedidos
-                order_data = json.loads(order_json)
-                final_confirmation = await order_skill.register_order(
-                    request.merchant_id, 
-                    request.customer_id, 
-                    request.conversation_id, 
-                    order_data
-                )
-            except Exception as e:
-                print(f"[ENGINE ERROR] Order Post-Processing failed: {str(e)}")
+                order_data = json.loads(order_match.group(1).strip())
+                ai_response = re.sub(r"\[ORDER_CONFIRMED:.*?\]", "", ai_response, flags=re.DOTALL).strip()
+                await order_skill.register_order(request.merchant_id, request.customer_id, request.conversation_id, order_data)
+            except: pass
 
-        return {
-            "success": True,
-            "response": ai_response + final_confirmation,
-            "intent": intent,
-            "context_retrieved": True if context else False
-        }
+        return {"success": True, "response": ai_response}
     except Exception as e:
         STATS["total_errors"] += 1
-        print(f"[ERROR] Engine Failure: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
