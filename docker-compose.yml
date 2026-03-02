@@ -13,3 +13,21 @@ services:
       resources:
         limits:
           memory: 512M
+
+  woox-ai-engine:
+    build:
+      context: ./woox-ai-engine
+      dockerfile: docker/Dockerfile
+    container_name: woox-ai-engine
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./woox-ai-engine/.env
+    restart: always
+    volumes:
+      - ./woox-ai-engine/app:/app/app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
