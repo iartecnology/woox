@@ -21,7 +21,8 @@ STATS = {
     "total_errors": 0,
     "intents": {},
     "start_time": time.time(),
-    "last_message_at": None
+    "last_message_at": None,
+    "last_db_error": None
 }
 
 # Inicializar variables de estado globales para evitar NameErrors
@@ -95,15 +96,21 @@ async def health_check():
     
     # Intentar reconectar si se perdió o no se inició
     if not supabase:
-        supabase = get_supabase()
+        try:
+            supabase = get_supabase()
+            if not supabase:
+                STATS["last_db_error"] = "Error desconocido inicializando cliente"
+        except Exception as e:
+            STATS["last_db_error"] = str(e)
     
     if supabase and not PLATFORM_SETTINGS:
         try:
             res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
             if res.data:
                 PLATFORM_SETTINGS = res.data
-        except:
-            pass
+                STATS["last_db_error"] = None
+        except Exception as e:
+            STATS["last_db_error"] = f"Error settings: {str(e)}"
 
     uptime = time.time() - STATS["start_time"]
     uptime_str = str(datetime.fromtimestamp(STATS["start_time"]))
@@ -167,6 +174,7 @@ async def health_check():
                     <div class="stat-card">
                         <h3>Servicios Core</h3>
                         <p style="font-size: 14px;">DB: {db_status}<br>Settings: {settings_status}</p>
+                        {f'<small style="color:#d93025; font-size:10px;">Err: {STATS["last_db_error"]}</small>' if STATS["last_db_error"] else ""}
                     </div>
                 </div>
 
