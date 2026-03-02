@@ -12,6 +12,17 @@ import os
 import time
 import re
 import json
+from datetime import datetime
+from fastapi.responses import HTMLResponse
+
+# Contadores para el monitor (en memoria)
+STATS = {
+    "total_messages": 0,
+    "total_errors": 0,
+    "intents": {},
+    "start_time": time.time(),
+    "last_message_at": None
+}
 
 # Inicializar servicios de forma única y segura
 try:
@@ -72,13 +83,79 @@ class MessageRequest(BaseModel):
     message_text: str
     platform: str # 'whatsapp', 'telegram', etc.
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def health_check():
-    return {
+    uptime = time.time() - STATS["start_time"]
+    uptime_str = str(datetime.fromtimestamp(STATS["start_time"]))
+    
+    # Determinar estado de servicios
+    db_status = "✅ Conectado" if supabase else "❌ Error"
+    settings_status = "✅ Sincronizado" if PLATFORM_SETTINGS else "⚠️ Pendiente"
+
+    html_content = f"""
+    <html>
+        <head>
+            <title>Woox AI Monitor</title>
+            <meta http-equiv="refresh" content="30">
+            <style>
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; color: #1c1e21; margin: 0; padding: 20px; }}
+                .container {{ max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+                h1 {{ color: #0084ff; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
+                .status-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }}
+                .stat-card {{ background: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 5px solid #0084ff; }}
+                .stat-card h3 {{ margin: 0; font-size: 14px; text-transform: uppercase; color: #666; }}
+                .stat-card p {{ margin: 10px 0 0; font-size: 24px; font-weight: bold; }}
+                .badge {{ padding: 5px 10px; border-radius: 5px; font-size: 12px; font-weight: bold; }}
+                .success {{ background: #e7f3ff; color: #0084ff; }}
+                .footer {{ margin-top: 30px; font-size: 12px; color: #888; text-align: center; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🚀 Woox AI Engine <span class="badge success">v1.0.0</span></h1>
+                <p>Estado del sistema: <strong>ONLINE</strong></p>
+                
+                <div class="status-grid">
+                    <div class="stat-card">
+                        <h3>Mensajes Procesados</h3>
+                        <p>{STATS["total_messages"]}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Errores del Motor</h3>
+                        <p style="color: {'#d93025' if STATS['total_errors'] > 0 else '#1e8e3e'}">{STATS["total_errors"]}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Uptime</h3>
+                        <p style="font-size: 14px;">Iniciado el: {uptime_str}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Servicios Core</h3>
+                        <p style="font-size: 14px;">DB: {db_status}<br>Settings: {settings_status}</p>
+                    </div>
+                </div>
+
+                <h2>📊 Intenciones Recientes</h2>
+                <ul>
+                    {"".join([f"<li>{k}: {v}</li>" for k, v in STATS["intents"].items()]) or "<li>Esperando mensajes...</li>"}
+                </ul>
+
+                <div class="footer">
+                    Woox Engine - Centralized Agent Orchestrator<br>
+                    IP: {os.getenv("PORT", "8000")} | Timestamp: {datetime.now()}
+                </div>
+            </div>
+        </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+@app.get("/api/health")
+async def api_health():
+    return {{
         "status": "online",
-        "engine": "Woox AI",
-        "timestamp": time.time()
-    }
+        "stats": STATS,
+        "platform_settings_loaded": True if PLATFORM_SETTINGS else False
+    }}
 
 @app.post("/process-message")
 async def process_message(request: MessageRequest, x_auth_token: Optional[str] = Header(None)):
@@ -88,10 +165,13 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         raise HTTPException(status_code=401, detail="No autorizado")
 
     try:
+        STATS["total_messages"] += 1
+        STATS["last_message_at"] = time.time()
         print(f"[ENGINE] Recibido mensaje de {request.merchant_id} en {request.platform}")
         
         # 1. Clasificar Intención
         intent = router.classify(request.message_text)
+        STATS["intents"][intent] = STATS["intents"].get(intent, 0) + 1
         print(f"[ENGINE] Intención detectada: {intent}")
         
         context = ""
@@ -154,6 +234,7 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
             "context_retrieved": True if context else False
         }
     except Exception as e:
+        STATS["total_errors"] += 1
         print(f"[ERROR] Engine Failure: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
