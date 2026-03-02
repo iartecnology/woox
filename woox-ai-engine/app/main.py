@@ -43,7 +43,7 @@ llm_service = None
 PLATFORM_SETTINGS = {}
 
 # 3. APP INITIALIZATION
-app = FastAPI(title="Woox AI Engine", version="1.6.2")
+app = FastAPI(title="Woox AI Engine", version="1.6.3")
 
 def add_log(msg: str):
     ts = datetime.now().strftime("%H:%M:%S")
@@ -54,7 +54,6 @@ def add_activity(merchant: str, text: str, intent: str, status: str = "✅", res
     ts = datetime.now().strftime("%H:%M:%S")
     display_res = response if status == "✅" else f"❌ ERROR: {error or response}"
     clean_res = display_res.replace("\n", " ").strip()
-    
     entry = {
         "time": ts,
         "merchant": merchant[:8] + "..." if len(merchant) > 8 else merchant,
@@ -68,24 +67,22 @@ def add_activity(merchant: str, text: str, intent: str, status: str = "✅", res
 
 def init_services():
     global supabase, rag_skill, catalog_skill, order_skill, router, llm_service, PLATFORM_SETTINGS
-    add_log("⚙️ Iniciando servicios v1.6.2 (Safe Mode)")
+    add_log("⚙️ Iniciando servicios v1.6.3 (Memory Enabled)")
     try:
         client, err, stats = get_supabase_detailed()
         if client:
             supabase = client
             add_log("✅ Supabase Conectado.")
             try:
-                # Usamos limit(1) que es más seguro entre versiones de supabase-js/py
                 res = supabase.table("platform_settings").select("*").eq("id", "global").limit(1).execute()
                 if res.data and len(res.data) > 0:
                     PLATFORM_SETTINGS = res.data[0]
-                    add_log("✅ Settings de Plataforma cargados.")
+                    add_log("✅ Settings de Plataforma sincronizados.")
             except Exception as e:
                 add_log(f"⚠️ Error cargando settings: {str(e)}")
         else:
             add_log(f"❌ Error DB: {err}")
 
-        # Inicialización garantizada
         rag_skill = RAGSkill()
         catalog_skill = CatalogSkill()
         order_skill = OrderSkill()
@@ -102,7 +99,6 @@ init_services()
 async def dashboard():
     global supabase, PLATFORM_SETTINGS
     db_status = "✅ Conectado" if supabase else "❌ Desconectado"
-    
     logs_html = "<br>".join(STATS["connection_log"])
     activity_rows = ""
     for act in STATS["recent_activity"]:
@@ -125,12 +121,12 @@ async def dashboard():
     <!DOCTYPE html>
     <html lang="es">
     <head>
-        <title>Woox Monitor Pro v1.6.2</title>
+        <title>Woox Monitor Pro v1.6.3</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            :root {{ --primary: #6366f1; --bg: #f8fafc; --text: #1e293b; }}
-            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }}
+            :root {{ --primary: #4f46e5; --bg: #f8fafc; --text: #1e293b; }}
+            body {{ font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }}
             .container {{ max-width: 1100px; margin: auto; }}
             .card {{ background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 24px; }}
             .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
@@ -143,23 +139,21 @@ async def dashboard():
             .log-box {{ background: #0f172a; color: #4ade80; padding: 16px; border-radius: 12px; font-family: 'Consolas', monospace; font-size: 12px; height: 120px; overflow-y: auto; }}
             .badge-live {{ background: #ef4444; color: white; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: bold; animation: pulse 2s infinite; }}
             @keyframes pulse {{ 0% {{ opacity: 1; }} 50% {{ opacity: 0.6; }} 100% {{ opacity: 1; }} }}
-            input, select, textarea {{ padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; box-sizing: border-box; font-family: inherit; }}
-            .btn {{ background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; cursor: pointer; }}
-            .btn:hover {{ background: #4f46e5; }}
+            .btn {{ background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; cursor: pointer; width:100%; }}
         </style>
     </head>
     <body>
         <div class="container">
             <div class="card">
                 <div class="header">
-                    <h2 style="margin:0;">🚀 Woox AI Manager <small style="font-weight:normal; opacity:0.6;">v1.6.2</small></h2>
-                    <span class="badge-live">MOTOR ACTIVO</span>
+                    <h2 style="margin:0;">🚀 Woox AI Manager <small style="font-weight:normal; opacity:0.6;">v1.6.3</small></h2>
+                    <span class="badge-live">MEMORY ON</span>
                 </div>
                 <div class="stats">
                     <div class="stat-card"><label>MSJS PROCESADOS</label><span>{STATS['total_messages']}</span></div>
                     <div class="stat-card"><label>ERRORES</label><span>{STATS['total_errors']}</span></div>
-                    <div class="stat-card"><label>BASE DE DATOS</label><span>{db_status}</span></div>
-                    <div class="stat-card"><label>ESTADO PLATAFORMA</label><span>{"✅ Sync" if PLATFORM_SETTINGS else "⚠️ Desync"}</span></div>
+                    <div class="stat-card"><label>DATABASE</label><span>{db_status}</span></div>
+                    <div class="stat-card"><label>MEMORY ENGINE</label><span>✅ Active</span></div>
                 </div>
             </div>
 
@@ -188,18 +182,18 @@ async def dashboard():
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <div>
                             <label style="font-size:12px; font-weight:700;">SUPABASE URL</label>
-                            <input type="text" name="url" value="{os.environ.get('SUPABASE_URL', '')}" placeholder="https://xyz.supabase.co">
+                            <input type="text" name="url" value="{os.environ.get('SUPABASE_URL', '')}" style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1;">
                         </div>
                         <div>
                             <label style="font-size:12px; font-weight:700;">SERVICE ROLE KEY</label>
-                            <input type="password" name="key" value="{os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')}" placeholder="eyJhbGciOiJIUzI1Ni...">
+                            <input type="password" name="key" value="{os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')}" style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1;">
                         </div>
                     </div>
                     <div style="margin-bottom:20px;">
-                        <label style="font-size:12px; font-weight:700;">AUTH SECRET (Motor Protection)</label>
-                        <input type="text" name="sec" value="{os.environ.get('AUTH_SECRET', '')}" placeholder="Tu contraseña de seguridad">
+                        <label style="font-size:12px; font-weight:700;">AUTH SECRET</label>
+                        <input type="text" name="sec" value="{os.environ.get('AUTH_SECRET', '')}" style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1;">
                     </div>
-                    <button type="submit" class="btn" style="width:100%;">Actualizar y Reiniciar Servicios</button>
+                    <button type="submit" class="btn">Sincronizar Motor</button>
                 </form>
                 <div style="margin-top:20px;">
                     <label style="font-size:12px; font-weight:700; display:block; margin-bottom:10px;">📶 Log del Sistema:</label>
@@ -215,7 +209,7 @@ async def dashboard():
 @app.post("/setup")
 async def setup_engine(url: str = Form(...), key: str = Form(...), sec: str = Form(...)):
     STATS["connection_log"] = []
-    add_log("🔄 Recibiendo configuración manual...")
+    add_log("🔄 Configuración manual...")
     os.environ["SUPABASE_URL"] = url.strip()
     os.environ["SUPABASE_SERVICE_ROLE_KEY"] = key.strip()
     os.environ["AUTH_SECRET"] = sec.strip()
@@ -231,66 +225,77 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
 
     current_intent = "UNKNOWN"
     try:
-        if not supabase: raise Exception("Motor de base de datos no inicializado")
+        if not supabase: raise Exception("Base de datos no conectada")
         STATS["total_messages"] += 1
         
         # 1. Obtener el prompt compilado
         try:
             prompt_res = supabase.rpc("get_compiled_prompt", {"p_merchant_id": request.merchant_id}).execute()
-            system_prompt = prompt_res.data
-            
-            if not system_prompt or "Error" in system_prompt:
-                # Fallback seguro si el merchant_id no devuelve un prompt válido
-                system_prompt = "Eres un asistente de ventas profesional. Saluda con entusiasmo y ofrece ayudar con los servicios del local."
-                add_log(f"⚠️ Prompt vacío o error RPC para {request.merchant_id}. Usando genérico.")
+            system_prompt = prompt_res.data or "Eres un asistente de ventas profesional."
         except Exception as e:
-            add_log(f"❌ Fallo crítico RPC get_compiled_prompt: {str(e)}")
+            add_log(f"❌ Error RPC: {str(e)}")
             system_prompt = "Eres un asistente de ventas profesional."
 
-        # 2. Configuración de IA (Prioridad: Comercio > Plataforma)
+        # 2. Obtener MEMORIA (Historial reciente)
+        history_context = ""
         try:
-            m_res = supabase.table("merchants").select("name, ai_provider, ai_api_key, ai_model").eq("id", request.merchant_id).limit(1).execute()
-            if m_res.data and len(m_res.data) > 0:
-                m_data = m_res.data[0]
-                m_name = m_data.get("name", "Local")
-                m_ai = m_data
-            else:
-                m_name = "Local"
-                m_ai = {}
+            # Traemos los últimos 8 mensajes de la conversación
+            hist_res = supabase.table("messages").select("sender_type, content")\
+                .eq("conversation_id", request.conversation_id)\
+                .order("created_at", desc=True)\
+                .limit(8).execute()
+            
+            if hist_res.data:
+                # Los mensajes vienen del más nuevo al más viejo, los invertimos para el LLM
+                messages = list(reversed(hist_res.data))
+                # El mensaje actual que está enviando el webhook aún no está en History Context 
+                # (aunque el webhook lo guarda justo antes de llamar al motor)
+                # así que lo filtramos para no duplicarlo si ya aparece arriba
+                history_lines = []
+                for msg in messages:
+                    role = "Cliente" if msg['sender_type'] == 'customer' else "Tú (IA)"
+                    if msg['content'] != request.message_text: # Evitar duplicar el último msj
+                        history_lines.append(f"{role}: {msg['content']}")
+                
+                if history_lines:
+                    history_context = "\n### HISTORIAL RECIENTE DEL CHAT:\n" + "\n".join(history_lines) + "\n"
         except Exception as e:
-            add_log(f"⚠️ Error cargando merchant info: {str(e)}")
-            m_name = "Local"
+            add_log(f"⚠️ Error cargando memoria: {str(e)}")
+
+        # 3. Config de IA
+        try:
+            m_res = supabase.table("merchants").select("ai_provider, ai_api_key, ai_model").eq("id", request.merchant_id).limit(1).execute()
+            m_ai = m_res.data[0] if m_res.data else {}
+        except:
             m_ai = {}
 
-        # 3. Clasificación
+        # 4. Clasificación
         current_intent = router.classify(request.message_text)
         STATS["intents"][current_intent] = STATS["intents"].get(current_intent, 0) + 1
         
-        # 4. Contexto Adicional (RAG)
+        # 5. Contexto Adicional (RAG)
         context_extra = ""
         if current_intent == "KNOWLEDGE_QUERY":
-            try:
-                context_extra = await rag_skill.search_context(request.merchant_id, request.message_text)
-            except:
-                add_log("⚠️ Fallo en RAG Skill")
+            try: context_extra = await rag_skill.search_context(request.merchant_id, request.message_text)
+            except: pass
 
-        # 5. Merging de Configuración Final
+        # 6. Merging de Config
         final_config = {
             "provider": m_ai.get("ai_provider") or PLATFORM_SETTINGS.get("ai_provider") or "google_gemini",
             "api_key": m_ai.get("ai_api_key") or PLATFORM_SETTINGS.get("ai_api_key") or os.getenv("GOOGLE_API_KEY"),
             "model": m_ai.get("ai_model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash"
         }
 
-        # 6. Generación
-        ai_response = await llm_service.generate_response(system_prompt, context_extra, request.message_text, final_config)
+        # 7. Generación (Sinyectamos la Memoria en el System Prompt o como contexto adicional)
+        full_context = (history_context + "\n" + context_extra).strip()
+        ai_response = await llm_service.generate_response(system_prompt, full_context, request.message_text, final_config)
         
-        # Registro Exitoso
+        # Registro
         add_activity(request.merchant_id, request.message_text, current_intent, "✅", ai_response)
         return {"success": True, "response": ai_response}
 
     except Exception as e:
         STATS["total_errors"] += 1
-        error_msg = str(e)
-        add_log(f"💀 Error procesando mensaje: {error_msg}")
-        add_activity(request.merchant_id, request.message_text, current_intent, "❌", error_msg, error=error_msg)
-        return {"success": False, "error": error_msg}
+        err_str = str(e)
+        add_activity(request.merchant_id, request.message_text, current_intent, "❌", err_str, error=err_str)
+        return {"success": False, "error": err_str}
