@@ -6,6 +6,8 @@ from app.skills.catalog import CatalogSkill
 from app.skills.orders import OrderSkill
 from app.core.router import IntentRouter
 from app.core.llm import LLMService
+from app.db.supabase_client import get_supabase
+from functools import lru_cache
 import os
 import time
 import re
@@ -18,9 +20,28 @@ try:
     order_skill = OrderSkill()
     router = IntentRouter()
     llm_service = LLMService()
+    supabase = get_supabase()
     print("[ENGINE] Todos los servicios inicializados correctamente.")
 except Exception as e:
     print(f"[CRITICAL ERROR] Error inicializando servicios: {str(e)}")
+
+@lru_cache(maxsize=100)
+def fetch_merchant_ai_config(merchant_id: str):
+    """
+    Obtiene la configuración específica de IA del comercio.
+    """
+    try:
+        res = supabase.from_("merchants").select("ai_provider, ai_model, ai_api_key").eq("id", merchant_id).single().execute()
+        if res.data:
+            return {
+                "provider": res.data.get("ai_provider"),
+                "model": res.data.get("ai_model"),
+                "api_key": res.data.get("ai_api_key")
+            }
+        return {}
+    except Exception as e:
+        print(f"[ENGINE ERROR] Failed to fetch merchant config: {str(e)}")
+        return {}
 
 app = FastAPI(
     title="Woox AI Engine",
@@ -71,11 +92,15 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         elif intent == "GREETING":
             system_prompt = "Eres un anfitrión amable de Woox. Saluda cálidamente y menciona que puedes ayudar con el menú o preguntas."
 
-        # 3. Generar respuesta con el LLM inyectando el contexto real filtrado
+        # 3. Obtener Configuración de IA del Comercio (Para el token propio)
+        merchant_config = fetch_merchant_ai_config(request.merchant_id)
+
+        # 4. Generar respuesta con el LLM inyectando el contexto real filtrado
         ai_response = await llm_service.generate_response(
             system_prompt=system_prompt,
             context=context,
-            user_input=request.message_text
+            user_input=request.message_text,
+            config=merchant_config
         )
         
         # 4. Post-Procesamiento (Skills Deterministas)
