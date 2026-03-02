@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi import FastAPI, HTTPException, Header, Request, Form
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from app.skills.rag import RAGSkill
@@ -13,7 +13,7 @@ import time
 import re
 import json
 from datetime import datetime
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 # 1. ESTADO GLOBAL
 STATS = {
@@ -21,7 +21,6 @@ STATS = {
     "total_errors": 0,
     "intents": {},
     "start_time": time.time(),
-    "last_message_at": None,
     "last_db_error": None
 }
 
@@ -34,7 +33,7 @@ llm_service = None
 PLATFORM_SETTINGS = {}
 
 # 2. APP INITIALIZATION
-app = FastAPI(title="Woox AI Engine", version="1.3.1")
+app = FastAPI(title="Woox AI Engine", version="1.4.0")
 
 def init_services():
     global supabase, rag_skill, catalog_skill, order_skill, router, llm_service, PLATFORM_SETTINGS
@@ -51,7 +50,7 @@ def init_services():
                 res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
                 if res.data:
                     PLATFORM_SETTINGS = res.data
-                    STATS["last_db_error"] = None # Limpiar error si todo salió bien
+                    STATS["last_db_error"] = None
             except Exception as e:
                 STATS["last_db_error"] = f"Settings: {str(e)}"
     except Exception as e:
@@ -59,80 +58,106 @@ def init_services():
 
 init_services()
 
-# 3. MODELOS
+# 3. ENDPOINTS DE INTERFAZ
+@app.get("/", response_class=HTMLResponse)
+async def dashboard():
+    global supabase, PLATFORM_SETTINGS
+    
+    # Re-verificar conexión
+    if not supabase:
+        supabase = get_supabase()
+    
+    db_status = "✅ Conectado" if supabase else "❌ Desconectado"
+    settings_status = "✅ Sincronizado" if PLATFORM_SETTINGS else "⚠️ Pendiente"
+    
+    cvars = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_API_KEY", "AUTH_SECRET"]
+    env_debug = "".join([f"<li>{'✅' if os.environ.get(v) else '❌'} <b>{v}:</b> {len(os.environ.get(v, ''))} ch</li>" for v in cvars])
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Woox AI Admin</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            :root {{ --primary: #0084ff; --dark: #1c1e21; --bg: #f0f2f5; }}
+            body {{ font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); margin: 0; padding: 20px; }}
+            .container {{ max-width: 800px; margin: auto; }}
+            .card {{ background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }}
+            .badge {{ padding: 4px 8px; border-radius: 5px; font-size: 11px; font-weight: bold; background: #e7f3ff; color: var(--primary); }}
+            .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }}
+            .stat {{ background: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 4px solid var(--primary); }}
+            .stat label {{ display: block; font-size: 11px; color: #666; text-transform: uppercase; }}
+            .stat value {{ font-size: 18px; font-weight: bold; color: var(--dark); }}
+            input, select {{ width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }}
+            button {{ background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; }}
+            button:hover {{ opacity: 0.9; }}
+            .error {{ color: #d93025; background: #fff5f5; padding: 10px; border-radius: 8px; font-size: 13px; border: 1px solid #fed7d7; }}
+            .debug {{ background: #1c1e21; color: #00ff00; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px; }}
+            h2 {{ color: var(--primary); margin-top: 0; }}
+            .tab-btn {{ padding: 10px 20px; cursor: pointer; border: none; background: none; font-weight: bold; color: #666; }}
+            .tab-btn.active {{ color: var(--primary); border-bottom: 2px solid var(--primary); }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="card">
+                <h2>🚀 Woox AI Manager <span class="badge">v1.4.0</span></h2>
+                <div class="grid">
+                    <div class="stat"><label>Mensajes</label><value>{STATS['total_messages']}</value></div>
+                    <div class="stat"><label>Errores</label><value style="color:{'#d93025' if STATS['total_errors'] > 0 else '#1e8e3e'}">{STATS['total_errors']}</value></div>
+                    <div class="stat"><label>Database</label><value>{db_status}</value></div>
+                    <div class="stat"><label>Config</label><value>{settings_status}</value></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>⚙️ Configuración del Motor</h3>
+                <form action="/setup" method="post">
+                    <label>Supabase URL</label>
+                    <input type="text" name="supabase_url" value="{os.environ.get('SUPABASE_URL', '')}" placeholder="https://xxx.supabase.co">
+                    
+                    <label>Supabase Service Role Key</label>
+                    <input type="password" name="supabase_key" value="{os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')}" placeholder="eyJhbGciOiJIUzI1Ni...">
+                    
+                    <label>Auth Secret (Tu clave de seguridad)</label>
+                    <input type="text" name="auth_secret" value="{os.environ.get('AUTH_SECRET', '')}" placeholder="Escribe un secreto inventado">
+                    
+                    <button type="submit">Guardar y Reiniciar Conexión</button>
+                </form>
+                {f'<p class="error"><b>Error:</b> {STATS["last_db_error"]}</p>' if STATS["last_db_error"] else ""}
+            </div>
+
+            <div class="card debug">
+                <strong>🛠️ Estado de Variables (Entorno):</strong>
+                <ul style="margin: 10px 0; padding-left: 20px;">{env_debug}</ul>
+                <p style="font-size: 10px; color: #888;">Nota: Los cambios manuales se aplicarán de inmediato a esta sesión.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+@app.post("/setup")
+async def setup_engine(supabase_url: str = Form(...), supabase_key: str = Form(...), auth_secret: str = Form(...)):
+    """Guarda la configuración en el entorno actual y re-inicializa."""
+    os.environ["SUPABASE_URL"] = supabase_url.strip()
+    os.environ["SUPABASE_SERVICE_ROLE_KEY"] = supabase_key.strip()
+    os.environ["AUTH_SECRET"] = auth_secret.strip()
+    
+    # Re-inicializar
+    init_services()
+    
+    return RedirectResponse(url="/", status_code=303)
+
+# --- BACKEND API ---
 class MessageRequest(BaseModel):
     merchant_id: str
     conversation_id: str
     customer_id: str
     message_text: str
     platform: str
-
-# 4. ENDPOINTS
-@app.get("/", response_class=HTMLResponse)
-async def health_check():
-    global supabase, PLATFORM_SETTINGS
-    
-    # RE-VERIFICACIÓN EN TIEMPO REAL
-    if not supabase:
-        supabase = get_supabase()
-    
-    if supabase:
-        STATS["last_db_error"] = None # Si hay supabase, ya no hay error de llave
-        if not PLATFORM_SETTINGS:
-            try:
-                res = supabase.from_("platform_settings").select("*").eq("id", "global").single().execute()
-                if res.data:
-                    PLATFORM_SETTINGS = res.data
-            except Exception as e:
-                STATS["last_db_error"] = f"Fetch Settings: {str(e)}"
-
-    uptime_str = str(datetime.fromtimestamp(STATS["start_time"]))
-    db_status = "✅ Conectado" if supabase else "❌ Error"
-    settings_status = "✅ Sincronizado" if PLATFORM_SETTINGS else "⚠️ Pendiente"
-
-    # Diagnóstico
-    cvars = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_API_KEY", "AUTH_SECRET"]
-    env_debug = " | ".join([f"{'✅' if os.environ.get(v) else '❌'} {v}: {len(os.environ.get(v, ''))}ch" for v in cvars])
-    intents_list = "".join([f"<li>{k}: {v}</li>" for k, v in STATS["intents"].items()]) or "<li>Sin mensajes</li>"
-
-    html = f"""
-    <html>
-        <head><title>Woox Monitor</title><meta http-equiv="refresh" content="30">
-        <style>
-            body {{ font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; }}
-            .card {{ background: white; padding: 30px; border-radius: 15px; max-width: 700px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
-            .grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; }}
-            .stat {{ background: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 5px solid #0084ff; }}
-            .stat b {{ display: block; font-size: 12px; color: #666; text-transform: uppercase; }}
-            .stat span {{ font-size: 20px; font-weight: bold; }}
-            .err {{ background: #fff5f5; color: #d93025; padding: 10px; border-radius: 5px; font-size: 12px; border: 1px solid #feb2b2; }}
-            .debug {{ background: #1c1e21; color: #00ff00; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 11px; margin-top: 20px; }}
-            h2 {{ color: #0084ff; margin-top: 0; }}
-        </style>
-        </head>
-        <body>
-            <div class="card">
-                <h2>🚀 Woox AI Engine <span style="font-size: 14px; background: #e7f3ff; padding: 4px 8px; border-radius: 5px;">v1.3.1</span></h2>
-                <div class="grid">
-                    <div class="stat"><b>Mensajes</b><span>{STATS['total_messages']}</span></div>
-                    <div class="stat"><b>Errores</b><span style="color: {'#d93025' if STATS['total_errors'] > 0 else '#1e8e3e'}">{STATS['total_errors']}</span></div>
-                    <div class="stat"><b>Base de Datos</b><span>{db_status}</span></div>
-                    <div class="stat"><b>Configuración</b><span>{settings_status}</span></div>
-                </div>
-                {f'<div class="err"><b>⚠️ Error Detectado:</b> {STATS["last_db_error"]}</div>' if STATS["last_db_error"] else ""}
-                <p><small>Sistema iniciado el: {uptime_str}</small></p>
-                <hr>
-                <b>📊 Análisis de Intenciones:</b><ul>{intents_list}</ul>
-                <div class="debug"><b>🛠️ Diagnóstico de Entorno (Docker):</b><br>{env_debug}</div>
-            </div>
-        </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
-
-@app.get("/api/health")
-async def api_health():
-    return {"status": "online", "stats": STATS, "db": bool(supabase)}
 
 @app.post("/process-message")
 async def process_message(request: MessageRequest, x_auth_token: Optional[str] = Header(None)):
@@ -141,6 +166,7 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         raise HTTPException(status_code=401, detail="No autorizado")
 
     try:
+        if not supabase: raise Exception("Motor no conectado a base de datos")
         STATS["total_messages"] += 1
         intent = router.classify(request.message_text)
         STATS["intents"][intent] = STATS["intents"].get(intent, 0) + 1
@@ -165,15 +191,8 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
 
         ai_response = await llm_service.generate_response(system_prompt, context, request.message_text, final_config)
         
-        order_match = re.search(r"\[ORDER_CONFIRMED:\s*(\{.*?})\s*\]", ai_response, re.DOTALL)
-        if order_match:
-            try:
-                order_data = json.loads(order_match.group(1).strip())
-                ai_response = re.sub(r"\[ORDER_CONFIRMED:.*?\]", "", ai_response, flags=re.DOTALL).strip()
-                await order_skill.register_order(request.merchant_id, request.customer_id, request.conversation_id, order_data)
-            except: pass
-
         return {"success": True, "response": ai_response}
     except Exception as e:
         STATS["total_errors"] += 1
+        print(f"[ERROR] {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
