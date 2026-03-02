@@ -27,12 +27,26 @@ class LLMService:
         try:
             if provider == "google_gemini":
                 genai.configure(api_key=api_key)
-                result = genai.embed_content(
-                    model=f"models/{model}" if not model.startswith("models/") else model,
-                    content=text,
-                    task_type="retrieval_query"
-                )
-                return result['embedding']
+                # Intentar con el modelo configurado
+                target_model = f"models/{model}" if not model.startswith("models/") else model
+                try:
+                    result = genai.embed_content(
+                        model=target_model,
+                        content=text,
+                        task_type="retrieval_query"
+                    )
+                    return result['embedding']
+                except Exception as e:
+                    if "404" in str(e) or "not found" in str(e).lower():
+                        # Fallback a un modelo más universal si el 004 falla
+                        print(f"[LLM Warning] {target_model} not found, falling back to models/embedding-001")
+                        result = genai.embed_content(
+                            model="models/embedding-001",
+                            content=text,
+                            task_type="retrieval_query"
+                        )
+                        return result['embedding']
+                    raise e
             
             elif provider == "openai":
                 async with httpx.AsyncClient() as client:

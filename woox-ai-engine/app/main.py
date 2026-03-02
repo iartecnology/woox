@@ -49,6 +49,21 @@ def add_log(msg: str):
     STATS["connection_log"].append(f"[{ts}] {msg}")
     if len(STATS["connection_log"]) > 15: STATS["connection_log"].pop(0)
 
+def add_activity(merchant: str, text: str, intent: str, status: str = "✅", response: str = "", error: str = None):
+    ts = datetime.now().strftime("%H:%M:%S")
+    display_res = response if status == "✅" else f"❌ ERROR: {error or response}"
+    clean_res = display_res.replace("\n", " ").strip()
+    entry = {
+        "time": ts,
+        "merchant": merchant[:8] + "..." if len(merchant) > 8 else merchant,
+        "text": (text[:30] + "...") if len(text) > 30 else text,
+        "intent": intent,
+        "status": status,
+        "response": (clean_res[:100] + "...") if len(clean_res) > 100 else clean_res
+    }
+    STATS["recent_activity"].insert(0, entry)
+    if len(STATS["recent_activity"]) > 15: STATS["recent_activity"].pop()
+
 def init_services():
     global supabase, rag_skill, catalog_skill, order_skill, router, llm_service, PLATFORM_SETTINGS
     add_log("⚙️ Iniciando servicios v1.6.5 (Lifespan enabled)")
@@ -80,7 +95,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Woox AI Engine", 
-    version="1.6.5",
+    version="1.6.6",
     lifespan=lifespan
 )
 
@@ -108,7 +123,7 @@ async def dashboard():
     <!DOCTYPE html>
     <html lang="es">
     <head>
-        <title>Woox Monitor Pro v1.6.5</title>
+        <title>Woox Monitor Pro v1.6.6</title>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
             :root {{ --p: #4f46e5; --bg: #f8fafc; }}
@@ -124,7 +139,7 @@ async def dashboard():
     <body>
         <div style="max-width:1100px; margin:auto;">
             <div class="card">
-                <h2 style="margin:0;">🚀 Woox AI Manager <small style="opacity:0.6;">v1.6.5</small> <span style="background:#ef4444; color:white; font-size:10px; padding:2px 8px; border-radius:10px; margin-left:10px;">LIFESPAN ACTIVE</span></h2>
+                <h2 style="margin:0;">🚀 Woox AI Manager <small style="opacity:0.6;">v1.6.6</small> <span style="background:#ef4444; color:white; font-size:10px; padding:2px 8px; border-radius:10px; margin-left:10px;">LIFESPAN ACTIVE</span></h2>
                 <div class="stats" style="margin-top:20px;">
                     <div class="stat-card"><label style="font-size:10px; color:#64748b; font-weight:800;">TOTAL MSJS</label><br><span>{STATS['total_messages']}</span></div>
                     <div class="stat-card"><label style="font-size:10px; color:#64748b; font-weight:800;">ERRORES</label><br><span>{STATS['total_errors']}</span></div>
