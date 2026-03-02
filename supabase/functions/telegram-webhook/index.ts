@@ -103,12 +103,15 @@ Deno.serve(async (req: Request) => {
         // --- LLAMADA AL MOTOR DE IA (PYTHON) ---
         let aiResponse = "";
         try {
-            const engineUrl = Deno.env.get("PYTHON_ENGINE_URL") || "https://woox-ai-engine.onrender.com";
+            // 1. Obtener URL dinámica desde DB
+            const { data: ps } = await supabase.from("platform_settings").select("ai_engine_url").eq("id", "global").maybeSingle();
+
+            const engineUrl = ps?.ai_engine_url || Deno.env.get("PYTHON_ENGINE_URL") || "http://167.86.73.89:8000";
             const engineSecret = Deno.env.get("PYTHON_ENGINE_AUTH");
 
-            console.log(`[GATEWAY] Enviando a Python Engine: ${messageText}`);
+            console.log(`[GATEWAY] Enviando a Python Engine (${engineUrl}): ${messageText}`);
 
-            const pyRes = await fetch(`${engineUrl}/process-message`, {
+            const pyRes = await fetch(`${engineUrl.replace(/\/$/, '')}/process-message`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -134,7 +137,7 @@ Deno.serve(async (req: Request) => {
 
         } catch (e: any) {
             console.error("[GATEWAY Exception]", e);
-            aiResponse = "Lo siento, mis circuitos están un poco cansados en este momento y tengo problemas técnicos. 🤖✨ Por favor, intenta de nuevo en un ratito o espera a que uno de nuestros asesores te atienda.";
+            aiResponse = "Lo siento, mis circuitos están un poco cansados. 🤖✨ Por favor, intenta de nuevo en un momento.";
         }
 
         // Enviar respuesta a Telegram
