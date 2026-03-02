@@ -117,9 +117,15 @@ async def health_check():
     if not intents_html:
         intents_html = "<li>Esperando mensajes...</li>"
 
-    # Depuración de variables de entorno (solo nombres para seguridad)
-    env_keys = ", ".join([k for k in os.environ.keys() if "SUPABASE" in k or "API" in k or "SECRET" in k])
-    if not env_keys: env_keys = "Ninguna llave relevante detectada"
+    # Depuración detallada de variables
+    critical_vars = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_API_KEY", "AUTH_SECRET"]
+    debug_info = []
+    for v in critical_vars:
+        val = os.environ.get(v, "")
+        status = "✅" if val else "❌"
+        debug_info.append(f"{status} {v}: {len(val)} caracteres")
+    
+    env_debug = "<br>".join(debug_info)
 
     html_content = f"""
     <html>
@@ -142,7 +148,7 @@ async def health_check():
         </head>
         <body>
             <div class="container">
-                <h1>🚀 Woox AI Engine <span class="badge success">v1.1.0</span></h1>
+                <h1>🚀 Woox AI Engine <span class="badge success">v1.2.0</span></h1>
                 <p>Estado del sistema: <strong>ONLINE</strong></p>
                 
                 <div class="status-grid">
@@ -170,8 +176,8 @@ async def health_check():
                 </ul>
 
                 <div class="debug-box">
-                    <strong>[Debug] Llaves detectadas en el entorno:</strong><br>
-                    {env_keys}
+                    <strong>[Debug] Estado de Variables de Entorno:</strong><br>
+                    {env_debug}
                 </div>
 
                 <div class="footer">
