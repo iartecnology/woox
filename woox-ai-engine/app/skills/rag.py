@@ -1,5 +1,6 @@
 from app.db.supabase_client import get_supabase
 from app.core.llm import LLMService
+from typing import Optional, Dict
 import json
 
 class RAGSkill:

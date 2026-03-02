@@ -14,6 +14,7 @@ import re
 import json
 from datetime import datetime
 from fastapi.responses import HTMLResponse, RedirectResponse
+from contextlib import asynccontextmanager
 
 # 1. MODELOS
 class MessageRequest(BaseModel):
@@ -42,32 +43,15 @@ router = None
 llm_service = None
 PLATFORM_SETTINGS = {}
 
-# 3. APP INITIALIZATION
-app = FastAPI(title="Woox AI Engine", version="1.6.4")
-
+# 3. APP LIFESPAN & INITIALIZATION
 def add_log(msg: str):
     ts = datetime.now().strftime("%H:%M:%S")
     STATS["connection_log"].append(f"[{ts}] {msg}")
     if len(STATS["connection_log"]) > 15: STATS["connection_log"].pop(0)
 
-def add_activity(merchant: str, text: str, intent: str, status: str = "✅", response: str = "", error: str = None):
-    ts = datetime.now().strftime("%H:%M:%S")
-    display_res = response if status == "✅" else f"❌ ERROR: {error or response}"
-    clean_res = display_res.replace("\n", " ").strip()
-    entry = {
-        "time": ts,
-        "merchant": merchant[:8] + "..." if len(merchant) > 8 else merchant,
-        "text": (text[:30] + "...") if len(text) > 30 else text,
-        "intent": intent,
-        "status": status,
-        "response": (clean_res[:100] + "...") if len(clean_res) > 100 else clean_res
-    }
-    STATS["recent_activity"].insert(0, entry)
-    if len(STATS["recent_activity"]) > 15: STATS["recent_activity"].pop()
-
 def init_services():
     global supabase, rag_skill, catalog_skill, order_skill, router, llm_service, PLATFORM_SETTINGS
-    add_log("⚙️ Iniciando servicios v1.6.4 (Order Management)")
+    add_log("⚙️ Iniciando servicios v1.6.5 (Lifespan enabled)")
     try:
         client, err, stats = get_supabase_detailed()
         if client:
@@ -87,9 +71,20 @@ def init_services():
     except Exception as e:
         add_log(f"❌ Error en Boot: {str(e)}")
 
-init_services()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Esto se ejecuta al arrancar el worker
+    init_services()
+    yield
+    # Esto se ejecuta al cerrar
 
-# 4. DASHBOARD HTML (v1.6.4)
+app = FastAPI(
+    title="Woox AI Engine", 
+    version="1.6.5",
+    lifespan=lifespan
+)
+
+# 4. DASHBOARD HTML
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
     global supabase
@@ -113,7 +108,7 @@ async def dashboard():
     <!DOCTYPE html>
     <html lang="es">
     <head>
-        <title>Woox Monitor Pro v1.6.4</title>
+        <title>Woox Monitor Pro v1.6.5</title>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
             :root {{ --p: #4f46e5; --bg: #f8fafc; }}
@@ -129,7 +124,7 @@ async def dashboard():
     <body>
         <div style="max-width:1100px; margin:auto;">
             <div class="card">
-                <h2 style="margin:0;">🚀 Woox AI Manager <small style="opacity:0.6;">v1.6.4</small> <span style="background:#ef4444; color:white; font-size:10px; padding:2px 8px; border-radius:10px; margin-left:10px;">ORDER ENGINE ACTIVE</span></h2>
+                <h2 style="margin:0;">🚀 Woox AI Manager <small style="opacity:0.6;">v1.6.5</small> <span style="background:#ef4444; color:white; font-size:10px; padding:2px 8px; border-radius:10px; margin-left:10px;">LIFESPAN ACTIVE</span></h2>
                 <div class="stats" style="margin-top:20px;">
                     <div class="stat-card"><label style="font-size:10px; color:#64748b; font-weight:800;">TOTAL MSJS</label><br><span>{STATS['total_messages']}</span></div>
                     <div class="stat-card"><label style="font-size:10px; color:#64748b; font-weight:800;">ERRORES</label><br><span>{STATS['total_errors']}</span></div>
@@ -158,7 +153,7 @@ async def setup_engine(url: str = Form(...), key: str = Form(...), sec: str = Fo
     init_services()
     return RedirectResponse(url="/", status_code=303)
 
-# 5. API PROCESSOR (v1.6.4)
+# 5. API PROCESSOR
 @app.post("/process-message")
 async def process_message(request: MessageRequest, x_auth_token: Optional[str] = Header(None)):
     expected_token = os.getenv("AUTH_SECRET")
@@ -197,21 +192,17 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         # 4. Lógica de Contexto y Acciones
         context_extra = ""
         
-        # --- NUEVA LÓGICA: REGISTRO DE PEDIDO ---
         if current_intent == "ORDER_CONFIRMATION":
             add_log(f"🛒 Detectada confirmación de pedido para {request.merchant_id}")
-            # Extraer datos del historial
             order_data = await llm_service.extract_order_data(history_context + f"\nCliente: {request.message_text}", ai_config)
             if order_data and order_data.get("items"):
                 add_log(f"📦 Datos extraídos: {len(order_data['items'])} items.")
-                # Registrar en DB
                 order_result = await order_skill.register_order(
                     request.merchant_id, 
                     request.customer_id, 
                     request.conversation_id, 
                     order_data
                 )
-                # Inyectar el número de orden en el contexto para que el LLM lo mencione
                 context_extra = f"\n### ACCIÓN REALIZADA: PEDIDO REGISTRADO EN DB ###\n{order_result}\nResponde al cliente confirmando que todo está listo y menciónale su número de orden si aparece arriba."
             else:
                 add_log("⚠️ No se pudieron extraer datos válidos del pedido.")
