@@ -89,13 +89,23 @@ Deno.serve(async (req: Request) => {
             const { data: mById } = await supabase.from("merchants").select("*").eq("id", merchantId).maybeSingle();
             m = mById;
             if (!m) {
+                // Por merchant_code (ej: BURGERKING05)
+                const { data: mByCode } = await supabase.from("merchants").select("*").eq("merchant_code", merchantId).maybeSingle();
+                m = mByCode;
+            }
+            if (!m) {
+                // Último fallback: por slug (ej: burger-king-pro)
                 const { data: mBySlug } = await supabase.from("merchants").select("*").eq("slug", merchantId).maybeSingle();
                 m = mBySlug;
             }
         }
         if (!m && instanceName) {
-            const { data: mBySlugName } = await supabase.from("merchants").select("*").eq("slug", instanceName).maybeSingle();
-            m = mBySlugName;
+            const { data: mByCode } = await supabase.from("merchants").select("*").eq("merchant_code", instanceName).maybeSingle();
+            m = mByCode;
+            if (!m) {
+                const { data: mBySlugName } = await supabase.from("merchants").select("*").eq("slug", instanceName).maybeSingle();
+                m = mBySlugName;
+            }
         }
 
         if (!m) throw new Error(`Merchant not found (ID: ${merchantId}, Instance: ${instanceName})`);

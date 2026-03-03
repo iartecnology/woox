@@ -41,15 +41,25 @@ Deno.serve(async (req: Request) => {
             const { data: mById } = await supabase.from("merchants").select("*").eq("id", merchantId).maybeSingle();
             m = mById;
             if (!m) {
+                // Buscar por merchant_code (ej: BURGERKING05)
+                const { data: mByCode } = await supabase.from("merchants").select("*").eq("merchant_code", merchantId).maybeSingle();
+                m = mByCode;
+            }
+            if (!m) {
+                // Último fallback: por slug (ej: burger-king-pro)
                 const { data: mBySlug } = await supabase.from("merchants").select("*").eq("slug", merchantId).maybeSingle();
                 m = mBySlug;
             }
         }
 
-        // Fallback: Buscar por instanceName (slug)
+        // Fallback final: Buscar por instanceName de Evolution
         if (!m && instanceName) {
-            const { data: mBySlugName } = await supabase.from("merchants").select("*").eq("slug", instanceName).maybeSingle();
-            m = mBySlugName;
+            const { data: mByCode } = await supabase.from("merchants").select("*").eq("merchant_code", instanceName).maybeSingle();
+            m = mByCode;
+            if (!m) {
+                const { data: mBySlug } = await supabase.from("merchants").select("*").eq("slug", instanceName).maybeSingle();
+                m = mBySlug;
+            }
         }
 
         if (!m) {
