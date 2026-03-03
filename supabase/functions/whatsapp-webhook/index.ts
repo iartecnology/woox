@@ -46,39 +46,68 @@ Deno.serve(async (req: Request) => {
 
     // 2. Procesamiento de Mensajes (POST)
     try {
-        if (!merchantId) throw new Error("merchant_id missing");
+        const body = await req.json();
+        const instanceName = body.instance; // Solo Evolution
+
+        let messageData: any = null;
+        let platform = "whatsapp"; // Default Meta
+        let waMessageId = "";
+        let customerPhone = "";
+        let customerName = "Cliente";
+        let messageText = "";
+
+        // --- DETECTAR PROVEEDOR (META vs EVOLUTION) ---
+        if (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
+            // META API ORIGINAL
+            const value = body.entry[0].changes[0].value;
+            const message = value.messages[0];
+            waMessageId = message.id;
+            customerPhone = message.from;
+            customerName = value.contacts?.[0]?.profile?.name || "Cliente WhatsApp";
+            messageText = message.text?.body || "";
+            platform = "whatsapp";
+        } else if (body.data?.message) {
+            // EVOLUTION FALLBACK
+            const data = body.data;
+            waMessageId = data.key.id;
+            customerPhone = data.key.remoteJid.split('@')[0];
+            customerName = data.pushName || "Cliente Evolution";
+            messageText = data.message.conversation || data.message.extendedTextMessage?.text || data.message.imageMessage?.caption || "";
+            platform = "evolution";
+        }
+
+        if (!messageText) {
+            console.log("[GATEWAY] Mensaje sin texto o tipo no soportado ignorado.");
+            return new Response("ok", { headers: corsHeaders });
+        }
 
         const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-        // Buscar comercio
-        let { data: m } = await supabase.from("merchants").select("*").eq("id", merchantId).maybeSingle();
-        if (!m) {
-            const { data: mc } = await supabase.from("merchants").select("*").eq("merchant_code", merchantId).maybeSingle();
-            m = mc;
+        // Buscar comercio (por merchant_id de URL o instanceName de Evolution)
+        let m: any = null;
+        if (merchantId) {
+            const { data: mById } = await supabase.from("merchants").select("*").eq("id", merchantId).maybeSingle();
+            m = mById;
+            if (!m) {
+                const { data: mBySlug } = await supabase.from("merchants").select("*").eq("slug", merchantId).maybeSingle();
+                m = mBySlug;
+            }
+        }
+        if (!m && instanceName) {
+            const { data: mBySlugName } = await supabase.from("merchants").select("*").eq("slug", instanceName).maybeSingle();
+            m = mBySlugName;
         }
 
-        if (!m) throw new Error("Merchant not found");
+        if (!m) throw new Error(`Merchant not found (ID: ${merchantId}, Instance: ${instanceName})`);
         const merchantIdInternal = m.id;
 
-        const body = await req.json();
-        const entry = body.entry?.[0];
-        const changes = entry?.changes?.[0];
-        const value = changes?.value;
-        const message = value?.messages?.[0];
-
-        if (!message || message.type !== "text") return new Response("ok", { headers: corsHeaders });
-
-        const waMessageId = message.id;
-        const customerPhone = message.from;
-        const customerName = value.contacts?.[0]?.profile?.name || "Cliente WhatsApp";
-        const messageText = message.text.body;
-
         // Deduplicación
-        const { data: existing } = await supabase.from("messages").select("id").eq("metadata->>wa_message_id", waMessageId).maybeSingle();
+        const metaKey = platform === "whatsapp" ? "wa_message_id" : "evolution_message_id";
+        const { data: existing } = await supabase.from("messages").select("id").eq(`metadata->>${metaKey}`, waMessageId).maybeSingle();
         if (existing) return new Response("ok", { headers: corsHeaders });
 
         // Obtener o crear cliente
-        let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", merchantIdInternal).eq("whatsapp_phone", customerPhone).maybeSingle();
+        let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", merchantIdInternal).eq("phone", customerPhone).maybeSingle();
         if (!customer) {
             const { data: nc } = await supabase.from("customers").insert({
                 merchant_id: merchantIdInternal,
@@ -95,7 +124,7 @@ Deno.serve(async (req: Request) => {
             const { data: nconv } = await supabase.from("conversations").insert({
                 merchant_id: merchantIdInternal,
                 customer_id: customer!.id,
-                channel: "whatsapp",
+                channel: platform === "whatsapp" ? "whatsapp" : "whatsapp_evolution",
                 status: "active"
             }).select().single();
             conversation = nconv;
@@ -106,7 +135,7 @@ Deno.serve(async (req: Request) => {
             conversation_id: conversation!.id,
             sender_type: "customer",
             content: messageText,
-            metadata: { wa_message_id: waMessageId }
+            metadata: { [metaKey]: waMessageId }
         });
 
         // Actualizar conversación
@@ -119,10 +148,13 @@ Deno.serve(async (req: Request) => {
         // --- LLAMADA AL MOTOR DE IA (PYTHON) ---
         let aiResponse = "";
         try {
-            const engineUrl = Deno.env.get("PYTHON_ENGINE_URL") || "https://woox-ai-engine.onrender.com";
+            // 1. Obtener la URL del motor desde los ajustes globales
+            const { data: ps } = await supabase.from("platform_settings").select("ai_engine_url").eq("id", "global").maybeSingle();
+
+            const engineUrl = ps?.ai_engine_url || Deno.env.get("PYTHON_ENGINE_URL") || "http://167.86.73.89:8000";
             const engineSecret = Deno.env.get("PYTHON_ENGINE_AUTH");
 
-            const pyRes = await fetch(`${engineUrl}/process-message`, {
+            const pyRes = await fetch(`${engineUrl.replace(/\/$/, '')}/process-message`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -133,7 +165,7 @@ Deno.serve(async (req: Request) => {
                     conversation_id: conversation!.id,
                     customer_id: customer!.id,
                     message_text: messageText,
-                    platform: "whatsapp"
+                    platform: platform
                 })
             });
 
@@ -142,6 +174,7 @@ Deno.serve(async (req: Request) => {
             aiResponse = pyData.response || "Lo siento, no pude procesar tu mensaje.";
 
         } catch (e: any) {
+            console.error("[UNIVERSAL-WH-ERROR]", e);
             aiResponse = "Lo siento, tenemos problemas técnicos pasajeros. 🤖✨ Por favor, intenta de nuevo en un ratito.";
         }
 

@@ -41,19 +41,15 @@ Deno.serve(async (req: Request) => {
             const { data: mById } = await supabase.from("merchants").select("*").eq("id", merchantId).maybeSingle();
             m = mById;
             if (!m) {
-                const { data: mByCode } = await supabase.from("merchants").select("*").eq("merchant_code", merchantId).maybeSingle();
-                m = mByCode;
+                const { data: mBySlug } = await supabase.from("merchants").select("*").eq("slug", merchantId).maybeSingle();
+                m = mBySlug;
             }
         }
 
-        // Fallback: Buscar por instanceName (slug o merchant_code suelen usarse como instance name)
+        // Fallback: Buscar por instanceName (slug)
         if (!m && instanceName) {
-            const { data: mBySlug } = await supabase.from("merchants").select("*").eq("slug", instanceName).maybeSingle();
-            m = mBySlug;
-            if (!m) {
-                const { data: mByCode } = await supabase.from("merchants").select("*").eq("merchant_code", instanceName).maybeSingle();
-                m = mByCode;
-            }
+            const { data: mBySlugName } = await supabase.from("merchants").select("*").eq("slug", instanceName).maybeSingle();
+            m = mBySlugName;
         }
 
         if (!m) {

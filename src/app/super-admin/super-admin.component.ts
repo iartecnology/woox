@@ -2384,7 +2384,10 @@ export class SuperAdminComponent implements OnInit {
     }
 
     getWhatsAppWebhookUrl(): string {
-        return this.getWebhookUrl('whatsapp-webhook');
+        const functionName = this.selectedMerchant?.wa_connector_type === 'web_qr'
+            ? 'evolution-webhook'
+            : 'whatsapp-webhook';
+        return this.getWebhookUrl(functionName);
     }
 
     getFacebookMessengerWebhookUrl(): string {
