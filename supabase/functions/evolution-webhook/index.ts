@@ -167,20 +167,45 @@ Deno.serve(async (req: Request) => {
 
         const cleanResponse = sanitizeMarkdown(aiResponse);
 
-        // Enviar a Evolution
-        const evolutionUrl = `${m.evolution_api_url}/message/sendText/${m.evolution_instance_name}`;
-        await fetch(evolutionUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "apikey": m.evolution_api_key
-            },
-            body: JSON.stringify({
-                number: customerPhone,
-                text: cleanResponse,
-                delay: 1200
-            })
-        });
+        // Enviar respuesta vía Evolution API
+        try {
+            // Obtener config de platform_settings
+            const { data: ps2 } = await supabase.from("platform_settings").select("evolution_api_url, evolution_api_key").eq("id", "global").maybeSingle();
+
+            const evoUrl = ps2?.evolution_api_url || m.evolution_api_url || "";
+            const evoKey = ps2?.evolution_api_key || m.evolution_api_key || "";
+            // Usar wa_session_id del comercio como nombre de instancia; si no, usar merchant_code
+            const evoInstance = m.wa_session_id || m.evolution_instance_name || instanceName || m.merchant_code || "";
+
+            if (!evoUrl || !evoKey || !evoInstance) {
+                console.error(`[EVOLUTION-SEND ERROR] Config incompleta: URL=${evoUrl}, Instance=${evoInstance}, KeyPresent=${!!evoKey}`);
+            } else {
+                const sendUrl = `${evoUrl.replace(/\/$/, '')}/message/sendText/${evoInstance}`;
+                console.log(`[EVOLUTION-SEND] Enviando a ${customerPhone} via ${sendUrl}`);
+
+                const sendRes = await fetch(sendUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "apikey": evoKey
+                    },
+                    body: JSON.stringify({
+                        number: customerPhone,
+                        text: cleanResponse,
+                        delay: 1200
+                    })
+                });
+
+                if (!sendRes.ok) {
+                    const errBody = await sendRes.text();
+                    console.error(`[EVOLUTION-SEND ERROR] Status: ${sendRes.status}, Body: ${errBody}`);
+                } else {
+                    console.log(`[EVOLUTION-SEND] ✅ Respuesta enviada a ${customerPhone}`);
+                }
+            }
+        } catch (sendErr: any) {
+            console.error("[EVOLUTION-SEND EXCEPTION]", sendErr.message);
+        }
 
         // Guardar mensaje de la IA
         await supabase.from("messages").insert({

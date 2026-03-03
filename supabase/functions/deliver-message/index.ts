@@ -96,31 +96,32 @@ Deno.serve(async (req) => {
             });
         }
 
-        if (channel === 'whatsapp') {
-            const waPhoneId = merchant?.whatsapp_phone_number_id;
-            const waCustomerPhone = customer?.whatsapp_phone;
+        if (channel === 'whatsapp' || channel === 'whatsapp_evolution') {
+            const waCustomerPhone = customer?.whatsapp_phone || customer?.phone;
             if (!waCustomerPhone) throw new Error("Customer WhatsApp phone missing");
 
-            if (waConnectorType === 'web_qr') {
-                // --- Lógica para WhatsApp WEB QR (No oficial) ---
-                if (waStatus !== 'connected') {
-                    throw new Error("WhatsApp QR Connector is not connected. Please scan QR in Admin.");
-                }
+            // --- Decidir proveedor de envío ---
+            const isEvolutionChannel = channel === 'whatsapp_evolution' || waConnectorType === 'web_qr';
 
-                console.log(`[Deliver] Enviando vía WEB QR (${waCustomerPhone})`);
+            if (isEvolutionChannel) {
+                // --- Envío via Evolution API ---
+                if (waStatus !== 'connected') {
+                    console.warn("[Deliver] Evolution not connected, attempting anyway...");
+                }
 
                 const evolutionUrl = platformSettings?.evolution_api_url;
                 const evolutionKey = platformSettings?.evolution_api_key;
                 const instanceName = merchant?.wa_session_id;
 
                 if (!evolutionUrl || !evolutionKey || !instanceName) {
-                    throw new Error("Evolution API configuration or Instance Name missing");
+                    throw new Error(`Evolution API config missing: URL=${evolutionUrl}, Instance=${instanceName}`);
                 }
 
-                // Simular delay de escritura
                 await new Promise(r => setTimeout(r, typingSpeedMs + randomDelay));
 
-                const evoRes = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
+                console.log(`[Deliver] Enviando vía EVOLUTION (${waCustomerPhone}) -> Instance: ${instanceName}`);
+
+                const evoRes = await fetch(`${evolutionUrl.replace(/\/$/, '')}/message/sendText/${instanceName}`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -129,7 +130,7 @@ Deno.serve(async (req) => {
                     body: JSON.stringify({
                         number: waCustomerPhone,
                         text: content,
-                        delay: 1200, // Re-aprovechar delay interno de Evolution si se quiere
+                        delay: 1200,
                         linkPreview: true
                     })
                 });
@@ -137,20 +138,19 @@ Deno.serve(async (req) => {
                 const evoData = await evoRes.json();
 
                 if (!evoRes.ok) {
-                    throw new Error(`Evolution API Error: ${evoData.message || evoRes.statusText}`);
+                    throw new Error(`Evolution API Error: ${JSON.stringify(evoData)}`);
                 }
 
-                return new Response(JSON.stringify({ ok: true, method: 'web_qr', status: 'delivered', provider_response: evoData }), {
+                return new Response(JSON.stringify({ ok: true, method: 'evolution', status: 'delivered', provider_response: evoData }), {
                     headers: { ...corsHeaders, "Content-Type": "application/json" }
                 });
 
             } else {
                 // --- Lógica para WhatsApp Meta API (Oficial) ---
                 const waToken = merchant?.whatsapp_token;
+                const waPhoneId = merchant?.whatsapp_phone_number_id;
                 if (!waToken || !waPhoneId) throw new Error("WhatsApp Meta config missing");
 
-                // En Cloud API no hay un "typing" oficial directo para el usuario, 
-                // pero el delay en el envío ayuda a no saturar los límites de Meta.
                 await new Promise(r => setTimeout(r, typingSpeedMs + randomDelay));
 
                 const waRes = await fetch(`https://graph.facebook.com/v22.0/${waPhoneId}/messages`, {
