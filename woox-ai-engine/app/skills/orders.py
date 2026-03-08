@@ -65,3 +65,48 @@ class OrderSkill:
         except Exception as e:
             print(f"[Order Skill Error] {str(e)}")
             return "\n\n⚠️ Tu pedido no pudo ser registrado automáticamente."
+
+    async def get_upsell_recommendations(self, merchant_id: str, current_items: List[Dict[str, Any]]) -> str:
+        """
+        Basado en los items actuales, sugiere productos complementarios (cross-selling).
+        Usa los cross_sell_ids extraídos de WooCommerce en el metadata.
+        """
+        try:
+            if not current_items: return ""
+
+            # 1. Obtener todos los productos del comercio para tener la referencia cruzada
+            res = self.supabase.from_("products").select("id, name, price, remote_id, metadata")\
+                .eq("merchant_id", merchant_id)\
+                .eq("is_available", True)\
+                .execute()
+            
+            if not res.data: return ""
+            all_products = res.data
+
+            # 2. Identificar qué productos en el carrito tienen sugerencias
+            suggested_ids = set()
+            current_names = [it.get("name", "").lower() for it in current_items]
+
+            for it in current_items:
+                matched = next((p for p in all_products if p["name"].lower() == it.get("name", "").lower()), None)
+                if matched and matched.get("metadata"):
+                    cross_ids = matched["metadata"].get("cross_sell_ids", [])
+                    suggested_ids.update([str(cid) for cid in cross_ids])
+            
+            if not suggested_ids: return ""
+
+            # 3. Filtrar productos sugeridos que NO estén ya en el carrito
+            final_suggestions = []
+            for p in all_products:
+                if p.get("remote_id") in suggested_ids and p["name"].lower() not in current_names:
+                    final_suggestions.append(f"- {p['name']} (${p['price']})")
+            
+            if not final_suggestions: return ""
+
+            # 4. Formatear la sugerencia
+            header = "\n\n💡 *Te podría interesar añadir:* \n"
+            return header + "\n".join(final_suggestions[:3]) # Sugerir máximo 3
+
+        except Exception as e:
+            print(f"[Upsell Error] {str(e)}")
+            return ""

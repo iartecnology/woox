@@ -75,7 +75,9 @@ Deno.serve(async (req) => {
                     attributes: p.attributes,
                     variations: p.variations,
                     short_description: p.short_description,
-                    all_images: p.images?.map((img: any) => img.src) || []
+                    all_images: p.images?.map((img: any) => img.src) || [],
+                    upsell_ids: p.upsell_ids || [],
+                    cross_sell_ids: p.cross_sell_ids || []
                 }
             }, { onConflict: 'merchant_id, remote_id' });
 

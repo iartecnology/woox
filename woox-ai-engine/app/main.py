@@ -236,11 +236,21 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         elif current_intent == "KNOWLEDGE_QUERY":
             context_extra = await rag_skill.search_context(request.merchant_id, request.message_text, config=ai_config)
 
-        # 5. Generación Final (Evitar saludos repetidos)
+        # 5. Inteligencia de Ventas (Upselling/Cross-selling Stage 3)
+        suggestions = ""
+        if current_intent in ["ORDER_CONFIRMATION", "KNOWLEDGE_QUERY"]:
+            # Intentar extraer items del contexto actual para sugerir complementos
+            recent_context = history_context + f"\nCliente: {request.message_text}"
+            # Usar un extraction rápido para ver si hay items mencionándose
+            current_order = await llm_service.extract_order_data(recent_context, ai_config)
+            if current_order and current_order.get("items"):
+                suggestions = await order_skill.get_upsell_recommendations(request.merchant_id, current_order["items"])
+        
+        # 6. Generación Final (Evitar saludos repetidos)
         if history_context:
             system_prompt += "\nNOTA: Es una conversación en curso. NO saludes de nuevo ni digas '¡Hola!', ve directo a lo que pide el cliente de forma amable."
 
-        full_context = (history_context + "\n" + context_extra).strip()
+        full_context = (history_context + "\n" + context_extra + "\n" + suggestions).strip()
         ai_response = await llm_service.generate_response(system_prompt, full_context, request.message_text, ai_config)
         
         # Registro
