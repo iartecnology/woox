@@ -69,11 +69,13 @@ Deno.serve(async (req) => {
                 image_url: p.images?.[0]?.src || null,
                 is_available: p.stock_status === "instock",
                 remote_id: String(p.id),
+                tags: p.tags?.map((t: any) => t.name) || [],
                 metadata: {
                     wc_url: p.permalink,
                     attributes: p.attributes,
                     variations: p.variations,
-                    short_description: p.short_description
+                    short_description: p.short_description,
+                    all_images: p.images?.map((img: any) => img.src) || []
                 }
             }, { onConflict: 'merchant_id, remote_id' });
 

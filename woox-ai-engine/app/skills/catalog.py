@@ -12,7 +12,7 @@ class CatalogSkill:
         """
         try:
             # 1. Obtener datos combinados directamente de Supabase
-            response = self.supabase.from_("products").select("name, price, description, is_available, categories(name)")\
+            response = self.supabase.from_("products").select("name, price, description, is_available, tags, metadata, categories(name)")\
                 .eq("merchant_id", merchant_id)\
                 .eq("is_available", True)\
                 .order("category_id")\
@@ -39,11 +39,18 @@ class CatalogSkill:
                     desc = p['description'][:80] + "..." if len(p['description']) > 80 else p['description']
                     catalog_text += f"  _{desc}_\n"
                 
+                # Etiquetas (Dieta, Alérgenos, etc.)
+                if p.get('tags'):
+                    catalog_text += f"  🏷️ [{', '.join(p['tags'])}]\n"
+                
                 # Soporte para variantes (WooCommerce Stage 1)
                 meta = p.get('metadata') or {}
                 if meta.get('attributes'):
                     attrs = [f"{a['name']}: {', '.join(a['options'])}" for a in meta['attributes']]
                     catalog_text += f"  (Opciones: {'; '.join(attrs)})\n"
+                
+                if meta.get('all_images') and len(meta['all_images']) > 1:
+                    catalog_text += f"  📸 {len(meta['all_images'])} fotos disponibles.\n"
             
             return catalog_text
 
