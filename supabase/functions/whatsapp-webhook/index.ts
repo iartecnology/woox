@@ -69,6 +69,7 @@ Deno.serve(async (req: Request) => {
         } else if (body.data?.message) {
             // EVOLUTION FALLBACK
             const data = body.data;
+            if (data.key?.fromMe === true) return new Response("ok", { headers: corsHeaders });
             waMessageId = data.key.id;
             customerPhone = data.key.remoteJid.split('@')[0];
             customerName = data.pushName || "Cliente Evolution";

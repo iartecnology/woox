@@ -31,7 +31,10 @@ Deno.serve(async (req: Request) => {
             console.log("[EVOLUTION] Payload sin mensaje ignorado.");
             return new Response("ok", { headers: corsHeaders });
         }
-        if (data.fromMe) return new Response("ok", { headers: corsHeaders });
+        if (data.key?.fromMe === true) {
+            console.log("[EVOLUTION] Mensaje saliente ignorado (fromMe: true)");
+            return new Response("ok", { headers: corsHeaders });
+        }
 
         const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
@@ -66,6 +69,7 @@ Deno.serve(async (req: Request) => {
             console.error(`[EVOLUTION ERROR] Comercio no encontrado (ID: ${merchantId}, Instance: ${instanceName})`);
             return new Response("ok", { headers: corsHeaders });
         }
+        console.log(`[EVOLUTION] Merchant Found: ${m.name} (${m.id}) | Code: ${m.merchant_code}`);
 
         const evolutionMessageId = data.key.id;
         const customerPhone = data.key.remoteJid.split('@')[0];
@@ -156,9 +160,13 @@ Deno.serve(async (req: Request) => {
                 })
             });
 
-            if (!pyRes.ok) throw new Error(`Engine Error: ${pyRes.status}`);
+            if (!pyRes.ok) {
+                const errText = await pyRes.text();
+                throw new Error(`Engine Error Status: ${pyRes.status}, Body: ${errText}`);
+            }
             const pyData = await pyRes.json();
             aiResponse = pyData.response || "Lo siento, no pude procesar tu mensaje.";
+            console.log(`[EVOLUTION] AI Response: ${aiResponse.substring(0, 50)}...`);
 
         } catch (e: any) {
             console.error("[EVOLUTION-WEBHOOK ERROR]", e);
