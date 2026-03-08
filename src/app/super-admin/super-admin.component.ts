@@ -10,6 +10,7 @@ import { LiveOrdersMonitorComponent } from '../live-orders-monitor/live-orders-m
 import { NotificationService } from '../notification.service';
 import { CatalogService } from '../catalog.service';
 import { SupabaseService } from '../supabase.service';
+import { AppInfoPanelComponent } from '../app-info-panel/app-info-panel.component';
 
 interface Team {
     id: string;
@@ -151,7 +152,7 @@ interface PlatformConfig {
 @Component({
     selector: 'app-super-admin',
     standalone: true,
-    imports: [CommonModule, FormsModule, ChatSimulatorComponent, LiveOrdersMonitorComponent],
+    imports: [CommonModule, FormsModule, ChatSimulatorComponent, LiveOrdersMonitorComponent, AppInfoPanelComponent],
     templateUrl: './super-admin.component.html',
     styleUrl: './super-admin.component.css'
 })
@@ -641,6 +642,10 @@ export class SuperAdminComponent implements OnInit {
     safeMonitorUrl: SafeResourceUrl | null = null;
     isEditing = false;
     showDebugPrompt = false;
+    showAppInfo = false;
+
+    openAppInfo() { this.showAppInfo = true; }
+    closeAppInfo() { this.showAppInfo = false; }
     verifyingChannel: string | null = null;
     channelStatus: { [key: string]: 'connected' | 'error' | 'idle' } = {
         whatsapp: 'idle',

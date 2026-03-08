@@ -5,6 +5,9 @@
             <p>Gestión global de empresas y plataforma SaaS Woox.</p>
         </div>
         <div class="header-actions">
+            <button class="info-btn" (click)="openAppInfo()">
+                ℹ️ Info & Changelog
+            </button>
             <button class="users-mgr-btn" (click)="openGlobalUserManager()">
                 👥 Gestión de Usuarios
             </button>
@@ -22,6 +25,11 @@
             </button>
         </div>
     </header>
+
+    <!-- PANEL DE INFO & CHANGELOG -->
+    <div *ngIf="showAppInfo" (click)="closeAppInfo()">
+        <app-info-panel (click)="$event.stopPropagation()"></app-info-panel>
+    </div>
 
     <section class="merchants-section">
         <div class="table-card">
