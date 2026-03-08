@@ -190,20 +190,42 @@ Deno.serve(async (req: Request) => {
 
         const cleanResponse = sanitizeMarkdown(aiResponse);
 
-        // Enviar a WhatsApp
-        const waUrl = `https://graph.facebook.com/v22.0/${m.whatsapp_phone_number_id}/messages`;
-        await fetch(waUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${m.whatsapp_token}`
-            },
-            body: JSON.stringify({
-                messaging_product: "whatsapp",
-                to: customerPhone,
-                text: { body: cleanResponse }
-            })
-        });
+        // --- ENTREGAR RESPUESTA (META vs EVOLUTION) ---
+        if (platform === "evolution") {
+            try {
+                const { data: ps2 } = await supabase.from("platform_settings").select("evolution_api_url, evolution_api_key").eq("id", "global").maybeSingle();
+                const evoUrl = ps2?.evolution_api_url || m.evolution_api_url || "";
+                const evoKey = ps2?.evolution_api_key || m.evolution_api_key || "";
+                const evoInstance = m.wa_session_id || instanceName || m.merchant_code || "";
+
+                if (evoUrl && evoKey && evoInstance) {
+                    const sendUrl = `${evoUrl.replace(/\/$/, '')}/message/sendText/${evoInstance}`;
+                    await fetch(sendUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "apikey": evoKey },
+                        body: JSON.stringify({ number: customerPhone, text: cleanResponse, delay: 1200 })
+                    });
+                    console.log(`[WH-EVO-SEND] Respuesta enviada a ${customerPhone}`);
+                }
+            } catch (sendErr) {
+                console.error("[WH-EVO-SEND ERROR]", sendErr);
+            }
+        } else {
+            // META API
+            const waUrl = `https://graph.facebook.com/v22.0/${m.whatsapp_phone_number_id}/messages`;
+            await fetch(waUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${m.whatsapp_token}`
+                },
+                body: JSON.stringify({
+                    messaging_product: "whatsapp",
+                    to: customerPhone,
+                    text: { body: cleanResponse }
+                })
+            });
+        }
 
         // Guardar mensaje de la IA
         await supabase.from("messages").insert({

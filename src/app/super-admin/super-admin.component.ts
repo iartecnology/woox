@@ -1850,6 +1850,10 @@ export class SuperAdminComponent implements OnInit {
 
                     this.notificationService.show('¡WhatsApp conectado correctamente!', 'success');
                     this.cdr.detectChanges();
+
+                    // 6. Configurar Webhook una vez conectado (asegurar persistencia)
+                    await this.setupEvolutionWebhook(merchant, instanceName);
+
                     clearInterval(this.waStatusInterval);
                 }
             } catch (e) {
@@ -1894,15 +1898,53 @@ export class SuperAdminComponent implements OnInit {
                     events: [
                         "MESSAGES_UPSERT",
                         "CONNECTION_UPDATE",
-                        "MESSAGES_UPDATE"
+                        "MESSAGES_UPDATE",
+                        "SEND_MESSAGE",
+                        "MESSAGES_SET"
                     ]
                 })
             });
             const data = await res.json();
             console.log('🌐 Evolution Webhook Setup:', data);
-            console.log('🌐 Webhook configurado en:', webhookUrl);
+
+            if (res.ok) {
+                // Enviar mensaje de éxito opcionalmente si tenemos un número destino
+                // Por ahora, intentaremos enviar un mensaje de prueba al mismo número de la instancia
+                // para verificar que el envío (salida) funciona.
+                this.sendEvolutionTestMessage(instanceName, apiUrl, apiKey);
+            }
         } catch (e) {
             console.error('Error configurando webhook:', e);
+        }
+    }
+
+    private async sendEvolutionTestMessage(instanceName: string, apiUrl: string, apiKey: string) {
+        try {
+            // Intentar obtener el número de la instancia primero
+            const statusRes = await fetch(`${apiUrl}/instance/connectionState/${instanceName}`, {
+                method: 'GET',
+                headers: { 'apikey': apiKey }
+            });
+            const statusData = await statusRes.json();
+            const myNumber = statusData.instance?.owner?.split(':')[0] || statusData.instance?.jid?.split('@')[0];
+
+            if (myNumber) {
+                await fetch(`${apiUrl}/message/sendText/${instanceName}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': apiKey
+                    },
+                    body: JSON.stringify({
+                        number: myNumber,
+                        text: '🤖 ¡Conexión Exitosa con Woox AI! 🚀\n\nTu instancia ha sido vinculada correctamente y el webhook está activo. Ya puedo recibir y responder mensajes automáticamente. ✨',
+                        delay: 1000
+                    })
+                });
+                console.log('✅ Mensaje de prueba enviado a:', myNumber);
+            }
+        } catch (err) {
+            console.error('Error enviando mensaje de prueba:', err);
         }
     }
 
