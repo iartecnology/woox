@@ -24,9 +24,15 @@
                 <h2>Catálogo de Productos</h2>
                 <p>Gestiona los productos disponibles para esta empresa.</p>
             </div>
-            <button class="add-product-btn" (click)="openProductModal()">
-                <span>+ Nuevo Producto</span>
-            </button>
+            <div class="header-actions">
+                <button class="sync-wc-btn" (click)="syncWooCommerce()" [disabled]="isSyncing">
+                    <span *ngIf="!isSyncing">🔄 Sincronizar WooCommerce</span>
+                    <span *ngIf="isSyncing">⌛ Sincronizando...</span>
+                </button>
+                <button class="add-product-btn" (click)="openProductModal()">
+                    <span>+ Nuevo Producto</span>
+                </button>
+            </div>
         </header>
 
         <div class="product-grid">
@@ -109,8 +115,14 @@
                         </div>
                         <p class="desc">{{ product.description }}</p>
                         <div class="actions">
-                            <button class="edit-btn" (click)="openProductModal(product)">Editar</button>
-                            <button class="delete-btn" (click)="requestDeleteProduct(product.id)">Eliminar</button>
+                            <button class="toggle-stock-btn" [class.unavailable]="!product.is_available"
+                                (click)="toggleAvailability(product)">
+                                {{ product.is_available ? 'Marcar Agotado' : 'Marcar Disponible' }}
+                            </button>
+                            <div class="action-row">
+                                <button class="edit-btn" (click)="openProductModal(product)">Editar</button>
+                                <button class="delete-btn" (click)="requestDeleteProduct(product.id)">Eliminar</button>
+                            </div>
                         </div>
                     </div>
                 </div>

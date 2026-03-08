@@ -41,6 +41,7 @@ export class ProductManagementComponent implements OnInit {
     };
 
     newCategoryName: string = '';
+    isSyncing: boolean = false;
 
     async ngOnInit() {
         this.route.queryParams.subscribe(async params => {
@@ -174,6 +175,48 @@ export class ProductManagementComponent implements OnInit {
         this.showDeleteConfirm = false;
         this.productToDeleteId = null;
         await this.loadData();
+    }
+
+    async toggleAvailability(product: Product) {
+        try {
+            const newStatus = !product.is_available;
+            const { error } = await this.supabaseService.updateProduct(product.id, { is_available: newStatus });
+            if (error) throw error;
+            product.is_available = newStatus;
+            this.notificationService.show(`Producto ${newStatus ? 'disponible' : 'agotado'}`, 'success');
+        } catch (error: any) {
+            console.error('Error toggling availability:', error);
+            this.notificationService.show('Error al actualizar disponibilidad', 'error');
+        }
+    }
+
+    async syncWooCommerce() {
+        if (!this.merchantId) return;
+        this.isSyncing = true;
+        this.notificationService.show('Sincronizando con WooCommerce...', 'info');
+
+        try {
+            const { data, error } = await this.supabaseService.rpc('invoke_edge_function', {
+                function_name: 'sync-woocommerce',
+                payload: { merchant_id: this.merchantId }
+            });
+
+            // Si el RPC no está disponible, usamos el invoke directo si existe en supabase-js
+            // Pero como estamos en el front, usualmente usamos el cliente de supabase inyectado
+            const { data: res, error: resErr } = await (this.supabaseService as any).supabase.functions.invoke('sync-woocommerce', {
+                body: { merchant_id: this.merchantId }
+            });
+
+            if (resErr) throw resErr;
+
+            this.notificationService.show(res?.message || 'Sincronización exitosa', 'success');
+            await this.loadData();
+        } catch (error: any) {
+            console.error('Error syncing WooCommerce:', error);
+            this.notificationService.show('Error en la sincronización: ' + (error.message || 'Error técnico'), 'error');
+        } finally {
+            this.isSyncing = false;
+        }
     }
 
     cancelDeleteProduct() {

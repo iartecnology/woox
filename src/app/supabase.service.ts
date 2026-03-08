@@ -168,11 +168,11 @@ export class SupabaseService {
     }
 
     async updateMerchant(id: string, updates: any) {
-        const { data, error } = await supabase
-            .from('merchants')
-            .update(updates)
-            .eq('id', id);
-        return { data, error };
+        return await supabase.from('merchants').update(updates).eq('id', id);
+    }
+
+    async updateProduct(id: string, updates: any) {
+        return await supabase.from('products').update(updates).eq('id', id);
     }
 
     async saveMerchant(merchant: any) {

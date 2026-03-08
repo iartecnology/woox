@@ -98,6 +98,34 @@
     margin: 4px 0 0 0;
 }
 
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.sync-wc-btn {
+    background: #9333EA;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+}
+
+.sync-wc-btn:hover:not(:disabled) {
+    background: #7E22CE;
+    transform: translateY(-2px);
+}
+
+.sync-wc-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    background: #A855F7;
+}
+
 .add-product-btn {
     background: #4F46E5;
     color: white;
@@ -198,7 +226,40 @@
 
 .actions {
     display: flex;
-    gap: 12px;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.toggle-stock-btn {
+    width: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #F5F3FF;
+    color: #5B21B6;
+    border: 1px solid #DDD6FE;
+}
+
+.toggle-stock-btn:hover {
+    background: #EDE9FE;
+}
+
+.toggle-stock-btn.unavailable {
+    background: #ECFDF5;
+    color: #065F46;
+    border: 1px solid #A7F3D0;
+}
+
+.toggle-stock-btn.unavailable:hover {
+    background: #D1FAE5;
+}
+
+.action-row {
+    display: flex;
+    gap: 8px;
 }
 
 .edit-btn,
