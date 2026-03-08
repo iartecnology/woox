@@ -253,6 +253,23 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         full_context = (history_context + "\n" + context_extra + "\n" + suggestions).strip()
         ai_response = await llm_service.generate_response(system_prompt, full_context, request.message_text, ai_config)
         
+        # 7. Sincronización Realtime (Paso 2 del plan)
+        # Extraer items y sentimiento para el Monitor de Carritos
+        try:
+            # Re-extraemos los datos del pedido actualizados con la última respuesta
+            updated_order = await llm_service.extract_order_data(full_context + f"\nTú: {ai_response}", ai_config)
+            if updated_order:
+                # Determinamos sentimiento básico (opcionalmente se puede usar otro prompt)
+                sentiment = "happy" if "gracias" in request.message_text.lower() or "👍" in request.message_text else "neutral"
+                
+                supabase.table("conversations").update({
+                    "typing_data": updated_order,
+                    "sentiment": sentiment,
+                    "updated_at": datetime.now().isoformat()
+                }).eq("id", request.conversation_id).execute()
+        except Exception as sync_err:
+            print(f"[Realtime Sync Error] {str(sync_err)}")
+
         # Registro
         add_activity(request.merchant_id, request.message_text, current_intent, "✅", ai_response)
         return {"success": True, "response": ai_response}

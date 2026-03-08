@@ -5,10 +5,10 @@ import { LiveOrderService, LiveCart } from '../live-order.service';
 import { Subscription } from 'rxjs';
 
 @Component({
-    selector: 'app-live-orders-monitor',
-    standalone: true,
-    imports: [CommonModule, FormsModule],
-    template: `
+  selector: 'app-live-orders-monitor',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  template: `
     <div class="monitor-container p-6">
       <div class="monitor-header mb-8">
         <div class="flex items-center gap-3">
@@ -33,8 +33,11 @@ import { Subscription } from 'rxjs';
             <div class="customer-info">
               <span class="avatar">{{ cart.customerName[0] }}</span>
               <div>
-                <h4>{{ cart.customerName }}</h4>
-                <p class="session-id">Sesión: {{ cart.id }}</p>
+                <div class="flex items-center gap-2">
+                  <h4 class="m-0">{{ cart.customerName }}</h4>
+                  <span class="sentiment-icon" [title]="cart.sentiment">{{ getSentimentIcon(cart.sentiment) }}</span>
+                </div>
+                <p class="session-id">ID: {{ cart.id.substring(0,8) }}... | {{ cart.customerPhone || 'Web' }}</p>
               </div>
             </div>
             <div class="status-badge" [class]="cart.status">
@@ -74,7 +77,7 @@ import { Subscription } from 'rxjs';
       </div>
     </div>
   `,
-    styles: [`
+  styles: [`
     .monitor-container {
       min-height: 100vh;
       background: radial-gradient(circle at top left, #1e1b4b 0%, #0f172a 100%);
@@ -138,7 +141,8 @@ import { Subscription } from 'rxjs';
       display: flex; align-items: center; justify-content: center;
       font-weight: 800; font-size: 1.2rem;
     }
-    .customer-info h4 { margin: 0; font-weight: 700; color: #f8fafc; }
+    .customer-info h4 { font-weight: 700; color: #f8fafc; }
+    .sentiment-icon { font-size: 1.1rem; }
     .session-id { margin: 0; font-size: 0.75rem; color: #94a3b8; }
     
     .status-badge {
@@ -209,29 +213,46 @@ import { Subscription } from 'rxjs';
   `]
 })
 export class LiveOrdersMonitorComponent implements OnInit, OnDestroy {
-    @Input() merchantId: string = '';
+  @Input() merchantId: string = '';
 
-    carts: LiveCart[] = [];
-    private sub?: Subscription;
+  carts: LiveCart[] = [];
+  private sub?: Subscription;
+  private channel?: any;
 
-    constructor(private liveOrderService: LiveOrderService) { }
+  constructor(private liveOrderService: LiveOrderService) { }
 
-    ngOnInit() {
-        this.sub = this.liveOrderService.liveCarts$.subscribe(carts => {
-            this.carts = carts;
-        });
+  ngOnInit() {
+    this.sub = this.liveOrderService.liveCarts$.subscribe(carts => {
+      this.carts = carts;
+    });
+
+    if (this.merchantId) {
+      this.channel = this.liveOrderService.subscribeToLiveCarts(this.merchantId);
     }
+  }
 
-    ngOnDestroy() {
-        this.sub?.unsubscribe();
+  ngOnDestroy() {
+    this.sub?.unsubscribe();
+    if (this.channel) {
+      this.liveOrderService.unsubscribeChannel(this.channel);
     }
+  }
 
-    get filteredCarts() {
-        return this.carts.filter(c => c.merchantId === this.merchantId)
-            .sort((a, b) => b.lastUpdate.getTime() - a.lastUpdate.getTime());
-    }
+  get filteredCarts() {
+    return this.carts.filter(c => c.merchantId === this.merchantId)
+      .sort((a, b) => b.lastUpdate.getTime() - a.lastUpdate.getTime());
+  }
 
-    viewConversation(cart: LiveCart) {
-        alert('Espiando conversación de ' + cart.customerName + '...');
+  viewConversation(cart: LiveCart) {
+    alert('Espiando conversación de ' + cart.customerName + '...');
+  }
+
+  getSentimentIcon(sentiment?: string): string {
+    switch (sentiment) {
+      case 'happy': return '😊';
+      case 'confused': return '😕';
+      case 'frustrated': return '😡';
+      default: return '😐';
     }
+  }
 }

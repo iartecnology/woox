@@ -466,15 +466,16 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
   }
 
   syncLiveCart() {
-    this.liveOrderService.updateLiveCart({
-      id: this.sessionId,
-      merchantId: this.merchantId,
-      customerName: this.customerName,
-      items: this.cart,
-      total: this.cartTotal,
-      status: 'active',
-      lastUpdate: new Date()
-    });
+    if (!this.dbConversationId) return;
+
+    this.liveOrderService.updateSimulatorCart(
+      this.dbConversationId,
+      {
+        items: this.cart,
+        total: this.cartTotal
+      },
+      'happy' // Simulator is usually a happy path
+    );
   }
 
   async sendMessage() {
@@ -1046,16 +1047,23 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       }
     }
 
-    // Marcar como confirmado en el monitor (Legacy/Live)
-    this.liveOrderService.updateLiveCart({
-      id: this.sessionId,
-      merchantId: this.merchantId,
-      customerName: this.customerName,
-      items: this.cart,
-      total: this.cartTotal,
-      status: 'confirmed',
-      lastUpdate: new Date()
-    });
+    // Marcar como confirmado en el monitor (Persistencia en DB)
+    if (this.dbConversationId) {
+      this.liveOrderService.updateSimulatorCart(
+        this.dbConversationId,
+        {
+          items: this.cart,
+          total: this.cartTotal
+        },
+        'happy'
+      ).then(() => {
+        // Al confirmar, limpiamos el typing_data para que desaparezca del monitor Live (o cambie de estado)
+        this.supabaseService.rpc('update_conversation_typing_data', {
+          p_conv_id: this.dbConversationId,
+          p_data: {}
+        });
+      });
+    }
 
     this.cart = [];
     this.cdr.detectChanges();
