@@ -28,12 +28,22 @@ class CatalogSkill:
             for p in response.data:
                 category_name = p['categories']['name'] if p['categories'] else "Otros"
                 if category_name != current_category:
-                    catalog_text += f"➔ [{category_name}]\n"
+                    catalog_text += f"\n➔ [{category_name}]\n"
                     current_category = category_name
                 
-                catalog_text += f"- {p['name']} | Precio: ${p['price']}\n"
+                price_text = f"${p['price']}" if p['price'] > 0 else "Consultar"
+                catalog_text += f"- *{p['name']}* | {price_text}\n"
+                
+                # Descripción resumida
                 if p['description']:
-                    catalog_text += f"  ({p['description']})\n"
+                    desc = p['description'][:80] + "..." if len(p['description']) > 80 else p['description']
+                    catalog_text += f"  _{desc}_\n"
+                
+                # Soporte para variantes (WooCommerce Stage 1)
+                meta = p.get('metadata') or {}
+                if meta.get('attributes'):
+                    attrs = [f"{a['name']}: {', '.join(a['options'])}" for a in meta['attributes']]
+                    catalog_text += f"  (Opciones: {'; '.join(attrs)})\n"
             
             return catalog_text
 
