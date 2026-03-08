@@ -184,3 +184,34 @@ class LLMService:
         except Exception as e:
             print(f"[LLM Extraction Error] {str(e)}")
             return None
+    async def profile_customer(self, history: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Analiza el historial para extraer preferencias, sentimiento y perfil del cliente.
+        """
+        api_key = config.get("api_key")
+        model_name = config.get("model", "gemini-1.5-flash")
+        if not api_key: return None
+
+        profile_prompt = f"""
+        Analiza el historial de chat y extrae un perfil del cliente para el CRM.
+        Busca: preferencias (sin cebolla, picante, etc), alergias, sentimiento predominante y etiquetas útiles.
+
+        Responde SOLO el JSON:
+        {{
+            "sentiment": "happy" | "neutral" | "frustrated",
+            "preferences": {{ "dietary": str, "interests": str, "notes": str }},
+            "tags": [str]
+        }}
+
+        HISTORIAL:
+        {history}
+
+        JSON:
+        """
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(profile_prompt)
+            json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+            return json.loads(json_match.group()) if json_match else None
+        except: return None

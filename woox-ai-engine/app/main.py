@@ -270,6 +270,21 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         except Exception as sync_err:
             print(f"[Realtime Sync Error] {str(sync_err)}")
 
+        # 8. Perfilamiento CRM Inteligente (Paso 2 del plan de mejora)
+        # Solo lo hacemos si el cliente envió un mensaje real (no bot)
+        try:
+            profile_data = await llm_service.profile_customer(history_context + f"\nCliente: {request.message_text}", ai_config)
+            if profile_data:
+                # Actualización atómica en la tabla de clientes
+                supabase.table("customers").update({
+                    "preferences": profile_data.get("preferences", {}),
+                    "tags": profile_data.get("tags", []),
+                    "sentiment": profile_data.get("sentiment", "neutral"),
+                    "updated_at": datetime.now().isoformat()
+                }).eq("id", request.customer_id).execute()
+        except Exception as prof_err:
+            print(f"[Profiling Error] {str(prof_err)}")
+
         # Registro
         add_activity(request.merchant_id, request.message_text, current_intent, "✅", ai_response)
         return {"success": True, "response": ai_response}

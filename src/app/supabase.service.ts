@@ -516,7 +516,15 @@ export class SupabaseService {
         };
     }
 
-    async getMerchantConfig(merchantId: string) {
+    async getMerchantCustomers(merchantId: string) {
+        return await supabase
+            .from('customers')
+            .select('*')
+            .eq('merchant_id', merchantId)
+            .order('clv', { ascending: false });
+    }
+
+    async getMerchantInfo(merchantId: string) {
         const { data, error } = await supabase
             .from('merchants')
             .select('*')
@@ -610,13 +618,6 @@ export class SupabaseService {
         return await supabase
             .from('conversation_tags')
             .insert({ conversation_id: conversationId, tag_id: tagId });
-    }
-
-    async removeTagFromConversation(conversationId: string, tagId: string) {
-        return await supabase
-            .from('conversation_tags')
-            .delete()
-            .match({ conversation_id: conversationId, tag_id: tagId });
     }
 
     async saveInternalNote(conversationId: string, content: string, authorId?: string) {
