@@ -46,6 +46,7 @@ export class CustomerCrmComponent implements OnInit {
     campaignResult: CampaignResult | null = null;
     campaignHistory: any[] = [];
     segmentCount = 0;
+    activeFilter: 'all' | 'vip' | 'churn' | 'new' | 'inactive' = 'all';
 
     campaign = {
         name: '',
@@ -74,8 +75,60 @@ export class CustomerCrmComponent implements OnInit {
         const { data } = await this.supabaseService.getMerchantCustomers(this.merchantId);
         if (data) {
             this.customers = data as unknown as Customer[];
-            this.filteredCustomers = [...this.customers];
-            if (this.customers.length > 0) this.selectedCustomer = this.customers[0];
+            this.applyFilter();
+            if (this.customers.length > 0) this.selectedCustomer = this.filteredCustomers[0];
+        }
+    }
+
+    setFilter(filter: 'all' | 'vip' | 'churn' | 'new' | 'inactive') {
+        this.activeFilter = filter;
+        this.searchTerm = '';
+        this.applyFilter();
+    }
+
+    applyFilter() {
+        const now15 = new Date();
+        now15.setDate(now15.getDate() - 15);
+
+        let base = this.customers;
+
+        switch (this.activeFilter) {
+            case 'vip':
+                base = this.customers.filter(c => c.loyalty_level === 'gold' || c.loyalty_level === 'platinum');
+                break;
+            case 'churn':
+                base = this.customers.filter(c => c.churn_risk === 'high');
+                break;
+            case 'new':
+                base = this.customers.filter(c => (c.total_orders || 0) <= 1);
+                break;
+            case 'inactive':
+                base = this.customers.filter(c => !c.last_purchase_at || new Date(c.last_purchase_at) < now15);
+                break;
+            default:
+                base = this.customers;
+        }
+
+        if (this.searchTerm) {
+            const term = this.searchTerm.toLowerCase();
+            base = base.filter(c =>
+                c.full_name?.toLowerCase().includes(term) ||
+                c.phone?.includes(term)
+            );
+        }
+
+        this.filteredCustomers = base;
+    }
+
+    getFilterCount(filter: string): number {
+        const now15 = new Date();
+        now15.setDate(now15.getDate() - 15);
+        switch (filter) {
+            case 'vip': return this.customers.filter(c => c.loyalty_level === 'gold' || c.loyalty_level === 'platinum').length;
+            case 'churn': return this.customers.filter(c => c.churn_risk === 'high').length;
+            case 'new': return this.customers.filter(c => (c.total_orders || 0) <= 1).length;
+            case 'inactive': return this.customers.filter(c => !c.last_purchase_at || new Date(c.last_purchase_at) < now15).length;
+            default: return this.customers.length;
         }
     }
 
@@ -91,10 +144,7 @@ export class CustomerCrmComponent implements OnInit {
     }
 
     search() {
-        this.filteredCustomers = this.customers.filter(c =>
-            c.full_name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-            c.phone?.includes(this.searchTerm)
-        );
+        this.applyFilter();
     }
 
     selectCustomer(customer: Customer) {

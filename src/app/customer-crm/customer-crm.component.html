@@ -35,6 +35,28 @@
                 <input type="text" [(ngModel)]="searchTerm" (input)="search()"
                     placeholder="🔍 Buscar por nombre o teléfono...">
             </div>
+
+            <!-- TABS DE FILTRADO INTELIGENTE -->
+            <div class="filter-tabs">
+                <button class="filter-tab" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">
+                    Todos <span class="tab-count">{{ getFilterCount('all') }}</span>
+                </button>
+                <button class="filter-tab vip" [class.active]="activeFilter === 'vip'" (click)="setFilter('vip')">
+                    ⭐ VIP <span class="tab-count">{{ getFilterCount('vip') }}</span>
+                </button>
+                <button class="filter-tab danger" [class.active]="activeFilter === 'churn'"
+                    (click)="setFilter('churn')">
+                    🔴 Riesgo <span class="tab-count">{{ getFilterCount('churn') }}</span>
+                </button>
+                <button class="filter-tab info" [class.active]="activeFilter === 'new'" (click)="setFilter('new')">
+                    🆕 Nuevos <span class="tab-count">{{ getFilterCount('new') }}</span>
+                </button>
+                <button class="filter-tab muted" [class.active]="activeFilter === 'inactive'"
+                    (click)="setFilter('inactive')">
+                    💤 Inactivos <span class="tab-count">{{ getFilterCount('inactive') }}</span>
+                </button>
+            </div>
+
             <div class="customer-list">
                 <div *ngIf="filteredCustomers.length === 0" class="empty-list">
                     <span>🔎 Sin resultados</span>
@@ -74,7 +96,7 @@
                 <div class="detail-main">
                     <h2>{{ selectedCustomer.full_name }}</h2>
                     <div class="tags">
-                        <span *ngFor="let tag of selectedCustomer.tags" class="tag">{{ tag }}</span>
+                        <span *ngFor="let tag of (selectedCustomer.tags || [])" class="tag">{{ tag }}</span>
                         <span class="tag" [class]="selectedCustomer.loyalty_level">
                             {{ getLoyaltyIcon(selectedCustomer.loyalty_level) }} {{ selectedCustomer.loyalty_level |
                             uppercase }}
@@ -118,9 +140,9 @@
                     </div>
                     <div class="history-desc">Canal: {{ selectedCustomer.channel_preference || 'WhatsApp' }}</div>
                 </div>
-                <div class="history-item" *ngIf="selectedCustomer.tags?.length > 0">
+                <div class="history-item" *ngIf="selectedCustomer.tags && selectedCustomer.tags.length > 0">
                     <div class="history-date">Preferencias detectadas por IA:</div>
-                    <div class="history-desc">{{ selectedCustomer.tags.join(', ') }}</div>
+                    <div class="history-desc">{{ selectedCustomer.tags?.join(', ') }}</div>
                 </div>
             </div>
         </div>
@@ -170,7 +192,7 @@
         <!-- Estado: Formulario -->
         <div *ngIf="!isSending && !campaignResult">
             <h2>🚀 Nueva Campaña de Remarketing</h2>
-            <p class="modal-subtitle">Envía mensajes masivos personalizados por WhatsApp</p>
+            <p class="modal-subtitle">Envía mensajes masivos personalizados por WhatsApp.</p>
 
             <div class="form-group">
                 <label>Nombre de la Campaña</label>
@@ -192,15 +214,17 @@
             </div>
 
             <div class="form-group">
-                <label>Mensaje <small>(usa <code>{{nombre}}</code> y <code>{{comercio}}</code> para
-                        personalizar)</small></label>
+                <label>Mensaje <small>(usa <code>&#123;&#123;nombre&#125;&#125;</code> y
+                        <code>&#123;&#123;comercio&#125;&#125;</code> para personalizar)</small></label>
                 <textarea [(ngModel)]="campaign.message" rows="5"
-                    placeholder="Hola {{nombre}}! 🎉 Tenemos una oferta especial para ti en {{comercio}}. ¡No te la pierdas!"></textarea>
+                    [placeholder]="'Hola &lcub;&lcub;nombre&rcub;&rcub;! \uD83C\uDF89 Tenemos una oferta especial para ti en &lcub;&lcub;comercio&rcub;&rcub;. \u00A1No te la pierdas!'"></textarea>
             </div>
 
             <div class="preview-box" *ngIf="campaign.message">
                 <label>👁️ Vista previa:</label>
-                <p>{{ campaign.message.replace('{{nombre}}', 'Carlos').replace('{{comercio}}', 'Tu Negocio') }}</p>
+                <p>{{ campaign.message
+                    | slice:0:200 }} <em style="color:var(--text-secondary);font-size:0.8rem">("nombre" y "comercio"
+                        serán reemplazados al enviar)</em></p>
             </div>
 
             <div class="modal-actions">

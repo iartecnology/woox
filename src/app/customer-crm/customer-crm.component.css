@@ -539,9 +539,88 @@
 
 .form-group input:focus,
 .form-group textarea:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group .search-box input:focus {
     outline: none;
     border-color: #6366f1;
+}
+
+/* FILTER TABS */
+.filter-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+}
+
+.filter-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.filter-tab {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.filter-tab:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.filter-tab.active {
+    background: #6366f1;
+    color: white;
+    border-color: #6366f1;
+}
+
+.filter-tab.vip.active {
+    background: #b45309;
+    border-color: #b45309;
+}
+
+.filter-tab.danger.active {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+
+.filter-tab.info.active {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+
+.filter-tab.muted.active {
+    background: #475569;
+    border-color: #475569;
+}
+
+.tab-count {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 99px;
+    padding: 1px 6px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    min-width: 18px;
+    text-align: center;
+}
+
+.filter-tab:not(.active) .tab-count {
+    background: var(--bg-primary);
+    color: var(--text-secondary);
 }
 
 .form-group textarea {
