@@ -17,6 +17,7 @@ import { AgentManagementComponent } from './agent-management/agent-management.co
 import { MerchantKnowledgeComponent } from './merchant-knowledge/merchant-knowledge.component';
 import { ReservationManagement } from './reservation-management/reservation-management';
 import { LandingBuilderComponent } from './landing-builder/landing-builder.component';
+import { LandingPageComponent } from './landing-page/landing-page.component';
 
 export const routes: Routes = [
     { path: 'login', component: LoginComponent },
@@ -36,6 +37,7 @@ export const routes: Routes = [
     { path: 'orders', component: OrderManagementComponent },
     { path: 'merchant-brain', component: MerchantKnowledgeComponent },
     { path: 'landing-builder', component: LandingBuilderComponent },
+    { path: 'p/:slug', component: LandingPageComponent },
     { path: 'bio/:slug', component: BiolinkPageComponent },
     { path: '', redirectTo: 'login', pathMatch: 'full' }
 ];

@@ -1,0 +1,127 @@
+<div class="landing-render" *ngIf="landing" [style.font-family]="'var(--landing-font)'">
+
+    <!-- Navegación Minimalista -->
+    <nav class="l-nav">
+        <div class="l-container">
+            <span class="l-brand">{{ landing.content_blocks.brand_name || 'Woox Site' }}</span>
+            <div class="l-nav-links">
+                <a (click)="scrollToSection('features')">Beneficios</a>
+                <a (click)="scrollToSection('about')">Nosotros</a>
+                <button class="l-btn-sm" (click)="scrollToSection('footer')">Contacto</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- BLOQUE: HERO -->
+    <header class="l-hero" [style.background-color]="landing.theme_palette.background">
+        <div class="l-container">
+            <div class="l-hero-content">
+                <h1 [style.color]="landing.theme_palette.text">{{ landing.content_blocks.hero?.title }}</h1>
+                <p [style.color]="landing.theme_palette.text" style="opacity: 0.8;">{{
+                    landing.content_blocks.hero?.subtitle }}</p>
+                <div class="l-hero-actions">
+                    <button class="l-btn-primary" [style.background]="landing.theme_palette.primary">¡Empezar
+                        Ahora!</button>
+                    <button class="l-btn-outline" [style.border-color]="landing.theme_palette.primary">Ver Más</button>
+                </div>
+            </div>
+            <div class="l-hero-image" [attr.data-industry]="landing.industry_type">
+                <!-- Aquí iría la imagen generada por IA o de stock -->
+                <div class="l-placeholder-img"></div>
+            </div>
+        </div>
+    </header>
+
+    <!-- BLOQUE: FEATURES -->
+    <section id="features" class="l-features">
+        <div class="l-container">
+            <div class="l-section-header">
+                <h2>¿Por qué elegirnos?</h2>
+                <div class="l-hr" [style.background]="landing.theme_palette.accent"></div>
+            </div>
+            <div class="l-features-grid">
+                <div class="l-feat-card" *ngFor="let feat of landing.content_blocks.features">
+                    <div class="l-feat-icon" [style.background]="landing.theme_palette.primary + '20'"
+                        [style.color]="landing.theme_palette.primary">{{ feat.icon }}</div>
+                    <h3>{{ feat.title }}</h3>
+                    <p>{{ feat.desc }}</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BLOQUE: DINÁMICO (RESTURANTE / HOTEL EXCLUSIVO) -->
+    <section class="l-industry-specific"
+        *ngIf="landing.industry_type === 'restaurant' || landing.industry_type === 'hotel'"
+        [style.background]="landing.theme_palette.primary + '05'">
+        <div class="l-container">
+            <div class="l-split">
+                <div class="l-split-text">
+                    <h2>{{ landing.industry_type === 'restaurant' ? 'Nuestra Carta' : 'Habitaciones Exclusivas' }}</h2>
+                    <p>Descubre lo que hemos preparado para ti con la mejor calidad y dedicación.</p>
+                    <button class="l-btn-primary" [style.background]="landing.theme_palette.primary">Explorar {{
+                        landing.industry_type === 'restaurant' ? 'Menú' : 'Reserva' }}</button>
+                </div>
+                <!-- Aquí inyectaríamos el componente de Catálogo Real de Woox -->
+                <div class="l-catalog-preview">
+                    <div class="l-mock-item" *ngFor="let i of [1,2,3]">
+                        <div class="l-mock-thumb"></div>
+                        <div class="l-mock-info">
+                            <div class="l-line"></div>
+                            <div class="l-line sm"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BLOQUE: ABOUT -->
+    <section id="about" class="l-about">
+        <div class="l-container">
+            <div class="l-about-card" [style.border-left-color]="landing.theme_palette.accent">
+                <h2>Sobre {{ landing.content_blocks.brand_name }}</h2>
+                <p>{{ landing.content_blocks.about?.text }}</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- PIE DE PÁGINA -->
+    <footer id="footer" class="l-footer" [style.background]="landing.theme_palette.text"
+        [style.color]="landing.theme_palette.background">
+        <div class="l-container">
+            <div class="l-footer-grid">
+                <div>
+                    <h3>{{ landing.content_blocks.brand_name }}</h3>
+                    <p>Potenciado por <b>Woox AI</b></p>
+                </div>
+                <div>
+                    <h4>Legal</h4>
+                    <p>Términos y Condiciones</p>
+                    <p>Privacidad</p>
+                </div>
+                <div>
+                    <h4>Contacto</h4>
+                    <button class="l-btn-primary" [style.background]="landing.theme_palette.primary"
+                        style="margin-top: 10px;">Chat con Especialista 💬</button>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+</div>
+
+<!-- Estado de Carga -->
+<div class="l-loading" *ngIf="isLoading">
+    <div class="l-spinner"></div>
+    <p>Sincronizando con el servidor...</p>
+</div>
+
+<!-- Estado de Error -->
+<div class="l-error" *ngIf="error && !isLoading">
+    <div class="l-error-card">
+        <h1>404</h1>
+        <p>{{ error }}</p>
+        <button onclick="window.location.href='/'">Volver a Woox</button>
+    </div>
+</div>

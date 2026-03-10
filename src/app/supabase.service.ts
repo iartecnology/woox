@@ -815,6 +815,14 @@ export class SupabaseService {
             .maybeSingle();
     }
 
+    async getLandingBySlug(slug: string) {
+        return await supabase
+            .from('ai_landing_pages')
+            .select('*')
+            .eq('slug', slug)
+            .maybeSingle();
+    }
+
     async saveLandingPage(landing: any) {
         return await supabase
             .from('ai_landing_pages')
