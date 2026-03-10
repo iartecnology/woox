@@ -1392,6 +1392,13 @@ export class SuperAdminComponent implements OnInit {
         this.router.navigate(['/reservations']);
     }
 
+    goToLandingBuilder(merchant: Merchant) {
+        console.log(`[SuperAdmin] Navigating to Landing Builder for ${merchant.name}`);
+        localStorage.setItem('active_merchant_id', merchant.id);
+        localStorage.setItem('merchant_name', merchant.name);
+        this.router.navigate(['/landing-builder']);
+    }
+
     openModal(merchant?: Merchant) {
         if (merchant) {
             this.selectedMerchant = { ...merchant };

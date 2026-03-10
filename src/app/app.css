@@ -356,6 +356,18 @@ body {
     border-left: 5px solid #7c3aed;
 }
 
+.sidebar-content a.landing-btn-highlight {
+    background: linear-gradient(135deg, #e0e7ff, #ede9fe);
+    border-left: 3px solid #6366f1;
+    color: #4f46e5;
+    font-weight: 700;
+}
+
+.sidebar-content a.landing-btn-highlight.active {
+    background: linear-gradient(135deg, #c7d2fe, #ddd6fe);
+    border-left: 5px solid #4f46e5;
+}
+
 .sidebar-content a .icon {
     font-size: 1.2rem;
     width: 24px;
