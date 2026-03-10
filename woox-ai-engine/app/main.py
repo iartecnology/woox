@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any
 from app.skills.rag import RAGSkill
 from app.skills.catalog import CatalogSkill
 from app.skills.orders import OrderSkill
+from app.skills.landing import LandingSkill
 from app.core.router import IntentRouter
 from app.core.llm import LLMService
 from app.db.supabase_client import get_supabase_detailed
@@ -24,6 +25,11 @@ class MessageRequest(BaseModel):
     message_text: str
     platform: str
 
+class LandingRequest(BaseModel):
+    merchant_id: str
+    business_info: str
+    logo_url: Optional[str] = None
+
 # 2. ESTADO GLOBAL
 STATS = {
     "total_messages": 0,
@@ -41,6 +47,7 @@ catalog_skill = None
 order_skill = None
 router = None
 llm_service = None
+landing_skill = None
 PLATFORM_SETTINGS = {}
 
 # 3. APP LIFESPAN & INITIALIZATION
@@ -77,11 +84,12 @@ def init_services():
                 if res.data: PLATFORM_SETTINGS = res.data[0]
             except: pass
         
+        llm_service = LLMService()
         rag_skill = RAGSkill()
         catalog_skill = CatalogSkill()
         order_skill = OrderSkill()
         router = IntentRouter()
-        llm_service = LLMService()
+        landing_skill = LandingSkill(llm_service)
         add_log("✅ Motor Listo.")
     except Exception as e:
         add_log(f"❌ Error en Boot: {str(e)}")
@@ -292,4 +300,33 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         STATS["total_errors"] += 1
         err_str = str(e)
         add_activity(request.merchant_id, request.message_text, current_intent, "❌", err_str, error=err_str)
+        return {"success": False, "error": err_str}
+
+@app.post("/landing/generate")
+async def generate_landing(request: LandingRequest, x_auth_token: Optional[str] = Header(None)):
+    expected_token = os.getenv("AUTH_SECRET")
+    if expected_token and x_auth_token != expected_token:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    try:
+        # 1. Config de IA del Merchant
+        m_res = supabase.table("merchants").select("ai_provider, ai_api_key, ai_model").eq("id", request.merchant_id).limit(1).execute()
+        m_ai = m_res.data[0] if m_res.data else {}
+        
+        ai_config = {
+            "provider": m_ai.get("ai_provider") or PLATFORM_SETTINGS.get("ai_provider") or "google_gemini",
+            "api_key": m_ai.get("ai_api_key") or PLATFORM_SETTINGS.get("ai_api_key") or os.getenv("GOOGLE_API_KEY"),
+            "model": m_ai.get("ai_model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash"
+        }
+
+        # 2. Generar Blueprint
+        blueprint = await landing_skill.generate_blueprint(request.business_info, ai_config)
+        
+        add_activity(request.merchant_id, "Generación de Landing (IA)", "LANDING_GEN", "✅", f"Página generada para {blueprint.get('brand_name')}")
+        
+        return {"success": True, "data": blueprint}
+
+    except Exception as e:
+        err_str = f"Error generando landing: {str(e)}"
+        add_activity(request.merchant_id, "Generación de Landing", "LANDING_GEN", "❌", err_str, error=err_str)
         return {"success": False, "error": err_str}
