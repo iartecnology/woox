@@ -1,0 +1,136 @@
+<div class="builder-container">
+    <!-- Encabezado de la Funcionalidad -->
+    <div class="builder-header">
+        <div class="header-content">
+            <h1>Woox AI Landing <span>Builder</span></h1>
+            <p>Transformamos el ADN de tu negocio en una página web de alta conversión en segundos.</p>
+        </div>
+        <div class="step-indicator">
+            <div class="step" [class.active]="currentStep >= 1" [class.completed]="currentStep > 1">1</div>
+            <div class="line"></div>
+            <div class="step" [class.active]="currentStep >= 2" [class.completed]="currentStep > 2">2</div>
+            <div class="line"></div>
+            <div class="step" [class.active]="currentStep >= 3" [class.completed]="currentStep > 3">3</div>
+        </div>
+    </div>
+
+    <!-- PASO 1: Ingesta de Datos (ADN) -->
+    <div class="step-card glass" *ngIf="currentStep === 1">
+        <div class="card-body">
+            <div class="icon-circle">🧬</div>
+            <h2>El ADN de tu Negocio</h2>
+            <p>Describe tu empresa, servicios o sube tu brochure. La IA se encargará de clasificar tu industria y
+                redactar el contenido.</p>
+
+            <div class="input-group">
+                <textarea [(ngModel)]="businessInfo"
+                    placeholder="Ej: Somos un Hotel Boutique en el centro histórico, con 12 habitaciones de lujo, piscina climatizada y restaurante de autor elogiado por críticos..."
+                    rows="8"></textarea>
+                <div class="char-count">{{ businessInfo.length }} caracteres</div>
+            </div>
+
+            <div class="upload-zone">
+                <div class="upload-content">
+                    <span>📄</span>
+                    <p>O suelta tu PDF/Manual aquí</p>
+                </div>
+            </div>
+
+            <button class="btn-primary" (click)="generateWithAI()" [disabled]="businessInfo.length < 20">
+                Generar Magia con IA ✨
+            </button>
+        </div>
+    </div>
+
+    <!-- PASO 2: Procesamiento (Magia) -->
+    <div class="step-card glass loading-step" *ngIf="currentStep === 2">
+        <div class="magic-loader">
+            <div class="sparkle s1">✨</div>
+            <div class="sparkle s2">✨</div>
+            <div class="sparkle s3">✨</div>
+            <div class="wand">🪄</div>
+        </div>
+        <h2>Creando tu Universo Digital...</h2>
+        <div class="loading-stats">
+            <div class="stat-row">
+                <span class="dot pulse"></span>
+                <span>Clasificando industria: <b>Buscando patrones...</b></span>
+            </div>
+            <div class="stat-row">
+                <span class="dot"></span>
+                <span>Definiendo paleta de colores cromática...</span>
+            </div>
+            <div class="stat-row">
+                <span class="dot"></span>
+                <span>Redactando copies de alta conversión...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- PASO 3: Vista Previa y Publicación -->
+    <div class="step-card glass results-step" *ngIf="currentStep === 3 && blueprint">
+        <div class="results-header">
+            <div class="industry-badge">Sector: {{ blueprint.industry_type | uppercase }}</div>
+            <button class="btn-text" (click)="reset()">Reiniciar 🔄</button>
+        </div>
+
+        <div class="preview-layout">
+            <!-- Columna Izquierda: Configuración Rápida -->
+            <div class="config-panel">
+                <h3>Identidad Detectada</h3>
+                <div class="info-box">
+                    <label>Nombre de Marca</label>
+                    <input type="text" [(ngModel)]="blueprint.brand_name">
+                </div>
+
+                <div class="info-box">
+                    <label>URL (Slug)</label>
+                    <div class="slug-input">
+                        <span>woox.ai/p/</span>
+                        <input type="text" [(ngModel)]="slug">
+                    </div>
+                </div>
+
+                <div class="theme-box">
+                    <label>Estética Sugerida</label>
+                    <div class="palette-preview">
+                        <div class="color" [style.background]="blueprint.theme_suggestion.palette.primary"
+                            title="Primario"></div>
+                        <div class="color" [style.background]="blueprint.theme_suggestion.palette.secondary"
+                            title="Secundario"></div>
+                        <div class="color" [style.background]="blueprint.theme_suggestion.palette.accent"
+                            title="Acento"></div>
+                    </div>
+                    <div class="font-tag">{{ blueprint.theme_suggestion.typography }}</div>
+                </div>
+
+                <button class="btn-success w-100 mt-4" (click)="publishLanding()" [disabled]="isPublishing">
+                    {{ isPublishing ? 'Publicando...' : 'Lanzar Sitio Web 🚀' }}
+                </button>
+            </div>
+
+            <!-- Columna Derecha: Resumen de Contenido -->
+            <div class="content-preview">
+                <div class="hero-summary">
+                    <h4>{{ blueprint.content.hero.title }}</h4>
+                    <p>{{ blueprint.content.hero.subtitle }}</p>
+                </div>
+
+                <div class="features-summary">
+                    <div class="feat-pill" *ngFor="let feat of blueprint.content.features">
+                        <span class="icon">{{ feat.icon }}</span>
+                        <div class="text">
+                            <strong>{{ feat.title }}</strong>
+                            <small>{{ feat.desc }}</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="about-summary">
+                    <label>Sobre nosotros (Extracto)</label>
+                    <p>{{ blueprint.content.about.text | slice:0:150 }}...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

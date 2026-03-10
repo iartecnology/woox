@@ -805,4 +805,21 @@ export class SupabaseService {
     async deleteMerchantContextBlock(id: string) {
         return await supabase.from('merchant_context_blocks').delete().eq('id', id);
     }
+
+    // --- AI LANDING PAGES ---
+    async getLandingByMerchant(merchantId: string) {
+        return await supabase
+            .from('ai_landing_pages')
+            .select('*')
+            .eq('merchant_id', merchantId)
+            .maybeSingle();
+    }
+
+    async saveLandingPage(landing: any) {
+        return await supabase
+            .from('ai_landing_pages')
+            .upsert(landing)
+            .select()
+            .single();
+    }
 }

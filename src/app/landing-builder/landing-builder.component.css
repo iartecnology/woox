@@ -1,0 +1,387 @@
+.builder-container {
+    max-width: 1000px;
+    margin: 40px auto;
+    padding: 0 20px;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: white;
+}
+
+.builder-header {
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+.builder-header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.builder-header h1 span {
+    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.builder-header p {
+    color: #94a3b8;
+    font-size: 1.1rem;
+}
+
+/* Indicador de Pasos */
+.step-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 30px;
+    gap: 15px;
+}
+
+.step {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    background: #1e293b;
+    border: 2px solid #334155;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #64748b;
+    transition: all 0.3s ease;
+}
+
+.step.active {
+    background: #6366f1;
+    border-color: #818cf8;
+    color: white;
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+}
+
+.step.completed {
+    background: #10b981;
+    border-color: #34d399;
+    color: white;
+}
+
+.line {
+    width: 50px;
+    height: 2px;
+    background: #334155;
+}
+
+/* Tarjeta Principal Glass */
+.glass {
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.step-card {
+    padding: 40px;
+}
+
+.card-body {
+    text-align: center;
+}
+
+.icon-circle {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+
+.step-card h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.step-card p {
+    color: #94a3b8;
+    margin-bottom: 30px;
+}
+
+/* Inputs */
+.input-group {
+    margin-bottom: 25px;
+    text-align: left;
+}
+
+textarea {
+    width: 100%;
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid #334155;
+    border-radius: 16px;
+    padding: 20px;
+    color: white;
+    font-size: 1rem;
+    resize: none;
+    transition: border-color 0.3s ease;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: #6366f1;
+}
+
+.char-count {
+    text-align: right;
+    font-size: 0.8rem;
+    color: #64748b;
+    margin-top: 5px;
+}
+
+.upload-zone {
+    border: 2px dashed #334155;
+    border-radius: 16px;
+    padding: 30px;
+    margin-bottom: 30px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upload-zone:hover {
+    background: rgba(99, 102, 241, 0.05);
+    border-color: #6366f1;
+}
+
+.upload-content span {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 10px;
+}
+
+/* Botones */
+.btn-primary {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: white;
+    border: none;
+    padding: 16px 40px;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.5);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Animación de Carga Mágica */
+.loading-step {
+    text-align: center;
+    padding: 80px 40px;
+}
+
+.magic-loader {
+    position: relative;
+    height: 120px;
+    margin-bottom: 40px;
+}
+
+.wand {
+    font-size: 4rem;
+    animation: wand-swing 2s infinite ease-in-out;
+}
+
+.sparkle {
+    position: absolute;
+    font-size: 1.5rem;
+    opacity: 0;
+}
+
+.s1 {
+    top: 10%;
+    left: 40%;
+    animation: sparkle-anim 1.5s infinite 0.1s;
+}
+
+.s2 {
+    top: 40%;
+    left: 60%;
+    animation: sparkle-anim 1.5s infinite 0.5s;
+}
+
+.s3 {
+    top: 70%;
+    left: 35%;
+    animation: sparkle-anim 1.5s infinite 0.9s;
+}
+
+@keyframes wand-swing {
+
+    0%,
+    100% {
+        transform: rotate(-15deg);
+    }
+
+    50% {
+        transform: rotate(15deg);
+    }
+}
+
+@keyframes sparkle-anim {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(0);
+        opacity: 0;
+    }
+}
+
+/* Pantalla de Resultados */
+.preview-layout {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 30px;
+    margin-top: 20px;
+    text-align: left;
+}
+
+.config-panel {
+    background: rgba(30, 41, 59, 0.4);
+    border-radius: 20px;
+    padding: 25px;
+}
+
+.info-box {
+    margin-bottom: 20px;
+}
+
+.info-box label {
+    display: block;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    margin-bottom: 8px;
+}
+
+.info-box input {
+    width: 100%;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 10px;
+    color: white;
+}
+
+.slug-input {
+    display: flex;
+    align-items: center;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding-left: 10px;
+}
+
+.slug-input span {
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.slug-input input {
+    border: none;
+    padding-left: 2px;
+}
+
+.palette-preview {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.color {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.font-tag {
+    display: inline-block;
+    background: #1e293b;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    color: #cbd5e1;
+}
+
+.content-preview {
+    background: white;
+    color: #1e293b;
+    border-radius: 20px;
+    padding: 30px;
+    overflow: hidden;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.hero-summary {
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+.hero-summary h4 {
+    font-size: 1.5rem;
+    margin: 0 0 10px 0;
+}
+
+.hero-summary p {
+    color: #64748b;
+    margin: 0;
+}
+
+.features-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.feat-pill {
+    background: #f1f5f9;
+    padding: 12px;
+    border-radius: 12px;
+    display: flex;
+    gap: 10px;
+}
+
+.feat-pill .icon {
+    font-size: 1.2rem;
+}
+
+.feat-pill .text strong {
+    display: block;
+    font-size: 0.9rem;
+}
+
+.feat-pill .text small {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.about-summary label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+}

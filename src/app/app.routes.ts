@@ -16,6 +16,7 @@ import { BiolinkAdminComponent } from './biolink-admin/biolink-admin';
 import { AgentManagementComponent } from './agent-management/agent-management.component';
 import { MerchantKnowledgeComponent } from './merchant-knowledge/merchant-knowledge.component';
 import { ReservationManagement } from './reservation-management/reservation-management';
+import { LandingBuilderComponent } from './landing-builder/landing-builder.component';
 
 export const routes: Routes = [
     { path: 'login', component: LoginComponent },
@@ -34,6 +35,7 @@ export const routes: Routes = [
     { path: 'products', component: ProductManagementComponent },
     { path: 'orders', component: OrderManagementComponent },
     { path: 'merchant-brain', component: MerchantKnowledgeComponent },
+    { path: 'landing-builder', component: LandingBuilderComponent },
     { path: 'bio/:slug', component: BiolinkPageComponent },
     { path: '', redirectTo: 'login', pathMatch: 'full' }
 ];
