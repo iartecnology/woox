@@ -204,86 +204,85 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         current_intent = router.classify(request.message_text)
         STATS["intents"][current_intent] = STATS["intents"].get(current_intent, 0) + 1
         
-        # 4. Lógica de Contexto y Acciones
+        # 4. Lógica de Contexto y Acciones (Optimización: Extraer datos de pedido solo una vez)
         context_extra = ""
+        order_data = None
         
-        if current_intent == "ORDER_CONFIRMATION":
-            add_log(f"🛒 Confirmación en proceso para {request.merchant_id}")
+        # Siempre intentamos extraer el estado del pedido si el intento es relevante
+        if current_intent in ["ORDER_CONFIRMATION", "CATALOG_QUERY", "KNOWLEDGE_QUERY"]:
+            add_log(f"🧠 Analizando intención: {current_intent}")
             order_data = await llm_service.extract_order_data(history_context + f"\nCliente: {request.message_text}", ai_config)
-            
-            if order_data and order_data.get("items"):
+
+        if current_intent == "ORDER_CONFIRMATION" and order_data:
+            if order_data.get("items"):
                 if order_data.get("is_complete"):
-                    add_log("📦 Pedido completo. Registrando...")
+                    add_log("📦 Pedido completo identificado. Registrando...")
                     order_result = await order_skill.register_order(
                         request.merchant_id, 
                         request.customer_id, 
                         request.conversation_id, 
                         order_data
                     )
-                    context_extra = f"\n### ACCIÓN REALIZADA: PEDIDO REGISTRADO ###\n{order_result}\nInstrucción: Confirma al cliente que su pedido procesado con éxito y menciónale su número de orden."
+                    context_extra = f"\n### ACCIÓN REALIZADA: PEDIDO REGISTRADO ###\n{order_result}\nInstrucción: Confirma al cliente que su pedido ha sido procesado con éxito y menciónale su número de orden."
                 else:
-                    add_log("💬 Faltan datos del cliente.")
+                    add_log("💬 Faltan datos del cliente para cerrar el pedido.")
                     missing = []
                     if not order_data.get("customer_name"): missing.append("nombre completo")
                     if not order_data.get("address"): missing.append("dirección de entrega")
                     if not order_data.get("phone"): missing.append("teléfono")
                     
-                    context_extra = f"\n### NOTA: PEDIDO NO CERRADO ###\nFaltan datos obligatorios: {', '.join(missing)}. \nInstrucción: Agradece la confirmación pero pide amablemente los datos que faltan para poder generar el pedido. NO inventes un número de orden."
+                    context_extra = f"\n### NOTA: PEDIDO NO CERRADO ###\nFaltan datos obligatorios: {', '.join(missing)}. \nInstrucción: Agradece la confirmación del interés pero pide amablemente los datos que faltan para poder generar el pedido. NO inventes un número de orden."
             else:
-                add_log("⚠️ Intento de confirmación sin carrito claro.")
-                context_extra = "\n### NOTA ### El cliente quiere confirmar pero el historial no muestra qué productos quiere. Pídele que elija algo del menú primero."
+                add_log("⚠️ Intento de confirmación sin items claros en el carrito.")
+                context_extra = "\n### NOTA ### El cliente parece querer confirmar pero el carrito está vacío o no se entienden los productos. Pídele que elija algo del menú primero."
 
         elif current_intent == "KNOWLEDGE_QUERY":
             context_extra = await rag_skill.search_context(request.merchant_id, request.message_text, config=ai_config)
 
-        # 5. Inteligencia de Ventas (Upselling/Cross-selling Stage 3)
+        # 5. Inteligencia de Ventas (Upselling) - Reusamos order_data si existe
         suggestions = ""
-        if current_intent in ["ORDER_CONFIRMATION", "KNOWLEDGE_QUERY"]:
-            # Intentar extraer items del contexto actual para sugerir complementos
-            recent_context = history_context + f"\nCliente: {request.message_text}"
-            # Usar un extraction rápido para ver si hay items mencionándose
-            current_order = await llm_service.extract_order_data(recent_context, ai_config)
-            if current_order and current_order.get("items"):
-                suggestions = await order_skill.get_upsell_recommendations(request.merchant_id, current_order["items"])
+        if order_data and order_data.get("items"):
+            suggestions = await order_skill.get_upsell_recommendations(request.merchant_id, order_data["items"])
         
         # 6. Generación Final (Evitar saludos repetidos)
         if history_context:
-            system_prompt += "\nNOTA: Es una conversación en curso. NO saludes de nuevo ni digas '¡Hola!', ve directo a lo que pide el cliente de forma amable."
+            system_prompt += "\nNOTA: Es una conversación en curso. NO saludes de nuevo ni digas '¡Hola!', ve directo a lo que pide el cliente de forma amable. Si el cliente acaba de agregar algo, confírmalo brevemente."
+
+        # Nudge para comandos de UI (Paso 3)
+        if order_data and order_data.get("items") and not order_data.get("is_complete"):
+            system_prompt += "\nAl final de tu respuesta, si hay productos en el carrito, agrega SIEMPRE el comando oculto [SHOW_SUMMARY] para que el sistema le muestre su resumen."
 
         full_context = (history_context + "\n" + context_extra + "\n" + suggestions).strip()
         ai_response = await llm_service.generate_response(system_prompt, full_context, request.message_text, ai_config)
         
-        # 7. Sincronización Realtime (Paso 2 del plan)
-        # Extraer items y sentimiento para el Monitor de Carritos
+        # 7. Sincronización Realtime (Consistente con la respuesta final)
         try:
-            # Re-extraemos los datos del pedido actualizados con la última respuesta
-            updated_order = await llm_service.extract_order_data(full_context + f"\nTú: {ai_response}", ai_config)
-            if updated_order:
-                # Determinamos sentimiento básico (opcionalmente se puede usar otro prompt)
-                sentiment = "happy" if "gracias" in request.message_text.lower() or "👍" in request.message_text else "neutral"
-                
+            # Optimizamos: Si ya tenemos order_data, lo usamos para el sync. 
+            # Si el mensaje fue una confirmación de datos personales, probablemente ya están en order_data.
+            if order_data:
+                sentiment = "happy" if any(x in request.message_text.lower() for x in ["gracias", "👍", "perfecto", "super"]) else "neutral"
                 supabase.table("conversations").update({
-                    "typing_data": updated_order,
+                    "typing_data": order_data,
                     "sentiment": sentiment,
                     "updated_at": datetime.now().isoformat()
                 }).eq("id", request.conversation_id).execute()
         except Exception as sync_err:
             print(f"[Realtime Sync Error] {str(sync_err)}")
 
-        # 8. Perfilamiento CRM Inteligente (Paso 2 del plan de mejora)
-        # Solo lo hacemos si el cliente envió un mensaje real (no bot)
-        try:
-            profile_data = await llm_service.profile_customer(history_context + f"\nCliente: {request.message_text}", ai_config)
-            if profile_data:
-                # Actualización atómica en la tabla de clientes
-                supabase.table("customers").update({
-                    "preferences": profile_data.get("preferences", {}),
-                    "tags": profile_data.get("tags", []),
-                    "sentiment": profile_data.get("sentiment", "neutral"),
-                    "updated_at": datetime.now().isoformat()
-                }).eq("id", request.customer_id).execute()
-        except Exception as prof_err:
-            print(f"[Profiling Error] {str(prof_err)}")
+        # 8. Perfilamiento CRM Inteligente (Opcional y condicional)
+        # Solo lo hacemos si el mensaje es largo o parece relevante para preferencias
+        if len(request.message_text) > 10:
+            try:
+                profile_data = await llm_service.profile_customer(history_context + f"\nCliente: {request.message_text}", ai_config)
+                if profile_data:
+                    supabase.table("customers").update({
+                        "preferences": profile_data.get("preferences", {}),
+                        "tags": profile_data.get("tags", []),
+                        "sentiment": profile_data.get("sentiment", "neutral"),
+                        "updated_at": datetime.now().isoformat()
+                    }).eq("id", request.customer_id).execute()
+            except Exception as prof_err:
+                print(f"[Profiling Error] {str(prof_err)}")
 
         # Registro
         add_activity(request.merchant_id, request.message_text, current_intent, "✅", ai_response)
