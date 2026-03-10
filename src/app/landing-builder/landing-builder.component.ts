@@ -102,7 +102,12 @@ export class LandingBuilderComponent implements OnInit {
             },
             error: (err) => {
                 console.error('AI Engine Error:', err);
-                this.notificationService.show('❌ No se pudo conectar con el motor de IA.', 'error');
+                let msg = '❌ No se pudo conectar con el motor de IA.';
+                if (err.status === 401) msg = '❌ Error de Autenticación (Token inválido).';
+                if (err.status === 404) msg = '❌ Endpoint no encontrado en el servidor.';
+                if (err.status === 0) msg = '❌ Error de Red: Verifica que el motor en http://167.86.73.89:8000 esté encendido y tenga CORS habilitado.';
+
+                this.notificationService.show(msg, 'error');
                 this.isGenerating = false;
                 this.currentStep = 1;
                 this.cdr.detectChanges();
