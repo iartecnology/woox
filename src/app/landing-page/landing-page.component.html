@@ -50,9 +50,41 @@
         </div>
     </section>
 
+    <!-- BLOQUE: PRODUCTOS REALES (CATÁLOGO WOOX) -->
+    <section id="catalog" class="l-catalog" *ngIf="products && products.length > 0"
+        [style.background]="landing.theme_palette.primary + '03'">
+        <div class="l-container">
+            <div class="l-section-header">
+                <h2>{{ landing.industry_type === 'restaurant' ? 'Nuestra Especialidades' : 'Productos Destacados' }}
+                </h2>
+                <div class="l-hr" [style.background]="landing.theme_palette.primary"></div>
+            </div>
+
+            <div class="l-catalog-grid">
+                <div class="l-product-card" *ngFor="let prod of products">
+                    <div class="l-product-img"
+                        [style.background-image]="prod.image_url ? 'url(' + prod.image_url + ')' : ''">
+                        <div class="l-product-badge" *ngIf="prod.price"
+                            [style.background]="landing.theme_palette.accent">
+                            ${{ prod.price | number:'1.0-0' }}
+                        </div>
+                    </div>
+                    <div class="l-product-info">
+                        <h3>{{ prod.name }}</h3>
+                        <p>{{ prod.description | slice:0:80 }}{{ prod.description.length > 80 ? '...' : '' }}</p>
+                        <button class="l-btn-action-sm" [style.color]="landing.theme_palette.primary"
+                            (click)="onAction()">
+                            {{ landing.industry_type === 'restaurant' ? 'Pedir Ahora 🛵' : 'Consultar 💬' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- BLOQUE: DINÁMICO (RESTURANTE / HOTEL EXCLUSIVO) -->
     <section class="l-industry-specific"
-        *ngIf="landing.industry_type === 'restaurant' || landing.industry_type === 'hotel'"
+        *ngIf="(landing.industry_type === 'restaurant' || landing.industry_type === 'hotel') && (!products || products.length === 0)"
         [style.background]="landing.theme_palette.primary + '05'">
         <div class="l-container">
             <div class="l-split">

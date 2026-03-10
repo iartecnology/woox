@@ -13,8 +13,10 @@ import { Title, Meta } from '@angular/platform-browser';
 })
 export class LandingPageComponent implements OnInit {
     landing: any = null;
+    products: any[] = [];
     isLoading: boolean = true;
     error: string | null = null;
+    chatbotUrl: string = '';
 
     private route = inject(ActivatedRoute);
     private supabaseService = inject(SupabaseService);
@@ -41,11 +43,31 @@ export class LandingPageComponent implements OnInit {
                 this.landing = data;
                 this.applySEO(data);
                 this.injectCustomStyles(data);
+
+                // 1. Cargar productos reales
+                await this.loadProducts(data.merchant_id);
+
+                // 2. Preparar el Widget de Chat (Usando su Biolink o ID)
+                this.chatbotUrl = `/bio/${data.slug}`; // Fallback a su biolink o widget
             }
         } catch (err) {
             this.error = 'Ocurrió un error al cargar la página.';
         } finally {
             this.isLoading = false;
+        }
+    }
+
+    async loadProducts(merchantId: string) {
+        try {
+            const { data } = await this.supabaseService.getProducts(merchantId);
+            if (data) {
+                // Mostrar solo los primeros 6 productos disponibles para la landing
+                this.products = data
+                    .filter((p: any) => p.is_available !== false)
+                    .slice(0, 6);
+            }
+        } catch (e) {
+            console.error('Error loading products for landing:', e);
         }
     }
 
@@ -89,10 +111,14 @@ export class LandingPageComponent implements OnInit {
     }
 
     onAction() {
-        // Aquí podrías abrir el chatbot o redirigir a WhatsApp
-        this.notification('Redirigiendo al Asistente...');
+        // Abrir el chat en una ventana nueva o modal
+        window.location.href = `https://wa.me/${this.landing?.merchant_phone || ''}?text=Hola,%20vi%20tu%20sitio%20web%20y%20quiero%20hacer%20un%20pedido.`;
     }
 
+    openChat() {
+        // Si tenemos widget embebido, lo lanzamos aquí
+        this.notification('Abriendo Asistente Woox AI...');
+    }
     notification(msg: string) {
         console.log(msg);
     }
