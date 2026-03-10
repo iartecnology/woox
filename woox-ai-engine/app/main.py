@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Header, Request, Form
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from app.skills.rag import RAGSkill
@@ -105,6 +106,15 @@ app = FastAPI(
     title="Woox AI Engine", 
     version="1.6.6",
     lifespan=lifespan
+)
+
+# 4. CORS CONFIGURATION
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # En producción deberías limitar esto a tus dominios
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 4. DASHBOARD HTML
