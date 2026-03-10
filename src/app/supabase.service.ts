@@ -620,6 +620,13 @@ export class SupabaseService {
             .insert({ conversation_id: conversationId, tag_id: tagId });
     }
 
+    async removeTagFromConversation(conversationId: string, tagId: string) {
+        return await supabase
+            .from('conversation_tags')
+            .delete()
+            .match({ conversation_id: conversationId, tag_id: tagId });
+    }
+
     async saveInternalNote(conversationId: string, content: string, authorId?: string) {
         return await supabase
             .from('internal_notes')

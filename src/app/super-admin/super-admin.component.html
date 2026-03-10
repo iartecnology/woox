@@ -28,7 +28,7 @@
 
     <!-- PANEL DE INFO & CHANGELOG -->
     <div *ngIf="showAppInfo" (click)="closeAppInfo()">
-        <app-info-panel (click)="$event.stopPropagation()"></app-info-panel>
+        <app-info-panel (click)="$event.stopPropagation()" (closePanel)="closeAppInfo()"></app-info-panel>
     </div>
 
     <section class="merchants-section">

@@ -41,4 +41,4 @@ class RAGSkill:
 
         except Exception as e:
             print(f"[RAG Skill Error] {str(e)}")
-            return "Error técnico consultando la base de conocimiento."
+            return ""

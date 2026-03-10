@@ -129,6 +129,8 @@ class LLMService:
                     err_msg = str(e)
                     if "FinishReason.SAFETY" in err_msg or "safety" in err_msg.lower():
                         return "Lo siento, la política de seguridad bloqueó esta respuesta. Intentemos hablar de otro tema relacionado con el catálogo. 🛡️"
+                    if "429" in err_msg or "quota" in err_msg.lower() or "exhausted" in err_msg.lower():
+                        return "Lo siento, estoy recibiendo demasiados mensajes en este momento o he superado mi límite de peticiones. 😅 ¡Por favor, inténtalo de nuevo en unos minutos!"
                     raise e
                 
                 # Esperar un poco antes de reintentar (backoff simple)

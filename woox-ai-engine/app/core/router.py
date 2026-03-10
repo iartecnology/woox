@@ -7,7 +7,7 @@ class IntentRouter:
         # Palabras clave simplificadas
         self.catalog_keywords = ["cuanto", "vale", "precio", "carta", "menu", "hamburguesa", "combo", "promo", "venden", "comprar", "costo", "pedido", "orden"]
         self.greeting_keywords = ["hola", "buenas", "buen dia", "tardes", "noches", "hey", "saludos"]
-        self.order_confirm_keywords = ["si", "correcto", "confirmar", "proceder", "confirmado", "listo", "dale"]
+        self.order_confirm_keywords = ["si", "correcto", "confirmar", "proceder", "confirmado", "listo", "dale", "no", "nada", "ya", "ninguno"]
 
     def classify(self, text: str) -> IntentType:
         """
