@@ -63,79 +63,75 @@ class LLMService:
             print(f"[LLM Error] Embedding failed: {str(e)}")
             raise e
 
+    async def _safe_generate(self, model, prompt: str, safety_settings: List[Dict[str, str]], max_retries: int = 3) -> str:
+        """Helper for retrying Gemini calls with exponential backoff on 429 errors."""
+        for attempt in range(max_retries):
+            try:
+                response = model.generate_content(prompt, safety_settings=safety_settings)
+                if not response.text:
+                    raise Exception("Empty response from AI")
+                return response.text
+            except Exception as e:
+                err_msg = str(e).lower()
+                if "429" in err_msg or "quota" in err_msg or "resource_exhausted" in err_msg:
+                    wait_time = (2 ** attempt) + (0.1 * attempt) # Exponential backoff: 1, 2, 4 seconds
+                    print(f"[LLM Quota] Rate limited (429). Waiting {wait_time}s before retry {attempt+1}/{max_retries}")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise e
+        raise Exception("Max retries exceeded for AI quota")
+
     async def generate_response(self, system_prompt: str, context: str, user_input: str, config: Dict[str, Any]) -> str:
-        """
-        Genera una respuesta. 
-        - Si el comercio tiene API Key, usa esa (Paga el comercio).
-        - Si no, usa la 'Master API Key (Chat)' de la plataforma (Pagas tú).
-        """
         provider = config.get("provider", "google_gemini")
         api_key = config.get("api_key")
         model_name = config.get("model", "gemini-1.5-flash")
 
         if not api_key:
-            return "Error: No hay una clave de IA configurada (comercio ni plataforma)."
+            return "Error: No hay una clave de IA configurada."
 
-        # Lógica de Reintentos
-        max_retries = 2
-        for attempt in range(max_retries + 1):
-            try:
-                if provider == "google_gemini" or model_name.startswith("gemini"):
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel(model_name)
-                    
-                    full_prompt = f"{system_prompt}\n\nCONTEXTO RELEVANTE:\n{context}\n\nPREGUNTA DEL CLIENTE: {user_input}"
-                    
-                    # Generar con parámetros de seguridad más relajados para evitar falsos positivos
-                    response = model.generate_content(
-                        full_prompt,
-                        safety_settings=[
-                            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                        ]
-                    )
-                    
-                    if not response.text:
-                        raise Exception("Respuesta vacía del modelo (posible filtro de seguridad)")
-                        
-                    return response.text
-
-                elif provider == "openai" or model_name.startswith("gpt"):
-                    async with httpx.AsyncClient() as client:
-                        headers = {
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json"
-                        }
-                        payload = {
-                            "model": model_name,
-                            "messages": [
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": f"Contexto:\n{context}\n\nPregunta: {user_input}"}
-                            ]
-                        }
-                        res = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
-                        if res.status_code == 200:
-                            data = res.json()
-                            return data['choices'][0]['message']['content']
-                        raise Exception(f"Error de OpenAI: {res.status_code} - {res.text}")
-
-                return f"Proveedor '{provider}' no soportado."
-
-            except Exception as e:
-                # Si es el último intento, dejar que explote para que el monitor lo registre
-                if attempt == max_retries:
-                    err_msg = str(e)
-                    if "FinishReason.SAFETY" in err_msg or "safety" in err_msg.lower():
-                        return "Lo siento, la política de seguridad bloqueó esta respuesta. Intentemos hablar de otro tema relacionado con el catálogo. 🛡️"
-                    if "429" in err_msg or "quota" in err_msg.lower() or "exhausted" in err_msg.lower():
-                        return "Lo siento, estoy recibiendo demasiados mensajes en este momento o he superado mi límite de peticiones. 😅 ¡Por favor, inténtalo de nuevo en unos minutos!"
-                    raise e
+        try:
+            if provider == "google_gemini" or model_name.startswith("gemini"):
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(model_name)
+                full_prompt = f"{system_prompt}\n\nCONTEXTO RELEVANTE:\n{context}\n\nPREGUNTA DEL CLIENTE: {user_input}"
                 
-                # Esperar un poco antes de reintentar (backoff simple)
-                await asyncio.sleep(1 * (attempt + 1))
-                print(f"[LLM Retry] Intento {attempt + 1} fallido: {str(e)}")
+                safety = [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                ]
+                
+                return await self._safe_generate(model, full_prompt, safety)
+
+            elif provider == "openai" or model_name.startswith("gpt"):
+                # Simplified OpenAI logic for brevity in this fix, can be expanded if needed
+                async with httpx.AsyncClient() as client:
+                    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+                    payload = {
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": f"Contexto:\n{context}\n\nPregunta: {user_input}"}
+                        ]
+                    }
+                    res = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
+                    if res.status_code == 200:
+                        return res.json()['choices'][0]['message']['content']
+                    elif res.status_code == 429:
+                        raise Exception("429 Quota Exhausted")
+                    raise Exception(f"Error AI: {res.status_code}")
+
+            return f"Proveedor '{provider}' no soportado."
+
+        except Exception as e:
+            err_msg = str(e)
+            if "429" in err_msg or "quota" in err_msg.lower() or "retries exceeded" in err_msg.lower():
+                return "Lo siento, la IA está procesando muchas solicitudes en este momento (Límite de cuota excedido). 😅 ¡Dame un momento o intenta nuevamente en un minuto!"
+            if "safety" in err_msg.lower():
+                return "Lo siento, mi política de seguridad bloqueó esta respuesta. 🛡️"
+            print(f"[LLM Error] {err_msg}")
+            return "Tuve un pequeño error técnico al procesar tu mensaje. ¿Puedes repetirlo? 🛠️"
 
     async def extract_order_data(self, history: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -172,9 +168,10 @@ class LLMService:
             target_model = config.get("model", "gemini-1.5-flash")
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(target_model)
-            response = model.generate_content(extraction_prompt)
             
-            raw_text = response.text
+            # Use safe generate to handle retries for extraction too
+            raw_text = await self._safe_generate(model, extraction_prompt, safety_settings=[])
+            
             json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group())

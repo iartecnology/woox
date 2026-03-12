@@ -189,13 +189,19 @@ async def setup_engine(url: str = Form(...), key: str = Form(...), sec: str = Fo
 # 5. API PROCESSOR
 @app.post("/process-message")
 async def process_message(request: MessageRequest, x_auth_token: Optional[str] = Header(None)):
+    """
+    Endpoint principal para procesar mensajes de cualquier plataforma.
+    """
+    if not supabase:
+        print("[CRITICAL] Supabase no está inicializado. Verifica tus variables de entorno.")
+        return {"success": False, "error": "Engine misconfigured: Supabase not connected"}
+        
     expected_token = os.getenv("AUTH_SECRET")
     if expected_token and x_auth_token != expected_token:
         raise HTTPException(status_code=401, detail="No autorizado")
 
     current_intent = "UNKNOWN"
     try:
-        if not supabase: raise Exception("Base de datos no conectada")
         STATS["total_messages"] += 1
         
         # 1. Config de IA y Prompt
@@ -222,40 +228,50 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         current_intent = router.classify(request.message_text)
         STATS["intents"][current_intent] = STATS["intents"].get(current_intent, 0) + 1
         
-        # 4. Lógica de Contexto y Acciones (Optimización: Extraer datos de pedido solo una vez)
+        # 4. Lógica de Contexto, Pedidos y Acciones
         context_extra = ""
         order_data = None
         
-        # Siempre intentamos extraer el estado del pedido si el intento es relevante
-        if current_intent in ["ORDER_CONFIRMATION", "CATALOG_QUERY", "KNOWLEDGE_QUERY"]:
-            add_log(f"🧠 Analizando intención: {current_intent}")
+        # Extraemos datos de pedido casi siempre para rastrear el estado del carrito y datos del cliente
+        if current_intent != "GREETING":
             order_data = await llm_service.extract_order_data(history_context + f"\nCliente: {request.message_text}", ai_config)
 
-        if current_intent == "ORDER_CONFIRMATION" and order_data:
-            if order_data.get("items"):
-                if order_data.get("is_complete"):
-                    add_log("📦 Pedido completo identificado. Registrando...")
+        # Lógica de flujo de ventas estructurado
+        if order_data and order_data.get("items") and len(order_data["items"]) > 0:
+            is_complete = order_data.get("is_complete")
+            items_list = "\n".join([f"- {i['name']} ({i['qty']}): ${i['price']}" for i in order_data["items"]])
+            order_summary = f"ITEMS EN CARRITO:\n{items_list}\nTOTAL: ${order_data.get('total', 0)}"
+            
+            if current_intent == "ORDER_CONFIRMATION":
+                if is_complete:
+                    add_log("📦 Pedido completo y confirmado. Registrando...")
                     order_result = await order_skill.register_order(
                         request.merchant_id, 
                         request.customer_id, 
                         request.conversation_id, 
                         order_data
                     )
-                    context_extra = f"\n### ACCIÓN REALIZADA: PEDIDO REGISTRADO ###\n{order_result}\nInstrucción: Confirma al cliente que su pedido ha sido procesado con éxito y menciónale su número de orden."
+                    context_extra = f"\n### ACCIÓN REALIZADA: PEDIDO REGISTRADO ###\n{order_result}\nInstrucción: Informa al cliente que su pedido ha sido procesado con éxito. ¡DEBES MOSTRAR EL NÚMERO DE ORDEN TAL CUAL APARECE ARRIBA!"
                 else:
-                    add_log("💬 Faltan datos del cliente para cerrar el pedido.")
+                    add_log("💬 Pedido iniciado/confirmado pero faltan datos.")
                     missing = []
                     if not order_data.get("customer_name"): missing.append("nombre completo")
                     if not order_data.get("address"): missing.append("dirección de entrega")
                     if not order_data.get("phone"): missing.append("teléfono")
                     
-                    context_extra = f"\n### NOTA: PEDIDO NO CERRADO ###\nFaltan datos obligatorios: {', '.join(missing)}. \nInstrucción: Agradece la confirmación del interés pero pide amablemente los datos que faltan para poder generar el pedido. NO inventes un número de orden."
+                    context_extra = f"\n### ESTADO: ITEMS E INFO PRELIMINAR ###\n{order_summary}\nFaltan datos de envío: {', '.join(missing)}. \nInstrucción: Agradece la confirmación del pedido de {len(order_data['items'])} productos por un valor de ${order_data.get('total')}. Pide amablemente la información que falta para completar el pedido. NO inventes números de orden todavía."
             else:
-                add_log("⚠️ Intento de confirmación sin items claros en el carrito.")
-                context_extra = "\n### NOTA ### El cliente parece querer confirmar pero el carrito está vacío o no se entienden los productos. Pídele que elija algo del menú primero."
+                # No es un intento de confirmación explícita (puede ser CATALOG_QUERY o KNOWLEDGE_QUERY)
+                if is_complete:
+                    add_log("📝 Datos completos detectados. Pidiendo confirmación final.")
+                    context_extra = f"\n### ESTADO: RESUMEN FINAL PARA CONFIRMAR ###\n{order_summary}\nDATOS DE ENVÍO:\nNombre: {order_data.get('customer_name')}\nDirección: {order_data.get('address')}\nTeléfono: {order_data.get('phone')}\n\nInstrucción: Presenta un resumen final MUY claro incluyendo cada precio y el total. Pregunta: '¿Confirmas que toda la información es correcta para registrar tu pedido ahora?'."
+                else:
+                    context_extra = f"\n### ESTADO: CARRITO CON PRODUCTOS ###\n{order_summary}. \nInstrucción: Al confirmar lo que el usuario agregó, SIEMPRE menciona el precio de cada item y el total acumulado. Luego pregúntale si desea confirmar el pedido o agregar algo más del catálogo."
 
-        elif current_intent == "KNOWLEDGE_QUERY":
-            context_extra = await rag_skill.search_context(request.merchant_id, request.message_text, config=ai_config)
+        # RAG siempre se ejecuta si la intención es conocimiento, acumulando al contexto previo
+        if current_intent == "KNOWLEDGE_QUERY":
+            rag_context = await rag_skill.search_context(request.merchant_id, request.message_text, config=ai_config)
+            context_extra += "\n" + rag_context
 
         # 5. Inteligencia de Ventas (Upselling) - Reusamos order_data si existe
         suggestions = ""
@@ -268,7 +284,7 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
 
         # Nudge para comandos de UI (Paso 3)
         if order_data and order_data.get("items") and not order_data.get("is_complete"):
-            system_prompt += "\nAl final de tu respuesta, si hay productos en el carrito, agrega SIEMPRE el comando oculto [SHOW_SUMMARY] para que el sistema le muestre su resumen."
+            system_prompt += "\nSi el usuario tiene productos en el carrito, agrega al FINAL de tu mensaje, en una línea nueva y solitaria, el comando: [SHOW_SUMMARY]"
 
         full_context = (history_context + "\n" + context_extra + "\n" + suggestions).strip()
         ai_response = await llm_service.generate_response(system_prompt, full_context, request.message_text, ai_config)
@@ -301,6 +317,9 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
                     }).eq("id", request.customer_id).execute()
             except Exception as prof_err:
                 print(f"[Profiling Error] {str(prof_err)}")
+
+        # Limpieza de respuesta para evitar comandos duplicados o mal formateados
+        ai_response = ai_response.replace("[[SHOW_SUMMARY]]", "[SHOW_SUMMARY]").strip()
 
         # Registro
         add_activity(request.merchant_id, request.message_text, current_intent, "✅", ai_response)

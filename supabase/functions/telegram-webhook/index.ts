@@ -141,16 +141,39 @@ Deno.serve(async (req: Request) => {
         }
 
         // Enviar respuesta a Telegram
-        const finalMessage = sanitizeMarkdown(aiResponse);
-        const tgRes = await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                chat_id: chatId,
-                text: finalMessage,
-                parse_mode: "Markdown"
-            })
-        });
+        const finalMessage = typeof aiResponse === 'string' ? sanitizeMarkdown(aiResponse) : "Lo siento, tuve un problema procesando tu mensaje.";
+        
+        try {
+            const tgRes = await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    text: finalMessage,
+                    parse_mode: "Markdown"
+                })
+            });
+
+            if (!tgRes.ok) {
+                // Fallback: Si el error es de parseo de Markdown, enviar como texto plano
+                const errorData = await tgRes.json();
+                if (errorData.description?.includes("can't parse entities")) {
+                    console.warn("[GATEWAY] Error de Markdown, reintentando como texto plano");
+                    await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            chat_id: chatId,
+                            text: finalMessage
+                        })
+                    });
+                } else {
+                    throw new Error(`Telegram API Error: ${tgRes.status} - ${JSON.stringify(errorData)}`);
+                }
+            }
+        } catch (tgError) {
+            console.error("[GATEWAY Telegram Send Error]", tgError);
+        }
 
         // Guardar mensaje de la IA
         await supabase.from("messages").insert({

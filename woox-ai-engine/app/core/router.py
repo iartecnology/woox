@@ -5,9 +5,9 @@ IntentType = Literal["CATALOG_QUERY", "KNOWLEDGE_QUERY", "GREETING", "GENERAL_CH
 class IntentRouter:
     def __init__(self):
         # Palabras clave simplificadas
-        self.catalog_keywords = ["cuanto", "vale", "precio", "carta", "menu", "hamburguesa", "combo", "promo", "venden", "comprar", "costo", "pedido", "orden"]
+        self.catalog_keywords = ["cuanto", "vale", "precio", "carta", "menu", "hamburguesa", "combo", "promo", "venden", "comprar", "costo", "pedido", "orden", "llevar", "pedir"]
         self.greeting_keywords = ["hola", "buenas", "buen dia", "tardes", "noches", "hey", "saludos"]
-        self.order_confirm_keywords = ["si", "correcto", "confirmar", "proceder", "confirmado", "listo", "dale", "no", "nada", "ya", "ninguno"]
+        self.order_confirm_keywords = ["si", "correcto", "confirmar", "proceder", "confirmado", "listo", "dale", "ya", "efectivo", "pagar", "enviar"]
 
     def classify(self, text: str) -> IntentType:
         """
