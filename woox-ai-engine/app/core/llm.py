@@ -182,8 +182,16 @@ class LLMService:
             }
 
         except Exception as e:
-            print(f"[Multitask LLM Error] {str(e)}")
-            return {"response": "Lo siento, tuve un problema técnico temporal con la IA. 😅", "order_data": None, "profile_data": None}
+            err_msg = str(e)
+            print(f"[Multitask LLM Error] {err_msg}")
+            return {
+                "response": f"Error Técnico: {err_msg}", 
+                "order_data": None, 
+                "profile_data": None,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "full_prompt": full_prompt
+            }
 
     async def generate_response(self, system_prompt: str, context: str, user_input: str, config: Dict[str, Any]) -> str:
         # Mantenemos por compatibilidad, pero lo ideal es usar multitask
