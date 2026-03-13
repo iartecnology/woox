@@ -57,7 +57,7 @@ def add_log(msg: str):
     STATS["connection_log"].append(f"[{ts}] {msg}")
     if len(STATS["connection_log"]) > 15: STATS["connection_log"].pop(0)
 
-def add_activity(merchant: str, text: str, intent: str, status: str = "✅", response: str = "", error: str = None):
+def add_activity(merchant: str, text: str, intent: str, status: str = "✅", response: str = "", error: str = None, tokens_in: int = 0, tokens_out: int = 0):
     ts = datetime.now().strftime("%H:%M:%S")
     display_res = response if status == "✅" else f"❌ ERROR: {error or response}"
     clean_res = display_res.replace("\n", " ").strip()
@@ -67,6 +67,8 @@ def add_activity(merchant: str, text: str, intent: str, status: str = "✅", res
         "text": (text[:30] + "...") if len(text) > 30 else text,
         "intent": intent,
         "status": status,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
         "response": (clean_res[:100] + "...") if len(clean_res) > 100 else clean_res
     }
     STATS["recent_activity"].insert(0, entry)
@@ -132,6 +134,7 @@ async def dashboard():
             <td style="padding:10px; border-bottom:1px solid #f1f5f9; font-family:monospace;">{act['merchant']}</td>
             <td style="padding:10px; border-bottom:1px solid #f1f5f9;">{act['text']}</td>
             <td style="padding:10px; border-bottom:1px solid #f1f5f9;"><span style="font-size:10px; padding:2px 6px; background:#e0e7ff; color:#4338ca; border-radius:4px;">{act['intent']}</span></td>
+            <td style="padding:10px; border-bottom:1px solid #f1f5f9; text-align:center;"><small>{act.get('tokens_in', 0)} / {act.get('tokens_out', 0)}</small></td>
             <td style="padding:10px; border-bottom:1px solid #f1f5f9; color:#475569;">{act['response']}</td>
             <td style="padding:10px; border-bottom:1px solid #f1f5f9; color:{color}; text-align:center;">{act['status']}</td>
         </tr>
@@ -166,7 +169,7 @@ async def dashboard():
             </div>
             <div class="card">
                 <h3 style="margin-top:0;">📊 Auditoría de Flujo</h3>
-                <div style="overflow-x:auto;"><table><thead><tr><th>Hora</th><th>Comercio</th><th>Mensaje</th><th>Intento</th><th>Respuesta</th><th>Status</th></tr></thead><tbody>{activity_rows or "<tr><td colspan='6' style='text-align:center; padding:20px;'>Sin actividad...</td></tr>"}</tbody></table></div>
+                <div style="overflow-x:auto;"><table><thead><tr><th>Hora</th><th>Comercio</th><th>Mensaje</th><th>Intento</th><th>Tokens (In/Out)</th><th>Respuesta</th><th>Status</th></tr></thead><tbody>{activity_rows or "<tr><td colspan='7' style='text-align:center; padding:20px;'>Sin actividad...</td></tr>"}</tbody></table></div>
             </div>
             <div class="card">
                 <h3>🛠️ Logs del Sistema</h3>
@@ -217,112 +220,82 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
             "model": m_ai.get("ai_model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash"
         }
 
-        # 2. Memoria (Historial)
+        # 2. Memoria (Historial) - Reducimos a 6 para ahorrar tokens
         history_context = ""
-        hist_res = supabase.table("messages").select("sender_type, content").eq("conversation_id", request.conversation_id).order("created_at", desc=True).limit(10).execute()
+        hist_res = supabase.table("messages").select("sender_type, content").eq("conversation_id", request.conversation_id).order("created_at", desc=True).limit(6).execute()
         if hist_res.data:
             messages = list(reversed(hist_res.data))
             history_context = "\n### HISTORIAL RECIENTE:\n" + "\n".join([f"{'Cliente' if m['sender_type']=='customer' else 'Tú'}: {m['content']}" for m in messages if m['content'] != request.message_text])
 
-        # 3. Clasificación
+        # 3. Clasificación e Intento
         current_intent = router.classify(request.message_text)
         STATS["intents"][current_intent] = STATS["intents"].get(current_intent, 0) + 1
         
-        # 4. Lógica de Contexto, Pedidos y Acciones
+        # 4. Procesamiento Inteligente Multitarea (UN SOLO LLM CALL)
         context_extra = ""
-        order_data = None
-        
-        # Extraemos datos de pedido casi siempre para rastrear el estado del carrito y datos del cliente
-        if current_intent != "GREETING":
-            order_data = await llm_service.extract_order_data(history_context + f"\nCliente: {request.message_text}", ai_config)
-
-        # Lógica de flujo de ventas estructurado
-        if order_data and order_data.get("items") and len(order_data["items"]) > 0:
-            is_complete = order_data.get("is_complete")
-            items_list = "\n".join([f"- {i['name']} ({i['qty']}): ${i['price']}" for i in order_data["items"]])
-            order_summary = f"ITEMS EN CARRITO:\n{items_list}\nTOTAL: ${order_data.get('total', 0)}"
-            
-            if current_intent == "ORDER_CONFIRMATION":
-                if is_complete:
-                    add_log("📦 Pedido completo y confirmado. Registrando...")
-                    order_result = await order_skill.register_order(
-                        request.merchant_id, 
-                        request.customer_id, 
-                        request.conversation_id, 
-                        order_data
-                    )
-                    context_extra = f"\n### ACCIÓN REALIZADA: PEDIDO REGISTRADO ###\n{order_result}\nInstrucción: Informa al cliente que su pedido ha sido procesado con éxito. ¡DEBES MOSTRAR EL NÚMERO DE ORDEN TAL CUAL APARECE ARRIBA!"
-                else:
-                    add_log("💬 Pedido iniciado/confirmado pero faltan datos.")
-                    missing = []
-                    if not order_data.get("customer_name"): missing.append("nombre completo")
-                    if not order_data.get("address"): missing.append("dirección de entrega")
-                    if not order_data.get("phone"): missing.append("teléfono")
-                    
-                    context_extra = f"\n### ESTADO: ITEMS E INFO PRELIMINAR ###\n{order_summary}\nFaltan datos de envío: {', '.join(missing)}. \nInstrucción: Agradece la confirmación del pedido de {len(order_data['items'])} productos por un valor de ${order_data.get('total')}. Pide amablemente la información que falta para completar el pedido. NO inventes números de orden todavía."
-            else:
-                # No es un intento de confirmación explícita (puede ser CATALOG_QUERY o KNOWLEDGE_QUERY)
-                if is_complete:
-                    add_log("📝 Datos completos detectados. Pidiendo confirmación final.")
-                    context_extra = f"\n### ESTADO: RESUMEN FINAL PARA CONFIRMAR ###\n{order_summary}\nDATOS DE ENVÍO:\nNombre: {order_data.get('customer_name')}\nDirección: {order_data.get('address')}\nTeléfono: {order_data.get('phone')}\n\nInstrucción: Presenta un resumen final MUY claro incluyendo cada precio y el total. Pregunta: '¿Confirmas que toda la información es correcta para registrar tu pedido ahora?'."
-                else:
-                    context_extra = f"\n### ESTADO: CARRITO CON PRODUCTOS ###\n{order_summary}. \nInstrucción: Al confirmar lo que el usuario agregó, SIEMPRE menciona el precio de cada item y el total acumulado. Luego pregúntale si desea confirmar el pedido o agregar algo más del catálogo."
-
-        # RAG siempre se ejecuta si la intención es conocimiento, acumulando al contexto previo
         if current_intent == "KNOWLEDGE_QUERY":
-            rag_context = await rag_skill.search_context(request.merchant_id, request.message_text, config=ai_config)
-            context_extra += "\n" + rag_context
+            context_extra = await rag_skill.search_context(request.merchant_id, request.message_text, config=ai_config)
 
-        # 5. Inteligencia de Ventas (Upselling) - Reusamos order_data si existe
-        suggestions = ""
-        if order_data and order_data.get("items"):
-            suggestions = await order_skill.get_upsell_recommendations(request.merchant_id, order_data["items"])
-        
-        # 6. Generación Final (Evitar saludos repetidos)
+        # Preparamos instrucciones especiales
         if history_context:
-            system_prompt += "\nNOTA: Es una conversación en curso. NO saludes de nuevo ni digas '¡Hola!', ve directo a lo que pide el cliente de forma amable. Si el cliente acaba de agregar algo, confírmalo brevemente."
+            system_prompt += "\nNOTA: Conversación en curso. Sé breve y ve al grano."
 
-        # Nudge para comandos de UI (Paso 3)
-        if order_data and order_data.get("items") and not order_data.get("is_complete"):
-            system_prompt += "\nSi el usuario tiene productos en el carrito, agrega al FINAL de tu mensaje, en una línea nueva y solitaria, el comando: [SHOW_SUMMARY]"
+        # Llamada Multitarea
+        llm_result = await llm_service.generate_multitask_response(
+            system_prompt, 
+            context_extra, 
+            request.message_text, 
+            history_context, 
+            ai_config
+        )
 
-        full_context = (history_context + "\n" + context_extra + "\n" + suggestions).strip()
-        ai_response = await llm_service.generate_response(system_prompt, full_context, request.message_text, ai_config)
-        
-        # 7. Sincronización Realtime (Consistente con la respuesta final)
-        try:
-            # Optimizamos: Si ya tenemos order_data, lo usamos para el sync. 
-            # Si el mensaje fue una confirmación de datos personales, probablemente ya están en order_data.
-            if order_data:
-                sentiment = "happy" if any(x in request.message_text.lower() for x in ["gracias", "👍", "perfecto", "super"]) else "neutral"
+        ai_response = llm_result.get("response", "")
+        order_data = llm_result.get("order_data")
+        profile_data = llm_result.get("profile_data")
+
+        # 5. Lógica Post-Procesamiento (Skills y CRM)
+        if order_data and order_data.get("items"):
+            if current_intent == "ORDER_CONFIRMATION" and order_data.get("is_complete"):
+                add_log("📦 Pedido confirmado via Multitask. Registrando...")
+                reg_res = await order_skill.register_order(
+                    request.merchant_id, request.customer_id, request.conversation_id, order_data
+                )
+                ai_response += f"\n\n{reg_res}"
+            
+            suggestions = await order_skill.get_upsell_recommendations(request.merchant_id, order_data["items"])
+            if suggestions: ai_response += suggestions
+
+            try:
                 supabase.table("conversations").update({
                     "typing_data": order_data,
-                    "sentiment": sentiment,
                     "updated_at": datetime.now().isoformat()
                 }).eq("id", request.conversation_id).execute()
-        except Exception as sync_err:
-            print(f"[Realtime Sync Error] {str(sync_err)}")
+            except: pass
 
-        # 8. Perfilamiento CRM Inteligente (Opcional y condicional)
-        # Solo lo hacemos si el mensaje es largo o parece relevante para preferencias
-        if len(request.message_text) > 10:
+        # 6. Perfilamiento CRM (Solo si hay datos nuevos)
+        if profile_data and len(request.message_text) > 15:
             try:
-                profile_data = await llm_service.profile_customer(history_context + f"\nCliente: {request.message_text}", ai_config)
-                if profile_data:
-                    supabase.table("customers").update({
-                        "preferences": profile_data.get("preferences", {}),
-                        "tags": profile_data.get("tags", []),
-                        "sentiment": profile_data.get("sentiment", "neutral"),
-                        "updated_at": datetime.now().isoformat()
-                    }).eq("id", request.customer_id).execute()
-            except Exception as prof_err:
-                print(f"[Profiling Error] {str(prof_err)}")
+                supabase.table("customers").update({
+                    "preferences": profile_data.get("preferences", {}),
+                    "tags": profile_data.get("tags", []),
+                    "sentiment": profile_data.get("sentiment", "neutral"),
+                    "updated_at": datetime.now().isoformat()
+                }).eq("id", request.customer_id).execute()
+            except: pass
 
-        # Limpieza de respuesta para evitar comandos duplicados o mal formateados
-        ai_response = ai_response.replace("[[SHOW_SUMMARY]]", "[SHOW_SUMMARY]").strip()
+        if order_data and order_data.get("items") and not order_data.get("is_complete"):
+            if "[SHOW_SUMMARY]" not in ai_response:
+                ai_response += "\n[SHOW_SUMMARY]"
 
-        # Registro
-        add_activity(request.merchant_id, request.message_text, current_intent, "✅", ai_response)
+        add_activity(
+            request.merchant_id, 
+            request.message_text, 
+            current_intent, 
+            "✅", 
+            ai_response, 
+            tokens_in=llm_result.get("input_tokens", 0), 
+            tokens_out=llm_result.get("output_tokens", 0)
+        )
         return {"success": True, "response": ai_response}
 
     except Exception as e:

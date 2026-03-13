@@ -28,26 +28,28 @@ class LLMService:
         try:
             if provider == "google_gemini":
                 genai.configure(api_key=api_key)
-                # Intentar con el modelo configurado
+                if not text or len(text.strip()) == 0: return [0.0] * 768
+                
                 target_model = f"models/{model}" if not model.startswith("models/") else model
-                try:
-                    result = genai.embed_content(
-                        model=target_model,
-                        content=text,
-                        task_type="retrieval_query"
-                    )
-                    return result['embedding']
-                except Exception as e:
-                    if "404" in str(e) or "not found" in str(e).lower():
-                        # Fallback a un modelo más universal si el 004 falla
-                        print(f"[LLM Warning] {target_model} not found, falling back to models/embedding-001")
+                
+                # Intentamos con varios modelos comunes si el principal falla
+                models_to_try = [target_model, "models/embedding-001", "models/text-embedding-004"]
+                
+                last_err = None
+                for m in models_to_try:
+                    try:
                         result = genai.embed_content(
-                            model="models/embedding-001",
+                            model=m,
                             content=text,
                             task_type="retrieval_query"
                         )
                         return result['embedding']
-                    raise e
+                    except Exception as e:
+                        last_err = e
+                        if "404" in str(e) or "not found" in str(e).lower():
+                            continue
+                        raise e
+                raise last_err
             
             elif provider == "openai":
                 async with httpx.AsyncClient() as client:
@@ -81,19 +83,50 @@ class LLMService:
                 raise e
         raise Exception("Max retries exceeded for AI quota")
 
-    async def generate_response(self, system_prompt: str, context: str, user_input: str, config: Dict[str, Any]) -> str:
-        provider = config.get("provider", "google_gemini")
+    async def generate_multitask_response(self, system_prompt: str, context: str, user_input: str, history: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Genera una respuesta, extrae datos de pedido y perfila al cliente en UN SOLO LLM CALL.
+        Retorna: { "response": str, "order_data": dict|None, "profile_data": dict|None }
+        """
         api_key = config.get("api_key")
         model_name = config.get("model", "gemini-1.5-flash")
-
+        
         if not api_key:
-            return "Error: No hay una clave de IA configurada."
+            return {"response": "Error: Clave de IA no configurada.", "order_data": None, "profile_data": None}
+
+        # Nudge para multifunción
+        multitask_instruction = """
+        IMPORTANTE: Al final de tu respuesta, DEBES incluir obligatoriamente dos bloques de datos en formato JSON encerrados en etiquetas especiales.
+        
+        [DATA]
+        {
+            "items": [{"name": "nombre", "qty": 1, "price": 10.0}],
+            "total": 0.0,
+            "customer_name": "nombre",
+            "address": "dirección",
+            "phone": "teléfono",
+            "is_complete": bool
+        }
+        [/DATA]
+
+        [PROFILE]
+        {
+            "sentiment": "happy" | "neutral" | "frustrated",
+            "preferences": { "dietary": "...", "interests": "...", "notes": "..." },
+            "tags": ["tag1", "tag2"]
+        }
+        [/PROFILE]
+        
+        Si no hay datos para extraer, deja los campos vacíos o null, pero envía siempre las etiquetas.
+        """
+
+        full_prompt = f"{system_prompt}\n{multitask_instruction}\n\nCONTEXTO:\n{context}\n\nHISTORIAL RECIENTE:\n{history}\n\nCLIENTE: {user_input}"
 
         try:
-            if provider == "google_gemini" or model_name.startswith("gemini"):
+            # Seleccionar Proveedor
+            if model_name.startswith("gemini") or config.get("provider") == "google_gemini":
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(model_name)
-                full_prompt = f"{system_prompt}\n\nCONTEXTO RELEVANTE:\n{context}\n\nPREGUNTA DEL CLIENTE: {user_input}"
                 
                 safety = [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -102,115 +135,82 @@ class LLMService:
                     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
                 ]
                 
-                return await self._safe_generate(model, full_prompt, safety)
-
-            elif provider == "openai" or model_name.startswith("gpt"):
-                # Simplified OpenAI logic for brevity in this fix, can be expanded if needed
+                raw_text = await self._safe_generate(model, full_prompt, safety)
+            else:
+                # Fallback simple a OpenAI logic (puedes mejorar este bloque luego)
                 async with httpx.AsyncClient() as client:
                     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
                     payload = {
                         "model": model_name,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": f"Contexto:\n{context}\n\nPregunta: {user_input}"}
-                        ]
+                        "messages": [{"role": "system", "content": full_prompt}]
                     }
                     res = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
-                    if res.status_code == 200:
-                        return res.json()['choices'][0]['message']['content']
-                    elif res.status_code == 429:
-                        raise Exception("429 Quota Exhausted")
-                    raise Exception(f"Error AI: {res.status_code}")
+                    raw_text = res.json()['choices'][0]['message']['content'] if res.status_code == 200 else ""
 
-            return f"Proveedor '{provider}' no soportado."
+            # Parsers de bloques
+            response_text = raw_text
+            order_data = None
+            profile_data = None
+
+            # 1. Extraer Data Pedido
+            data_match = re.search(r'\[DATA\](.*?)\[/DATA\]', raw_text, re.DOTALL)
+            if data_match:
+                try:
+                    order_data = json.loads(data_match.group(1).strip())
+                    response_text = response_text.replace(data_match.group(0), "")
+                except: pass
+
+            # 2. Extraer Perfil
+            profile_match = re.search(r'\[PROFILE\](.*?)\[/PROFILE\]', raw_text, re.DOTALL)
+            if profile_match:
+                try:
+                    profile_data = json.loads(profile_match.group(1).strip())
+                    response_text = response_text.replace(profile_match.group(0), "")
+                except: pass
+
+            # Estimación simple de tokens (aprox 4 caracteres por token)
+            input_tokens = len(full_prompt) // 4
+            output_tokens = len(raw_text) // 4
+
+            return {
+                "response": response_text.strip(),
+                "order_data": order_data,
+                "profile_data": profile_data,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens
+            }
 
         except Exception as e:
-            err_msg = str(e)
-            if "429" in err_msg or "quota" in err_msg.lower() or "retries exceeded" in err_msg.lower():
-                return "Lo siento, la IA está procesando muchas solicitudes en este momento (Límite de cuota excedido). 😅 ¡Dame un momento o intenta nuevamente en un minuto!"
-            if "safety" in err_msg.lower():
-                return "Lo siento, mi política de seguridad bloqueó esta respuesta. 🛡️"
-            print(f"[LLM Error] {err_msg}")
-            return "Tuve un pequeño error técnico al procesar tu mensaje. ¿Puedes repetirlo? 🛠️"
+            print(f"[Multitask LLM Error] {str(e)}")
+            return {"response": "Lo siento, tuve un problema técnico temporal con la IA. 😅", "order_data": None, "profile_data": None}
 
-    async def extract_order_data(self, history: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        Extrae datos de la orden desde el historial usando el LLM.
-        Retorna un dict con: items, total, customer_name, address, phone.
-        """
+    async def generate_response(self, system_prompt: str, context: str, user_input: str, config: Dict[str, Any]) -> str:
+        # Mantenemos por compatibilidad, pero lo ideal es usar multitask
+        provider = config.get("provider", "google_gemini")
         api_key = config.get("api_key")
         model_name = config.get("model", "gemini-1.5-flash")
-        
-        if not api_key: return None
-
-        extraction_prompt = f"""
-        Analiza el historial de chat y extrae los datos del pedido en formato JSON.
-        IMPORTANTE: Solo incluye valores si el cliente los ha proporcionado claramente. 
-        Si no hay dirección o teléfono, deja el campo como null o string vacío.
-
-        Esquema JSON:
-        {{
-            "items": [{{ "name": str, "qty": int, "price": float }}],
-            "total": float,
-            "customer_name": str,
-            "address": str,
-            "phone": str,
-            "is_complete": bool  // true solo si tiene items, nombre, dirección y teléfono
-        }}
-
-        HISTORIAL:
-        {history}
-
-        JSON:
-        """
-
-        try:
-            target_model = config.get("model", "gemini-1.5-flash")
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(target_model)
-            
-            # Use safe generate to handle retries for extraction too
-            raw_text = await self._safe_generate(model, extraction_prompt, safety_settings=[])
-            
-            json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-                # Validación extra de completitud
-                required = ["customer_name", "address", "phone"]
-                data["is_complete"] = all(data.get(f) and len(str(data.get(f))) > 3 for f in required) and len(data.get("items", [])) > 0
-                return data
-            return None
-        except Exception as e:
-            print(f"[LLM Extraction Error] {str(e)}")
-            return None
-    async def profile_customer(self, history: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        Analiza el historial para extraer preferencias, sentimiento y perfil del cliente.
-        """
-        api_key = config.get("api_key")
-        model_name = config.get("model", "gemini-1.5-flash")
-        if not api_key: return None
-
-        profile_prompt = f"""
-        Analiza el historial de chat y extrae un perfil del cliente para el CRM.
-        Busca: preferencias (sin cebolla, picante, etc), alergias, sentimiento predominante y etiquetas útiles.
-
-        Responde SOLO el JSON:
-        {{
-            "sentiment": "happy" | "neutral" | "frustrated",
-            "preferences": {{ "dietary": str, "interests": str, "notes": str }},
-            "tags": [str]
-        }}
-
-        HISTORIAL:
-        {history}
-
-        JSON:
-        """
+        if not api_key: return "Error: No API key."
         try:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(model_name)
-            response = model.generate_content(profile_prompt)
-            json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
-            return json.loads(json_match.group()) if json_match else None
+            full_prompt = f"{system_prompt}\n\nCONTEXTO:\n{context}\n\nCLIENTE: {user_input}"
+            return await self._safe_generate(model, full_prompt, safety_settings=[])
+        except Exception as e: return str(e)
+
+    async def extract_order_data(self, history: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        # Mantenemos por compatibilidad
+        api_key = config.get("api_key")
+        model_name = config.get("model", "gemini-1.5-flash")
+        if not api_key: return None
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name)
+            prompt = f"Analiza y responde SOLO JSON con los datos del pedido:\n{history}"
+            raw = await self._safe_generate(model, prompt, safety_settings=[])
+            match = re.search(r'\{.*\}', raw, re.DOTALL)
+            return json.loads(match.group()) if match else None
         except: return None
+
+    async def profile_customer(self, history: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        # Mantenemos por compatibilidad
+        return None
