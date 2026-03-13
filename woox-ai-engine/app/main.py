@@ -57,11 +57,12 @@ def add_log(msg: str):
     STATS["connection_log"].append(f"[{ts}] {msg}")
     if len(STATS["connection_log"]) > 15: STATS["connection_log"].pop(0)
 
-def add_activity(merchant: str, text: str, intent: str, status: str = "✅", response: str = "", error: str = None, tokens_in: int = 0, tokens_out: int = 0):
+def add_activity(merchant: str, text: str, intent: str, status: str = "✅", response: str = "", error: str = None, tokens_in: int = 0, tokens_out: int = 0, full_prompt: str = ""):
     ts = datetime.now().strftime("%H:%M:%S")
     display_res = response if status == "✅" else f"❌ ERROR: {error or response}"
     clean_res = display_res.replace("\n", " ").strip()
     entry = {
+        "id": int(time.time() * 1000),
         "time": ts,
         "merchant": merchant[:8] + "..." if len(merchant) > 8 else merchant,
         "text": (text[:30] + "...") if len(text) > 30 else text,
@@ -69,6 +70,7 @@ def add_activity(merchant: str, text: str, intent: str, status: str = "✅", res
         "status": status,
         "tokens_in": tokens_in,
         "tokens_out": tokens_out,
+        "full_prompt": full_prompt,
         "response": (clean_res[:100] + "...") if len(clean_res) > 100 else clean_res
     }
     STATS["recent_activity"].insert(0, entry)
@@ -129,12 +131,15 @@ async def dashboard():
     for act in STATS["recent_activity"]:
         color = "#059669" if act["status"] == "✅" else "#dc2626"
         activity_rows += f"""
-        <tr>
+        <tr id="row-{act['id']}">
             <td style="padding:10px; border-bottom:1px solid #f1f5f9;">{act['time']}</td>
             <td style="padding:10px; border-bottom:1px solid #f1f5f9; font-family:monospace;">{act['merchant']}</td>
             <td style="padding:10px; border-bottom:1px solid #f1f5f9;">{act['text']}</td>
             <td style="padding:10px; border-bottom:1px solid #f1f5f9;"><span style="font-size:10px; padding:2px 6px; background:#e0e7ff; color:#4338ca; border-radius:4px;">{act['intent']}</span></td>
-            <td style="padding:10px; border-bottom:1px solid #f1f5f9; text-align:center;"><small>{act.get('tokens_in', 0)} / {act.get('tokens_out', 0)}</small></td>
+            <td style="padding:10px; border-bottom:1px solid #f1f5f9; text-align:center;">
+                <small>{act.get('tokens_in', 0)} / {act.get('tokens_out', 0)}</small><br>
+                <button onclick='showPrompt({json.dumps(act.get("full_prompt", ""))})' style="font-size:9px; border:none; background:var(--p); color:white; padding:2px 5px; border-radius:3px; cursor:pointer; margin-top:2px;">Ver Prompt</button>
+            </td>
             <td style="padding:10px; border-bottom:1px solid #f1f5f9; color:#475569;">{act['response']}</td>
             <td style="padding:10px; border-bottom:1px solid #f1f5f9; color:{color}; text-align:center;">{act['status']}</td>
         </tr>
@@ -176,6 +181,21 @@ async def dashboard():
                 <div class="log-box">{logs_html}</div>
             </div>
         </div>
+
+        <div id="promptModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; padding:50px;">
+            <div style="background:white; max-width:900px; margin:auto; padding:30px; border-radius:15px; height:80vh; display:flex; flex-direction:column;">
+                <h3 style="margin-top:0;">📄 Prompt Enviado a la IA</h3>
+                <textarea id="promptContent" readonly style="flex:1; width:100%; padding:15px; font-family:monospace; font-size:12px; border:1px solid #ddd; background:#f9f9f9; resize:none;"></textarea>
+                <button onclick="document.getElementById('promptModal').style.display='none'" style="margin-top:15px; padding:10px; background:#ef4444; color:white; border:none; border-radius:8px; cursor:pointer;">Cerrar</button>
+            </div>
+        </div>
+
+        <script>
+            function showPrompt(text) {{
+                document.getElementById('promptContent').value = text;
+                document.getElementById('promptModal').style.display = 'block';
+            }}
+        </script>
     </body>
     </html>
     """
@@ -294,7 +314,8 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
             "✅", 
             ai_response, 
             tokens_in=llm_result.get("input_tokens", 0), 
-            tokens_out=llm_result.get("output_tokens", 0)
+            tokens_out=llm_result.get("output_tokens", 0),
+            full_prompt=llm_result.get("full_prompt", "")
         )
         return {"success": True, "response": ai_response}
 

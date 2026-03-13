@@ -177,7 +177,8 @@ class LLMService:
                 "order_data": order_data,
                 "profile_data": profile_data,
                 "input_tokens": input_tokens,
-                "output_tokens": output_tokens
+                "output_tokens": output_tokens,
+                "full_prompt": full_prompt # Enviamos el texto completo para auditoría
             }
 
         except Exception as e:
