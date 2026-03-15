@@ -774,6 +774,12 @@ small {
     color: #15803d;
 }
 
+.config-icon-btn.bot:hover {
+    background: #fff1f2;
+    border-color: #f43f5e;
+    color: #e11d48;
+}
+
 .config-icon-btn.test:hover {
     background: #faf5ff;
     border-color: #a855f7;
@@ -822,6 +828,9 @@ small {
     background: #475569;
     color: #f8fafc;
 }
+
+.config-icon-btn.bot { background: #fff1f2; color: #e11d48; }
+.config-icon-btn.catalog { background: #fff7ed; color: #ea580c; }
 
 .btn-divider {
     width: 1px;
@@ -4221,4 +4230,181 @@ input:checked+.slider:before {
 .monitor-iframe-container iframe {
     border: none;
     background: white;
+}
+
+/* --- AUTOMATION CENTRAL UI (SUPER ADMIN) --- */
+.automation-central {
+    background: #f8fafc;
+    border-radius: 20px;
+    padding: 24px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.automation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    gap: 16px;
+}
+
+.automation-header .title-group {
+    display: flex;
+    gap: 16px;
+}
+
+.main-emoji {
+    font-size: 2.2rem;
+    background: white;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.automation-header .text-info h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #0f172a;
+}
+
+.automation-header .text-info p {
+    margin: 4px 0 0 0;
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.automation-badge {
+    padding: 6px 16px;
+    border-radius: 30px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    background: #e0e7ff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    white-space: nowrap;
+}
+
+.automation-badge.manual {
+    background: #fff7ed;
+    color: #9a3412;
+    border-color: #fed7aa;
+}
+
+.automation-options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.auto-card {
+    background: white;
+    border: 2px solid #f1f5f9;
+    border-radius: 16px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.auto-card.active {
+    border-color: #6366f1;
+    box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.1);
+}
+
+.auto-card-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.auto-card-info {
+    display: flex;
+    gap: 12px;
+}
+
+.auto-icon {
+    font-size: 1.5rem;
+    background: #f8fafc;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+}
+
+.auto-details strong {
+    display: block;
+    font-size: 0.95rem;
+    color: #0f172a;
+    margin-bottom: 4px;
+}
+
+.auto-details p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.auto-card-footer {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.btn-builder-link {
+    width: 100%;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    padding: 10px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-builder-link:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.manual-mode-alert {
+    margin-top: 24px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.manual-mode-alert .alert-icon { font-size: 2rem; }
+
+.manual-mode-alert .alert-content strong {
+    display: block;
+    color: #9a3412;
+    margin-bottom: 4px;
+}
+
+.manual-mode-alert .alert-content p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #c2410c;
+}
+
+/* Switches para Admin Modal */
+.bot-pill-slider {
+    background-color: #ccc;
+}
+input:checked + .bot-pill-slider {
+    background-color: #10b981 !important;
 }

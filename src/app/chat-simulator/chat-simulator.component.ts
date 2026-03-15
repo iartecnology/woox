@@ -6,6 +6,7 @@ import { LiveOrderService } from '../live-order.service';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { inject } from '@angular/core';
 import { NotificationService } from '../notification.service';
+import { BotRuntimeService } from '../bot-builder/services/bot-runtime.service';
 
 interface Message {
   sender: 'user' | 'ai';
@@ -368,12 +369,14 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
   @Input() context: string = '';
   @Input() merchantId: string = '';
   @Input() aiEnabled: boolean = true;
+  @Input() botMode: boolean = false;
   @Input() showMenuAction: boolean = true;
   @Output() onClose = new EventEmitter<void>();
 
   private liveOrderService = inject(LiveOrderService);
   private supabaseService = inject(SupabaseService);
   private notificationService = inject(NotificationService);
+  private botRuntime = inject(BotRuntimeService);
   private cdr = inject(ChangeDetectorRef);
   private sanitizer = inject(DomSanitizer);
 
@@ -395,7 +398,16 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
   constructor() { }
 
   async ngOnInit() {
+    // Cargar estado del comercio
+    const { data: merchant } = await this.supabaseService.getMerchantById(this.merchantId);
+    this.botMode = merchant?.bot_mode || false;
+
     let greeting = this.aiWelcomeMessage || `¡Hola! Soy el asistente virtual de ${this.merchantName}. ¿En qué puedo ayudarte hoy?`;
+
+    // Si estamos en modo Bot, el saludo inicial vendrá del proceso del bot
+    if (this.botMode) {
+      greeting = 'Iniciando asistente...';
+    }
 
     // Reemplazar placeholders dinámicos
     greeting = greeting.replace(/{{merchantName}}/g, this.merchantName);
@@ -424,8 +436,21 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
       if (conv) {
         this.dbConversationId = conv.id;
-        // Guardar el saludo inicial de la IA
-        await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', this.messages[0].text);
+        
+        // Si es modo BOT, procesar el primer mensaje (START) de forma silenciosa para obtener el saludo real
+        if (this.botMode) {
+           const botRes = await this.botRuntime.processMessage(conv.id, this.merchantId, '');
+           if (botRes && botRes.messages.length > 0) {
+             this.messages = []; // Limpiar el "Iniciando..."
+             botRes.messages.forEach(msg => {
+               this.messages.push({ sender: 'ai', text: msg, time: new Date() });
+               this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg);
+             });
+           }
+        } else {
+          // Guardar el saludo inicial de la IA
+          await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', this.messages[0].text);
+        }
 
         // Suscribirse a mensajes para recibir respuestas humanas del panel
         this.subscribeToRealtime();
@@ -493,8 +518,37 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
     this.isTyping = true;
 
     try {
-      if (!this.aiEnabled) {
-        this.isTyping = false;
+      // --- LÓGICA DE BOT (NUEVA) ---
+      if (this.botMode) {
+        const botResponse = await this.botRuntime.processMessage(this.dbConversationId!, this.merchantId, userText);
+        
+        setTimeout(() => {
+          this.isTyping = false;
+          if (botResponse && botResponse.messages.length > 0) {
+            botResponse.messages.forEach(msg => {
+              this.messages.push({ sender: 'ai', text: msg, time: new Date() });
+              this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg);
+            });
+          } else {
+            this.messages.push({ sender: 'ai', text: 'Lo siento, no tengo una respuesta programada para eso.', time: new Date() });
+          }
+          this.cdr.detectChanges();
+          this.scrollToBottom();
+        }, 1000);
+        return;
+      }
+
+      if (!this.aiEnabled && !this.botMode) {
+        // MODO MANUAL: No hay respuesta automática
+        setTimeout(() => {
+          this.isTyping = false;
+          this.messages.push({ 
+            sender: 'ai', 
+            text: '⚠️ [SIMULADOR] El comercio está en MODO MANUAL. No habrá respuesta automática del sistema.', 
+            time: new Date() 
+          });
+          this.cdr.detectChanges();
+        }, 800);
         return;
       }
 
@@ -634,19 +688,18 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
           options: { temperature: 0.7 }
         };
       } else if (this.aiProvider === 'lmstudio') {
-        // LM Studio API
-        apiUrl = `${this.lmstudioBaseUrl}/chat/completions`;
+        // LM Studio API (Using /api/v1/chat endpoint)
+        let baseUrl = this.lmstudioBaseUrl.replace(/\/v1$/, '').replace(/\/api$/, '');
+        apiUrl = `${baseUrl}/api/v1/chat`;
+        
+        // We ensure the input fits by only taking the last few messages and formatting it as text
+        const recentMessages = chatContents.slice(-4).map((msg: any) => `${msg.role === 'model' ? 'Assistant' : 'User'}: ${msg.parts[0].text}`).join("\\n");
+        
         requestBody = {
           model: modelName,
-          messages: [
-            { role: 'system', content: fullSystemInstruction },
-            ...chatContents.map((msg: any) => ({
-              role: msg.role === 'model' ? 'assistant' : 'user',
-              content: msg.parts[0].text
-            }))
-          ],
-          temperature: 0.7,
-          max_tokens: 1024
+          system_prompt: fullSystemInstruction.substring(0, 10000), // Protect against massive context sizes
+          input: recentMessages,
+          temperature: 0.7
         };
       } else {
         // Google AI Studio (Gemini / Gemma)
@@ -683,7 +736,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       });
 
       // Fallback para Gemini: si falla con system_instruction, intentar como mensaje USER
-      if (!isOpenAI && !response.ok && !modelName.toLowerCase().includes('gemma-3')) {
+      if (this.aiProvider === 'google_gemini' && !response.ok && !modelName.toLowerCase().includes('gemma-3')) {
         console.log('🔄 Reintentando Gemini con fallback de mensaje USER...');
 
         const blendedContents = JSON.parse(JSON.stringify(chatContents.slice(-10)));
@@ -718,8 +771,22 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       const data = await response.json();
       let aiText = '';
 
-      if (isOpenAI || this.aiProvider === 'lmstudio') {
+      if (isOpenAI) {
         aiText = data.choices?.[0]?.message?.content || '';
+      } else if (this.aiProvider === 'lmstudio') {
+        if (data.choices && data.choices.length > 0) {
+          aiText = data.choices[0].message?.content || data.choices[0].text || '';
+        } else if (data.output && Array.isArray(data.output) && data.output.length > 0) {
+          aiText = data.output[0].content || data.output[0].text || '';
+        } else if (data.content) {
+          aiText = data.content;
+        } else if (data.response) {
+          aiText = data.response;
+        } else if (data.message && data.message.content) {
+          aiText = data.message.content;
+        } else {
+          aiText = JSON.stringify(data);
+        }
       } else if (this.aiProvider === 'ollama') {
         aiText = data.message?.content || '';
       } else {

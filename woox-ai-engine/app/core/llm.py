@@ -96,11 +96,11 @@ class LLMService:
 
         # Nudge para multifunción
         multitask_instruction = """
-        IMPORTANTE: Al final de tu respuesta, DEBES incluir obligatoriamente dos bloques de datos en formato JSON encerrados en etiquetas especiales.
+        IMPORTANTE: Al final de tu respuesta, DEBES incluir un bloque de datos JSON con el resumen de la compra usando la siguiente estructura.
         
         [DATA]
         {
-            "items": [{"name": "nombre", "qty": 1, "price": 10.0}],
+            "items": [{"name": "nombre producto", "qty": 1, "price": 10.0}],
             "total": 0.0,
             "customer_name": "nombre",
             "address": "dirección",
@@ -108,16 +108,8 @@ class LLMService:
             "is_complete": bool
         }
         [/DATA]
-
-        [PROFILE]
-        {
-            "sentiment": "happy" | "neutral" | "frustrated",
-            "preferences": { "dietary": "...", "interests": "...", "notes": "..." },
-            "tags": ["tag1", "tag2"]
-        }
-        [/PROFILE]
         
-        Si no hay datos para extraer, deja los campos vacíos o null, pero envía siempre las etiquetas.
+        No envíes ningún otro bloque JSON. Si no hay datos, deja los campos vacíos o envía el array items vacío.
         """
 
         full_prompt = f"{system_prompt}\n{multitask_instruction}\n\nCONTEXTO:\n{context}\n\nHISTORIAL RECIENTE:\n{history}\n\nCLIENTE: {user_input}"
@@ -137,16 +129,54 @@ class LLMService:
                 
                 raw_text = await self._safe_generate(model, full_prompt, safety)
             else:
-                # Fallback simple a OpenAI logic (puedes mejorar este bloque luego)
-                async with httpx.AsyncClient() as client:
-                    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-                    payload = {
-                        "model": model_name,
-                        "messages": [{"role": "system", "content": full_prompt}]
-                    }
-                    res = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
-                    raw_text = res.json()['choices'][0]['message']['content'] if res.status_code == 200 else ""
+                if config.get("provider") == "lmstudio":
+                    base_url = config.get("lmstudio_base_url", "http://localhost:1234").rstrip("/")
+                    url = f"{base_url}/api/v1/chat"
+                    
+                    async with httpx.AsyncClient() as client:
+                        headers = {"Content-Type": "application/json"}
+                        payload = {
+                            "model": model_name,
+                            "system_prompt": "You are a helpful assistant.",
+                            "input": full_prompt,
+                            "temperature": 0.7
+                        }
+                        res = await client.post(url, headers=headers, json=payload, timeout=60.0)
+                        if res.status_code == 200:
+                            data = res.json()
+                            if "choices" in data and len(data["choices"]) > 0:
+                                raw_text = data["choices"][0].get("message", {}).get("content", "")
+                                if not raw_text and "text" in data["choices"][0]: raw_text = data["choices"][0]["text"]
+                            elif "output" in data and isinstance(data["output"], list) and len(data["output"]) > 0:
+                                raw_text = data["output"][0].get("content", "")
+                            elif "content" in data: raw_text = data["content"]
+                            elif "response" in data: raw_text = data["response"]
+                            elif "message" in data and isinstance(data["message"], dict): raw_text = data["message"].get("content", "")
+                            else: raw_text = str(data)
+                        else:
+                            raise Exception(f"LM Studio Error {res.status_code} at {url}: {res.text}")
 
+                else:
+                    base_url = "https://api.openai.com/v1"
+                    if config.get("provider") == "ollama":
+                        base_url = config.get("ollama_base_url", "http://localhost:11434").rstrip("/")
+                        if not base_url.endswith("/v1"): base_url += "/v1"
+
+                    async with httpx.AsyncClient() as client:
+                        headers = {"Content-Type": "application/json"}
+                        if api_key and api_key != "local-key":
+                            headers["Authorization"] = f"Bearer {api_key}"
+                            
+                        payload = {
+                            "model": model_name,
+                            "messages": [{"role": "system", "content": full_prompt}],
+                            "temperature": 0.7
+                        }
+                        res = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload, timeout=60.0)
+                        if res.status_code == 200:
+                            raw_text = res.json()['choices'][0]['message']['content']
+                        else:
+                            raise Exception(f"LLM API Error {res.status_code} at {base_url}: {res.text}")
             # Parsers de bloques
             response_text = raw_text
             order_data = None
@@ -160,13 +190,8 @@ class LLMService:
                     response_text = response_text.replace(data_match.group(0), "")
                 except: pass
 
-            # 2. Extraer Perfil
-            profile_match = re.search(r'\[PROFILE\](.*?)\[/PROFILE\]', raw_text, re.DOTALL)
-            if profile_match:
-                try:
-                    profile_data = json.loads(profile_match.group(1).strip())
-                    response_text = response_text.replace(profile_match.group(0), "")
-                except: pass
+            # 2. Extraer Perfil (Desactivado para ahorrar tokens)
+            profile_data = None
 
             # Estimación simple de tokens (aprox 4 caracteres por token)
             input_tokens = len(full_prompt) // 4

@@ -28,6 +28,7 @@ export class AiConfigComponent implements OnInit {
         ai_restrictions: '',
         ai_use_catalog: true,
         ai_enabled: true,
+        bot_mode: false,
         industry_type: 'retail',
         ai_schedule_enabled: false,
         ai_schedule_start: '09:00',
@@ -270,7 +271,8 @@ export class AiConfigComponent implements OnInit {
             ai_schedule_message: this.merchantConfig.ai_schedule_message,
             ai_provider: this.merchantConfig.ai_provider,
             ollama_base_url: this.merchantConfig.ollama_base_url,
-            lmstudio_base_url: this.merchantConfig.lmstudio_base_url
+            lmstudio_base_url: this.merchantConfig.lmstudio_base_url,
+            bot_mode: this.merchantConfig.bot_mode
         };
 
         // Limpiar URLs de IA local si no son el proveedor activo
@@ -429,6 +431,24 @@ export class AiConfigComponent implements OnInit {
 
     get selectedAgent(): any {
         return this.agents.find(a => a.id === this.merchantConfig.agent_id);
+    }
+
+    toggleAiEnabled() {
+        if (this.merchantConfig.ai_enabled) {
+            this.merchantConfig.bot_mode = false;
+            this.notificationService.show('🧠 Modo de Inteligencia Artificial ACTIVADO.', 'success');
+        } else {
+            this.notificationService.show('⚠️ Automatización desactivada. El comercio ahora opera en MODO MANUAL.', 'warning');
+        }
+    }
+
+    toggleBotMode() {
+        if (this.merchantConfig.bot_mode) {
+            this.merchantConfig.ai_enabled = false;
+            this.notificationService.show('🤖 Modo Bot Programado ACTIVADO.', 'success');
+        } else {
+            this.notificationService.show('⚠️ Automatización desactivada. El comercio ahora opera en MODO MANUAL.', 'warning');
+        }
     }
 
     get fullContext(): string {

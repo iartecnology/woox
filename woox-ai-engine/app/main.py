@@ -227,7 +227,14 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
     try:
         STATS["total_messages"] += 1
         
-        # 1. Config de IA y Prompt
+        # 1. Refrescar configuracion Global (para no hacer restart)
+        try:
+            glob_res = supabase.table("platform_settings").select("*").eq("id", "global").limit(1).execute()
+            if glob_res.data:
+                PLATFORM_SETTINGS.update(glob_res.data[0])
+        except: pass
+
+        # 2. Config de IA y Prompt
         prompt_res = supabase.rpc("get_compiled_prompt", {"p_merchant_id": request.merchant_id}).execute()
         system_prompt = prompt_res.data or "Eres un asistente de ventas."
         
@@ -237,12 +244,21 @@ async def process_message(request: MessageRequest, x_auth_token: Optional[str] =
         ai_config = {
             "provider": m_ai.get("ai_provider") or PLATFORM_SETTINGS.get("ai_provider") or "google_gemini",
             "api_key": m_ai.get("ai_api_key") or PLATFORM_SETTINGS.get("ai_api_key") or os.getenv("GOOGLE_API_KEY"),
-            "model": m_ai.get("ai_model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash"
+            "model": m_ai.get("ai_model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash",
+            "lmstudio_base_url": PLATFORM_SETTINGS.get("lmstudio_base_url"),
+            "ollama_base_url": PLATFORM_SETTINGS.get("ollama_base_url")
         }
 
-        # 2. Memoria (Historial) - Reducimos a 6 para ahorrar tokens
+        # Override de Pruebas AI Local (Global)
+        if PLATFORM_SETTINGS.get("local_ai_enabled") is True:
+            ai_config["provider"] = "lmstudio"
+            ai_config["model"] = PLATFORM_SETTINGS.get("local_ai_model") or "qwen/qwen3.5-9b"
+            ai_config["api_key"] = "local-key"
+            ai_config["lmstudio_base_url"] = PLATFORM_SETTINGS.get("local_ai_url") or "http://10.20.30.152:1234"
+
+        # 2. Memoria (Historial) - Reducimos a 4 para ahorrar tokens
         history_context = ""
-        hist_res = supabase.table("messages").select("sender_type, content").eq("conversation_id", request.conversation_id).order("created_at", desc=True).limit(6).execute()
+        hist_res = supabase.table("messages").select("sender_type, content").eq("conversation_id", request.conversation_id).order("created_at", desc=True).limit(4).execute()
         if hist_res.data:
             messages = list(reversed(hist_res.data))
             history_context = "\n### HISTORIAL RECIENTE:\n" + "\n".join([f"{'Cliente' if m['sender_type']=='customer' else 'Tú'}: {m['content']}" for m in messages if m['content'] != request.message_text])
@@ -339,8 +355,17 @@ async def generate_landing(request: LandingRequest, x_auth_token: Optional[str] 
         ai_config = {
             "provider": m_ai.get("ai_provider") or PLATFORM_SETTINGS.get("ai_provider") or "google_gemini",
             "api_key": m_ai.get("ai_api_key") or PLATFORM_SETTINGS.get("ai_api_key") or os.getenv("GOOGLE_API_KEY"),
-            "model": m_ai.get("ai_model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash"
+            "model": m_ai.get("ai_model") or PLATFORM_SETTINGS.get("ai_model") or "gemini-1.5-flash",
+            "lmstudio_base_url": PLATFORM_SETTINGS.get("lmstudio_base_url"),
+            "ollama_base_url": PLATFORM_SETTINGS.get("ollama_base_url")
         }
+
+        # Override de Pruebas AI Local (Global)
+        if PLATFORM_SETTINGS.get("local_ai_enabled") is True:
+            ai_config["provider"] = "lmstudio"
+            ai_config["model"] = PLATFORM_SETTINGS.get("local_ai_model") or "qwen/qwen3.5-9b"
+            ai_config["api_key"] = "local-key"
+            ai_config["lmstudio_base_url"] = PLATFORM_SETTINGS.get("local_ai_url") or "http://10.20.30.152:1234"
 
         # 2. Generar Blueprint
         blueprint = await landing_skill.generate_blueprint(request.business_info, ai_config)

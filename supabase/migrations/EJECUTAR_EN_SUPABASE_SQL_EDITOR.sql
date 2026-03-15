@@ -38,15 +38,11 @@ BEGIN
         '¡Hola! ¿En qué puedo ayudarte?'
     );
 
-    -- 3. Generar Catálogo (SIN JOIN a categories para evitar error 42803)
+    -- 3. Generar Catálogo [DESACTIVADO - OPTIMIZACIÓN DE TOKENS]
     IF COALESCE(v_merchant.ai_use_catalog, true) = true AND COALESCE(v_merchant.industry_type, '') != 'support' THEN
-        SELECT string_agg('➔ ' || p.name || ' | Precio: $' || p.price, E'\n') INTO v_catalog
-        FROM products p
-        WHERE p.merchant_id = p_merchant_id AND p.is_available = true;
-    END IF;
-
-    IF v_catalog IS NULL OR v_catalog = '' THEN 
-        v_catalog := 'No hay productos disponibles actualmente.'; 
+        v_catalog := '(Catálogo disponible. Busca los productos de forma lógica y pregunta al usuario antes de ofrecerlo todo.)';
+    ELSE
+        v_catalog := 'No hay productos disponibles actualmente.';
     END IF;
 
     -- 4. Conocimiento del Agente y del Comercio

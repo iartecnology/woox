@@ -134,6 +134,7 @@ interface Merchant {
     wa_status?: string;
     wa_qr_code?: string;
     wa_last_connection?: string;
+    bot_mode?: boolean;
 }
 
 interface PlatformConfig {
@@ -663,7 +664,10 @@ export class SuperAdminComponent implements OnInit {
         embed_api_key: '',
         support_ai_enabled: false,
         evolution_api_url: '',
-        evolution_api_key: ''
+        evolution_api_key: '',
+        local_ai_enabled: false,
+        local_ai_url: 'http://10.20.30.152:1234',
+        local_ai_model: 'qwen/qwen3.5-9b'
     };
 
     platformFeatures: any = {};
@@ -827,6 +831,7 @@ export class SuperAdminComponent implements OnInit {
         this.selectedMerchant.ai_restrictions = this.selectedMerchant.ai_restrictions || '';
         this.selectedMerchant.industry_type = this.selectedMerchant.industry_type || 'retail';
         this.selectedMerchant.ai_enabled = this.selectedMerchant.ai_enabled !== false;
+        this.selectedMerchant.bot_mode = this.selectedMerchant.bot_mode || false;
         this.selectedMerchant.ollama_base_url = this.selectedMerchant.ollama_base_url || 'http://localhost:11434';
         this.selectedMerchant.lmstudio_base_url = this.selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1';
 
@@ -845,6 +850,24 @@ export class SuperAdminComponent implements OnInit {
         this.updateConsolidatedPrompt().then(() => {
             this.cdr.detectChanges();
         });
+    }
+
+    toggleAiEnabled() {
+        if (this.selectedMerchant.ai_enabled) {
+            this.selectedMerchant.bot_mode = false;
+            this.notificationService.show('🧠 IA Activada para este comercio.', 'success');
+        } else {
+            this.notificationService.show('⚠️ Modo Manual: Automatización desactivada.', 'warning');
+        }
+    }
+
+    toggleBotMode() {
+        if (this.selectedMerchant.bot_mode) {
+            this.selectedMerchant.ai_enabled = false;
+            this.notificationService.show('🤖 Bot Programado activado para este comercio.', 'success');
+        } else {
+            this.notificationService.show('⚠️ Modo Manual: Automatización desactivada.', 'warning');
+        }
     }
 
     async getAIContext() {
@@ -1070,6 +1093,33 @@ export class SuperAdminComponent implements OnInit {
             } else {
                 this.router.navigate(['/chats']);
             }
+        });
+    }
+
+    goToBotBuilder(merchant: any) {
+        if (!merchant || !merchant.id) {
+            this.notificationService.show('Error: Comercio no identificado', 'error');
+            return;
+        }
+
+        console.log(`[SuperAdmin] Navigating to Bot Builder for ${merchant.name}`);
+        this.ngZone.run(() => {
+            // Sincronizar contexto para el Bot Builder
+            localStorage.setItem('active_merchant_id', merchant.id);
+            localStorage.setItem('merchant_name', merchant.name || '');
+            localStorage.setItem('merchant_slug', merchant.slug || '');
+            localStorage.setItem('merchant_industry_type', merchant.industry_type || 'retail');
+            
+            this.showAIConfig = false;
+            
+            // Navegación inmediata
+            this.router.navigate(['/bot-builder']).then(success => {
+                if (success) {
+                    this.notificationService.show(`Diseñador de Flujos: ${merchant.name}`, 'success');
+                } else {
+                    this.notificationService.show('No se pudo abrir el Diseñador', 'error');
+                }
+            });
         });
     }
 
@@ -1329,7 +1379,7 @@ export class SuperAdminComponent implements OnInit {
     async testChatSimulator(merchant: Merchant) {
         if (this.isPreparingSimulator) return;
 
-        if (!merchant.ai_api_key) {
+        if (!merchant.ai_api_key && !this.platformAiSettings?.local_ai_enabled) {
             this.notificationService.show('El comercio no tiene una API Key configurada. Configúrala primero en el botón 🤖', 'warning');
             this.openAIConfig(merchant);
             return;
@@ -1341,6 +1391,14 @@ export class SuperAdminComponent implements OnInit {
         this.ngZone.run(() => {
             this.isPreparingSimulator = true;
             this.selectedMerchant = { ...merchant };
+            
+            // Override with Local AI settings if enabled
+            if (this.platformAiSettings?.local_ai_enabled) {
+                this.selectedMerchant.ai_provider = 'lmstudio';
+                this.selectedMerchant.ai_model = this.platformAiSettings.local_ai_model || 'qwen/qwen3.5-9b';
+                this.selectedMerchant.lmstudio_base_url = this.platformAiSettings.local_ai_url || 'http://10.20.30.152:1234';
+                this.selectedMerchant.ai_api_key = 'local-override-key'; // Evitamos error de api key vacía
+            }
             this.cdr.detectChanges();
         });
 

@@ -79,21 +79,59 @@
                 </div>
             </section>
 
-            <section class="config-section master-toggle">
+            <!-- 🎮 CONTROL DE AUTOMATIZACIÓN -->
+            <section class="config-section highlight" style="background: #f8fafc; border-left: 5px solid #6366f1;">
                 <div class="section-header">
-                    <div class="title-with-badge">
-                        <h3>Estado del Asistente IA</h3>
-                        <span class="badge" [class.active]="merchantConfig.ai_enabled">
-                            {{ merchantConfig.ai_enabled ? 'ACTIVO' : 'INACTIVO' }}
-                        </span>
+                    <h3>🎮 Control de Automatización</h3>
+                    <div class="automation-status-badge" [ngClass]="{'manual': !merchantConfig.ai_enabled && !merchantConfig.bot_mode}">
+                        {{ merchantConfig.ai_enabled ? '🧠 IA ACTIVA' : (merchantConfig.bot_mode ? '🤖 BOT ACTIVO' : '👤 MODO MANUAL') }}
                     </div>
-                    <label class="switch">
-                        <input type="checkbox" [(ngModel)]="merchantConfig.ai_enabled">
-                        <span class="slider round"></span>
-                    </label>
                 </div>
-                <p class="desc">Interruptor maestro. Si se apaga, la IA dejará de responder automáticamente en todos los
-                    canales (WhatsApp, Telegram, etc.).</p>
+                <p class="desc">Define cómo quieres que se respondan los mensajes de tus clientes. Puedes elegir entre IA Generativa, un Bot Programado o desactivar ambos para atención humana manual.</p>
+                
+                <div class="automation-grid">
+                    <!-- Opción IA -->
+                    <div class="automation-card" [class.active]="merchantConfig.ai_enabled">
+                        <div class="card-top">
+                            <span class="card-icon">🧠</span>
+                            <div class="card-info">
+                                <strong>Inteligencia Artificial</strong>
+                                <span>Creativa y flexible</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" [(ngModel)]="merchantConfig.ai_enabled" (change)="toggleAiEnabled()">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Opción Bot -->
+                    <div class="automation-card" [class.active]="merchantConfig.bot_mode">
+                        <div class="card-top">
+                            <span class="card-icon">🤖</span>
+                            <div class="card-info">
+                                <strong>Bot Programado</strong>
+                                <span>Flujos fijos y seguros</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" [(ngModel)]="merchantConfig.bot_mode" (change)="toggleBotMode()">
+                                <span class="slider round bot-slider"></span>
+                            </label>
+                        </div>
+                        <div *ngIf="merchantConfig.bot_mode" class="card-footer-action">
+                            <button class="link-btn" routerLink="/bot-builder">🎨 Ajustar Flujo Visual</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicador Modo Manual -->
+                <div *ngIf="!merchantConfig.ai_enabled && !merchantConfig.bot_mode" class="manual-alert">
+                    <span class="alert-icon">👤</span>
+                    <div class="alert-text">
+                        <strong>Modo Manual Activado</strong>
+                        <p>Ningún sistema automático responderá. Debes atender los chats manualmente desde la sección de Chats.</p>
+                    </div>
+                </div>
             </section>
 
             <section class="config-section">
@@ -390,5 +428,5 @@
     [aiProvider]="merchantConfig.ai_provider" [aiApiKey]="merchantConfig.ai_api_key" [aiModel]="merchantConfig.ai_model"
     [ollamaBaseUrl]="merchantConfig.ollama_base_url || 'http://localhost:11434'"
     [lmstudioBaseUrl]="merchantConfig.lmstudio_base_url || 'http://localhost:1234/v1'"
-    [aiEnabled]="merchantConfig.ai_enabled" [context]="fullContext" (onClose)="toggleSimulator()">
+    [aiEnabled]="merchantConfig.ai_enabled" [botMode]="merchantConfig.bot_mode" [context]="fullContext" (onClose)="toggleSimulator()">
 </app-chat-simulator>

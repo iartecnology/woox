@@ -152,6 +152,8 @@
                                         <div class="action-group highlighted">
                                             <button class="config-icon-btn ai" title="Configuración de IA"
                                                 (click)="openAIConfig(m)">🤖</button>
+                                            <button class="config-icon-btn bot" title="Bot Builder"
+                                                (click)="goToBotBuilder(m)">🎨</button>
                                             <button *ngIf="m.industry_type === 'retail'" class="config-icon-btn catalog"
                                                 title="Catálogo" (click)="goToCatalog(m)">🍔</button>
                                             <button *ngIf="m.industry_type === 'support'" class="config-icon-btn brain"
@@ -558,6 +560,23 @@
                         </select>
                     </div>
 
+                    <div class="section-divider full-width">🧪 Entorno de Pruebas IA (Local)</div>
+                    <div class="form-group full-width">
+                        <p class="desc">Forzar que todos los agentes usen un modelo local (ej. LM Studio u Ollama) para fines de pruebas, ignorando la configuración individual de cada comercio.</p>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 10px; font-weight: 600; color: #b45309;">
+                            <input type="checkbox" [(ngModel)]="platformAiSettings.local_ai_enabled">
+                            Activar Override Local (Test Mode)
+                        </label>
+                    </div>
+
+                    <div class="form-group full-width" *ngIf="platformAiSettings.local_ai_enabled" style="background: #fffbeb; padding: 15px; border-radius: 8px; border: 1px solid #fcd34d;">
+                        <label style="color: #92400e;">URL del Servidor Local (ej. LM Studio, incluye http:// y el puerto)</label>
+                        <input type="text" [(ngModel)]="platformAiSettings.local_ai_url" placeholder="http://10.20.30.152:1234" style="border-color: #fcd34d;">
+                        
+                        <label style="margin-top: 10px; display: block; color: #92400e;">Nombre del Modelo</label>
+                        <input type="text" [(ngModel)]="platformAiSettings.local_ai_model" placeholder="qwen/qwen3.5-9b" style="border-color: #fcd34d;">
+                    </div>
+
                     <div class="section-divider full-width">🧠 Motor de Embeddings (Vectores)</div>
                     <div class="form-group full-width">
                         <p class="desc">Configura el motor que se encargará de "vectorizar" la memoria del agente para
@@ -730,19 +749,68 @@
             <h2>🤖 Configuración de IA - {{ currentManagingMerchant?.name }}</h2>
 
             <div class="ai-config-content">
-                <!-- Estado General del Bot (Diseño Premium Pill) -->
-                <div class="ai-master-toggle-pill" [class.active]="selectedMerchant.ai_enabled !== false">
-                    <div class="pill-info">
-                        <span class="pill-emoji">🤖</span>
-                        <span class="pill-text">{{ selectedMerchant.ai_enabled !== false ? 'IA Activa' : 'IA
-                            Desactivada'
-                            }}</span>
+                <!-- 🎮 CENTRO DE CONTROL DE AUTOMATIZACIÓN -->
+                <section class="config-section automation-central">
+                    <div class="automation-header">
+                        <div class="title-group">
+                            <span class="main-emoji">🎮</span>
+                            <div class="text-info">
+                                <h3>Control de Automatización</h3>
+                                <p>Define el nivel de respuesta automática para este comercio.</p>
+                            </div>
+                        </div>
+                        <div class="automation-badge" [ngClass]="{'manual': !selectedMerchant.ai_enabled && !selectedMerchant.bot_mode}">
+                            {{ selectedMerchant.ai_enabled ? '🧠 IA ACTIVA' : (selectedMerchant.bot_mode ? '🤖 BOT ACTIVO' : '👤 MODO MANUAL') }}
+                        </div>
                     </div>
-                    <label class="switch-pill">
-                        <input type="checkbox" [(ngModel)]="selectedMerchant.ai_enabled">
-                        <span class="slider-pill round"></span>
-                    </label>
-                </div>
+
+                    <div class="automation-options-grid">
+                        <!-- Opción IA -->
+                        <div class="auto-card" [class.active]="selectedMerchant.ai_enabled">
+                            <div class="auto-card-content">
+                                <div class="auto-card-info">
+                                    <span class="auto-icon">🧠</span>
+                                    <div class="auto-details">
+                                        <strong>Inteligencia Artificial</strong>
+                                        <p>Respuestas creativas y fluidas basadas en el cerebro configurado.</p>
+                                    </div>
+                                </div>
+                                <label class="switch-pill">
+                                    <input type="checkbox" [(ngModel)]="selectedMerchant.ai_enabled" (change)="toggleAiEnabled()">
+                                    <span class="slider-pill round"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Opción Bot -->
+                        <div class="auto-card" [class.active]="selectedMerchant.bot_mode">
+                            <div class="auto-card-content">
+                                <div class="auto-card-info">
+                                    <span class="auto-icon">🤖</span>
+                                    <div class="auto-details">
+                                        <strong>Bot Programado</strong>
+                                        <p>Flujos lógicos diseñados en el Bot Builder para procesos fijos.</p>
+                                    </div>
+                                </div>
+                                <label class="switch-pill">
+                                    <input type="checkbox" [(ngModel)]="selectedMerchant.bot_mode" (change)="toggleBotMode()">
+                                    <span class="slider-pill round bot-pill-slider"></span>
+                                </label>
+                            </div>
+                            <div *ngIf="selectedMerchant.bot_mode" class="auto-card-footer">
+                                <button class="btn-builder-link" (click)="goToBotBuilder(currentManagingMerchant!)">🎨 Abrir Diseñador de Flujos</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div *ngIf="!selectedMerchant.ai_enabled && !selectedMerchant.bot_mode" class="manual-mode-alert">
+                        <span class="alert-icon">👤</span>
+                        <div class="alert-content">
+                            <strong>Atención Humana Requerida</strong>
+                            <p>El sistema no responderá automáticamente. El comercio deberá atender los chats de forma manual.</p>
+                        </div>
+                    </div>
+                </section>
 
                 <!-- Motor de IA (Agrupado y Organizado) -->
                 <section class="config-section ai-engine-container">

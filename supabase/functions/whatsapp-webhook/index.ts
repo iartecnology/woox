@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { processBotFlow } from "../_shared/bot-engine.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -156,37 +157,25 @@ Deno.serve(async (req: Request) => {
             unread_count: (conversation!.unread_count || 0) + 1
         }).eq("id", conversation!.id);
 
-        // --- LLAMADA AL MOTOR DE IA (PYTHON) ---
+        // --- NUEVA LÓGICA: BOT FLOW ENGINE (SUPABASE NATIVO) ---
         let aiResponse = "";
         try {
-            // 1. Obtener la URL del motor desde los ajustes globales
-            const { data: ps } = await supabase.from("platform_settings").select("ai_engine_url").eq("id", "global").maybeSingle();
-
-            const engineUrl = ps?.ai_engine_url || Deno.env.get("PYTHON_ENGINE_URL") || "http://167.86.73.89:8000";
-            const engineSecret = Deno.env.get("PYTHON_ENGINE_AUTH");
-
-            const pyRes = await fetch(`${engineUrl.replace(/\/$/, '')}/process-message`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-Auth-Token": engineSecret || ""
-                },
-                body: JSON.stringify({
-                    merchant_id: merchantIdInternal,
-                    conversation_id: conversation!.id,
-                    customer_id: customer!.id,
-                    message_text: messageText,
-                    platform: platform
-                })
-            });
-
-            if (!pyRes.ok) throw new Error(`Engine Error: ${pyRes.status}`);
-            const pyData = await pyRes.json();
-            aiResponse = pyData.response || "Lo siento, no pude procesar tu mensaje.";
-
+            // Solo procesar si la IA está activa para esta conversación
+            if (conversation!.ai_active) {
+                const engineRes = await processBotFlow(supabase, merchantIdInternal, conversation!.id, messageText, customer!.id);
+                if (engineRes) {
+                    aiResponse = engineRes;
+                    console.log("[BOT-ENGINE] Respuesta procesada desde Flujo Visual (WhatsApp)");
+                }
+            }
+            
+            if (!aiResponse) {
+                // Si la IA no está activa o no hay respuesta del flujo, no respondemos automáticamente
+                return new Response("ok", { headers: corsHeaders });
+            }
         } catch (e: any) {
-            console.error("[UNIVERSAL-WH-ERROR]", e);
-            aiResponse = "Lo siento, tenemos problemas técnicos pasajeros. 🤖✨ Por favor, intenta de nuevo en un ratito.";
+            console.error("[BOT-ENGINE ERROR]", e);
+            aiResponse = "Lo siento, tuve un problema procesándolo. 🤖⚙️";
         }
 
         const cleanResponse = sanitizeMarkdown(aiResponse);

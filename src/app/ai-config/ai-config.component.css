@@ -743,3 +743,127 @@ input:checked+.slider:before {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* --- BOT MODE HIGHLIGHT --- */
+.bot-mode-highlight {
+    border-top: 5px solid #10b981;
+    background: linear-gradient(to bottom right, #f0fdf4, #ffffff);
+}
+
+.badge.bot.active {
+    background: #dcfce7;
+    color: #166534;
+    border-color: #86efac;
+}
+
+.bot-slider {
+    background-color: #ccc;
+}
+
+input:checked+.bot-slider {
+    background-color: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+/* --- AUTOMATION CONTROL UI --- */
+.automation-status-badge {
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: #eef2ff;
+    color: #4f46e5;
+    border: 1px solid #c7d2fe;
+}
+
+.automation-status-badge.manual {
+    background: #fff7ed;
+    color: #c2410c;
+    border-color: #fed7aa;
+}
+
+.automation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.automation-card {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 16px;
+    transition: all 0.3s ease;
+}
+
+.automation-card.active {
+    border-color: #6366f1;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+}
+
+.card-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.card-icon {
+    font-size: 1.8rem;
+    background: #f1f5f9;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+}
+
+.card-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.card-info strong {
+    font-size: 0.95rem;
+    color: #1e293b;
+}
+
+.card-info span {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.card-footer-action {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.manual-alert {
+    margin-top: 24px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.alert-icon {
+    font-size: 1.5rem;
+}
+
+.alert-text strong {
+    display: block;
+    font-size: 0.9rem;
+    color: #9a3412;
+}
+
+.alert-text p {
+    margin: 4px 0 0 0;
+    font-size: 0.85rem;
+    color: #c2410c;
+}

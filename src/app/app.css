@@ -368,6 +368,18 @@ body {
     border-left: 5px solid #4f46e5;
 }
 
+.sidebar-content a.bot-btn-highlight {
+    background: linear-gradient(135deg, #dcfce7, #ccfbf1);
+    border-left: 3px solid #10b981;
+    color: #065f46;
+    font-weight: 700;
+}
+
+.sidebar-content a.bot-btn-highlight.active {
+    background: linear-gradient(135deg, #bbf7d0, #99f6e4);
+    border-left: 5px solid #059669;
+}
+
 .sidebar-content a .icon {
     font-size: 1.2rem;
     width: 24px;

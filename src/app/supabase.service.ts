@@ -270,6 +270,18 @@ export class SupabaseService {
         return await supabase.from('products').delete().eq('id', productId);
     }
 
+    async getReservableResources(merchantId: string) {
+        if (!merchantId || !this.isValidUUID(merchantId)) {
+            return { data: [], error: { message: 'ID de comercio inválido' } };
+        }
+        const { data, error } = await supabase
+            .from('reservable_resources')
+            .select('*')
+            .eq('merchant_id', merchantId)
+            .order('name');
+        return { data, error };
+    }
+
     // --- PEDIDOS (ORDERS) ---
     async getOrders(merchantId: string) {
         const { data, error } = await supabase
@@ -289,7 +301,7 @@ export class SupabaseService {
         const { data, error } = await supabase
             .from('orders')
             .insert(orderData)
-            .select();
+            .select('*');
 
         if (error) {
             console.error('❌ [SupabaseService] Error creando pedido:', error);
@@ -753,6 +765,53 @@ export class SupabaseService {
 
     async saveSkillToCatalog(skill: any) {
         return await supabase.from('skills_catalog').upsert(skill).select().single();
+    }
+
+    // --- BOT BUILDER (FLUJOS PROGRAMADOS) ---
+    async getBotFlows(merchantId: string) {
+        return await supabase
+            .from('bot_flows')
+            .select('*')
+            .eq('merchant_id', merchantId)
+            .order('created_at', { ascending: false });
+    }
+
+    async saveBotFlow(flow: any) {
+        return await supabase
+            .from('bot_flows')
+            .upsert(flow)
+            .select()
+            .single();
+    }
+
+    async deleteBotFlow(id: string) {
+        return await supabase
+            .from('bot_flows')
+            .delete()
+            .eq('id', id);
+    }
+
+    async getActiveBotFlow(merchantId: string) {
+        return await supabase.rpc('get_active_bot_flow', { p_merchant_id: merchantId });
+    }
+
+    async getOrCreateBotSession(conversationId: string, merchantId: string, flowId: string, startNodeId: string) {
+        return await supabase.rpc('get_or_create_bot_session', {
+            p_conversation_id: conversationId,
+            p_merchant_id: merchantId,
+            p_flow_id: flowId,
+            p_start_node_id: startNodeId
+        });
+    }
+
+    async updateBotSession(sessionId: string, updates: any) {
+        return await supabase
+            .from('bot_flow_sessions')
+            .update({
+                ...updates,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', sessionId);
     }
 
     async deleteSkillFromCatalog(id: string) {

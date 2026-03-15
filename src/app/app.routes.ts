@@ -16,12 +16,14 @@ import { BiolinkAdminComponent } from './biolink-admin/biolink-admin';
 import { AgentManagementComponent } from './agent-management/agent-management.component';
 import { MerchantKnowledgeComponent } from './merchant-knowledge/merchant-knowledge.component';
 import { ReservationManagement } from './reservation-management/reservation-management';
+import { BotBuilderComponent } from './bot-builder/bot-builder.component';
 import { LandingBuilderComponent } from './landing-builder/landing-builder.component';
 import { LandingPageComponent } from './landing-page/landing-page.component';
 
 export const routes: Routes = [
     { path: 'login', component: LoginComponent },
     { path: 'super-admin', component: SuperAdminComponent },
+    { path: 'bot-builder', component: BotBuilderComponent },
     { path: 'platform-analytics', component: PlatformAnalyticsComponent },
     { path: 'audit-logs', component: AuditLogsComponent },
     { path: 'crm', component: CustomerCrmComponent },
