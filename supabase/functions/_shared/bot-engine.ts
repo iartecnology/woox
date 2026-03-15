@@ -280,11 +280,18 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
                     const skills = skillConns.map((c: any) => nodes.find((n: any) => n.id === c.from)).filter((n: any) => n?.type === 'ai_skill');
                     
                     const tools: any[] = [];
+                    const toolMapping: Record<string, string> = {};
+
                     if (skills.length > 0) {
                         const functionDeclarations = skills.map((s: any) => {
-                            const desc = s.data.message || `Herramienta para ${s.data.actionType}`;
+                            // Sanitizar nombre: solo alfanuméricos y guiones
+                            const rawName = s.data.actionType || "tool";
+                            const cleanName = rawName.replace(/[^a-zA-Z0-9_-]/g, '_');
+                            toolMapping[cleanName] = rawName; // Guardar original para ejecutar
+
+                            const desc = s.data.message || `Herramienta para ${rawName}`;
                             return {
-                                name: s.data.actionType,
+                                name: cleanName,
                                 description: desc,
                                 parameters: {
                                     type: "object",
@@ -304,8 +311,7 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
                             .select("sender_type, content")
                             .eq("conversation_id", conversationId)
                             .order("created_at", { ascending: false })
-                            .limit(memoryLimit)
-                            .execute();
+                            .limit(memoryLimit);
                         if (hist) history = hist.reverse();
                     }
 
@@ -316,76 +322,86 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
 
                     // 4. Llamada a Gemini con Tools
                     const finalUserMessage = userTemplate.replace('{{message}}', messageText);
+                    const contents = [
+                        ...formattedHistory,
+                        { role: 'user', parts: [{ text: finalUserMessage }] }
+                    ];
+
+                    console.log(`[AI-AGENT] Call Gemini ${model} with ${tools.length > 0 ? tools[0].function_declarations.length : 0} tools.`);
                     
                     const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             system_instruction: { parts: [{ text: systemPrompt }] },
-                            contents: [
-                                ...formattedHistory,
-                                { role: 'user', parts: [{ text: finalUserMessage }] }
-                            ],
+                            contents,
                             tools: tools.length > 0 ? tools : undefined,
                             generationConfig: { temperature: temp }
                         })
                     });
 
-                    let aiData = await aiRes.json();
-                    let response = aiData.candidates?.[0]?.content;
-                    
-                    // 5. Manejar Tool Calls (Si existen)
-                    if (response?.parts?.[0]?.functionCall) {
-                        const call = response.parts[0].functionCall;
-                        console.log(`[AI-AGENT] Tool Call detectada: ${call.name}`);
-                        
-                        let toolResult = "No hay información disponible.";
-                        
-                        // Ejecutar Skill Lógica Real (Simulado aquí, pero llama a executeAction o similar)
-                        if (call.name === 'catalog_search') {
-                            const { data: prods } = await supabase.from('products').select('name, price, stock').ilike('name', `%${call.args.query || ''}%`).limit(3);
-                            toolResult = prods?.length ? `Resultados: ${prods.map((p: any) => `${p.name} ($${p.price})`).join(', ')}` : "No encontré productos.";
-                        } else if (call.name === 'inventory_check') {
-                            const { data: prod } = await supabase.from('products').select('name, stock').ilike('name', `%${call.args.query || ''}%`).single();
-                            toolResult = prod ? `El stock de ${prod.name} es ${prod.stock}` : "No tengo info de ese producto.";
-                        } else if (call.name === 'knowledge_base') {
-                            // Simulación de búsqueda en base de conocimientos
-                            toolResult = `Sobre '${call.args.query}': Realizamos envíos a todo el país. El tiempo de entrega es de 24-48h. Aceptamos tarjetas, transferencias y efectivo.`;
-                        } else if (call.name === 'shopping_cart') {
-                            const cart = variables['cart'] || [];
-                            if (cart.length === 0) toolResult = "El carrito está actualmente vacío.";
-                            else {
-                                const summary = cart.map((it: any) => `- ${it.name} x${it.qty}`).join('\n');
-                                const total = cart.reduce((acc: number, it: any) => acc + (it.price * it.qty), 0);
-                                toolResult = `Resumen del carrito:\n${summary}\nTotal: $${total}`;
-                            }
-                        }
-
-                        // Segunda llamada para integrar el resultado
-                        const secondRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contents: [
-                                    { role: 'user', parts: [{ text: finalUserMessage }] },
-                                    response,
-                                    {
-                                        role: 'user', // En Gemini 1.0/1.5 es 'user' con response de functionResponse
-                                        parts: [{
-                                            functionResponse: {
-                                                name: call.name,
-                                                response: { content: toolResult }
-                                            }
-                                        }]
-                                    }
-                                ]
-                            })
-                        });
-                        const secondData = await secondRes.json();
-                        const finalMsg = secondData.candidates?.[0]?.content?.parts?.[0]?.text || "Lo siento, tuve un problema procesando la herramienta.";
-                        messagesToReturn.push(finalMsg);
+                    if (!aiRes.ok) {
+                        const errBody = await aiRes.text();
+                        console.error(`[AI-AGENT] Gemini API Error: ${aiRes.status}`, errBody);
+                        messagesToReturn.push("⚠️ Lo siento, tuve un problema conectando con mi cerebro de IA.");
                     } else {
-                        messagesToReturn.push(response?.parts?.[0]?.text || "No pude generar una respuesta.");
+                        let aiData = await aiRes.json();
+                        let response = aiData.candidates?.[0]?.content;
+                        
+                        // 5. Manejar Tool Calls (Si existen)
+                        if (response?.parts?.[0]?.functionCall) {
+                            const call = response.parts[0].functionCall;
+                            const originalAction = toolMapping[call.name] || call.name;
+                            console.log(`[AI-AGENT] Tool Call detectada: ${call.name} (Original: ${originalAction})`);
+                            
+                            let toolResult = "No hay información disponible.";
+                            
+                            // Ejecutar Skill Lógica Real
+                            if (originalAction === 'catalog_search' || originalAction === 'Búsqueda Catálogo') {
+                                const { data: prods } = await supabase.from('products').select('name, price, stock').ilike('name', `%${call.args.query || ''}%`).limit(3);
+                                toolResult = prods?.length ? `Resultados: ${prods.map((p: any) => `${p.name} ($${p.price})`).join(', ')}` : "No encontré productos específicos con ese nombre.";
+                            } else if (originalAction === 'inventory_check' || originalAction === 'Consultar Stock') {
+                                const { data: prod } = await supabase.from('products').select('name, stock').ilike('name', `%${call.args.query || ''}%`).order('stock', {ascending: false}).limit(1).maybeSingle();
+                                toolResult = prod ? `El stock de ${prod.name} es ${prod.stock} unidades.` : "No tengo información detallada del stock de ese producto.";
+                            } else if (originalAction === 'knowledge_base') {
+                                toolResult = `Sobre '${call.args.query}': Realizamos envíos a todo el país. Aceptamos tarjetas y transferencias. El horario es de 8am a 6pm.`;
+                            } else if (originalAction === 'shopping_cart' || originalAction === 'Gestionar Carrito') {
+                                const cart = variables['cart'] || [];
+                                if (cart.length === 0) toolResult = "El carrito está actualmente vacío.";
+                                else {
+                                    const summary = cart.map((it: any) => `- ${it.name} x${it.qty}`).join('\n');
+                                    const total = cart.reduce((acc: number, it: any) => acc + (it.price * it.qty), 0);
+                                    toolResult = `El cliente tiene esto en su carrito:\n${summary}\nTotal: $${total}`;
+                                }
+                            }
+
+                            // Segunda llamada para integrar el resultado (IMPORTANTE: role: 'function')
+                            const secondRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    system_instruction: { parts: [{ text: systemPrompt }] },
+                                    contents: [
+                                        ...contents,
+                                        response,
+                                        {
+                                            role: 'function',
+                                            parts: [{
+                                                functionResponse: {
+                                                    name: call.name,
+                                                    response: { content: toolResult }
+                                                }
+                                            }]
+                                        }
+                                    ]
+                                })
+                            });
+                            const secondData = await secondRes.json();
+                            const finalMsg = secondData.candidates?.[0]?.content?.parts?.[0]?.text || "Lo siento, tuve un problema procesando la herramienta.";
+                            messagesToReturn.push(finalMsg);
+                        } else {
+                            messagesToReturn.push(response?.parts?.[0]?.text || "No pude generar una respuesta clara en este momento.");
+                        }
                     }
                 } catch (err) {
                     console.error("[AI-AGENT-ENGINE] Error Critico:", err);

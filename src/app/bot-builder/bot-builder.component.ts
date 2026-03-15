@@ -924,6 +924,28 @@ export class BotBuilderComponent implements OnInit {
       const nextId = this.findNextNodeId(currentNode.id, 'output');
       await this.moveToNextNode(nextId);
     }
+    else if (currentNode.type === 'ai_agent') {
+      // 🧠 Simulación de respuesta de IA basada en el input del usuario
+      this.chatMessages.push({ 
+        text: `🤖 [IA Respondiento a: "${input}"]: Basado en tu pregunta, estoy procesando una respuesta usando el modelo ${currentNode.data.model || 'Gemini'}...`, 
+        sender: 'bot' 
+      });
+      
+      // Simular un retraso para que parezca que la "IA" piensa
+      setTimeout(async () => {
+        const skillsCount = this.botFlow.flow_data.connections.filter(c => c.to === currentNode.id && c.toPort === 'skills_in').length;
+        let response = "¡Hola! Entiendo perfectamente tu consulta. ";
+        if (skillsCount > 0) {
+          response += `He revisado mis herramientas (${skillsCount} conectadas) y puedo ayudarte con ello. `;
+        }
+        response += "Esta es una simulación de mi respuesta inteligente. ¿Deseas continuar?";
+        
+        this.chatMessages.push({ text: response, sender: 'bot' });
+        
+        const nextId = this.findNextNodeId(currentNode.id, 'output');
+        await this.moveToNextNode(nextId);
+      }, 800);
+    }
     else if (currentNode.type === 'menu') {
       const options = currentNode.data.options || [];
       const numIdx = parseInt(input) - 1;
@@ -1014,16 +1036,12 @@ export class BotBuilderComponent implements OnInit {
       }).filter(n => n).join(', ');
 
       this.chatMessages.push({ 
-        text: `🧠 [Agente Inteligente]: "${node.data.label}"\n${skillsNames ? 'Habilidades: ' + skillsNames : 'Sin herramientas conectadas.'}`, 
+        text: `🧠 [Agente Inteligente]: "${node.data.label}" activo.\n${skillsNames ? 'Habilidades disponibles: ' + skillsNames : 'Sin herramientas conectadas.'}\n\n🤖 Escribe algo para que la IA te responda (simulación).`, 
         sender: 'bot' 
       });
-      this.chatMessages.push({ 
-        text: `🤖 Simularé una respuesta usando ${node.data.model} y mi memoria (${node.data.memory_limit} msjs).`, 
-        sender: 'bot' 
-      });
-      const nextId = this.findNextNodeId(node.id, 'output');
-      await this.moveToNextNode(nextId);
-      return;
+      
+      this.simulationState.currentNodeId = node.id;
+      return; // PAUSAR AQUÍ para que el usuario escriba a la IA
     }
 
     const messages = this.collectSimulationMessages(node);
@@ -1195,7 +1213,7 @@ export class BotBuilderComponent implements OnInit {
         msgs.push(msg);
       }
 
-      if (current.type === 'question' || current.type === 'menu' || current.type === 'end') {
+      if (current.type === 'question' || current.type === 'menu' || current.type === 'end' || current.type === 'ai_agent') {
         this.simulationState.currentNodeId = current.id;
         break;
       }
