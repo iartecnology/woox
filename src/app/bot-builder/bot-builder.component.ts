@@ -737,8 +737,16 @@ export class BotBuilderComponent implements OnInit {
 
   onPortMouseUp(event: MouseEvent, node: FlowNode, port: string) {
     if (this.isConnecting && this.connectionStart) {
-      // Evitar conexiones al mismo nodo o bucles a entrada desde la misma salida
-      if (this.connectionStart.node.id !== node.id && port === 'input') {
+      // Evitar conexiones al mismo nodo
+      const isSameNode = this.connectionStart.node.id === node.id;
+      
+      // Permitir: 
+      // 1. Conexiones hacia 'input' regulares
+      // 2. Conexiones desde 'skill_out' hacia 'skills_in'
+      const isValidStandardConnection = port === 'input' && this.connectionStart.port !== 'skill_out';
+      const isValidSkillConnection = port === 'skills_in' && this.connectionStart.port === 'skill_out';
+
+      if (!isSameNode && (isValidStandardConnection || isValidSkillConnection)) {
         const newConn: FlowConnection = {
           id: `conn_${Date.now()}`,
           from: this.connectionStart.node.id,
@@ -779,15 +787,45 @@ export class BotBuilderComponent implements OnInit {
     const start = this.getPortCoords(fromNode, conn.fromPort);
     const end = this.getPortCoords(toNode, conn.toPort);
 
-    const cp1x = start.x + Math.abs(end.x - start.x) * 0.5;
-    const cp2x = end.x - Math.abs(end.x - start.x) * 0.5;
+    // Para conexiones verticales (skills)
+    if (conn.fromPort === 'skill_out' || conn.toPort === 'skills_in') {
+      const isUpward = end.y < start.y;
+      const verticalOffset = Math.max(Math.abs(end.y - start.y) * 0.5, 50);
+      const cp1y = start.y + (isUpward ? -verticalOffset : verticalOffset);
+      const cp2y = end.y - (isUpward ? -verticalOffset : verticalOffset);
+      return `M ${start.x} ${start.y} C ${start.x} ${cp1y}, ${end.x} ${cp2y}, ${end.x} ${end.y}`;
+    }
 
+    // Para conexiones horizontales (estándar)
+    const cp1x = start.x + Math.max(Math.abs(end.x - start.x) * 0.5, 50);
+    const cp2x = end.x - Math.max(Math.abs(end.x - start.x) * 0.5, 50);
+
+    return `M ${start.x} ${start.y} C ${cp1x} ${start.y}, ${cp2x} ${end.y}, ${end.x} ${end.y}`;
+  }
+
+  getTempConnectionPath(): string {
+    if (!this.connectionStart) return '';
+    const start = this.getPortCoords(this.connectionStart.node, this.connectionStart.port);
+    const end = this.mousePos;
+
+    if (this.connectionStart.port === 'skill_out' || this.connectionStart.port === 'skills_in') {
+      const verticalOffset = Math.max(Math.abs(end.y - start.y) * 0.5, 50);
+      // skill_out normalmente va hacia abajo (empieza arriba, drag down), skills_in al revés
+      const cp1y = start.y + (this.connectionStart.port === 'skill_out' ? verticalOffset : -verticalOffset);
+      const cp2y = end.y - (this.connectionStart.port === 'skill_out' ? verticalOffset : -verticalOffset);
+      return `M ${start.x} ${start.y} C ${start.x} ${cp1y}, ${end.x} ${cp2y}, ${end.x} ${end.y}`;
+    }
+
+    const cp1x = start.x + Math.max(Math.abs(end.x - start.x) * 0.5, 50);
+    const cp2x = end.x - Math.max(Math.abs(end.x - start.x) * 0.5, 50);
     return `M ${start.x} ${start.y} C ${cp1x} ${start.y}, ${cp2x} ${end.y}, ${end.x} ${end.y}`;
   }
 
   getPortCoords(node: FlowNode, port: string): { x: number, y: number } {
     if (port === 'input') return { x: node.position.x, y: node.position.y + 40 };
     if (port === 'output') return { x: node.position.x + 220, y: node.position.y + 40 };
+    if (port === 'skill_out') return { x: node.position.x + 110, y: node.position.y };
+    if (port === 'skills_in') return { x: node.position.x + 110, y: node.position.y + 80 };
     
     // Para puertos de menú (múltiples salidas)
     if (node.type === 'menu' && node.data.options) {

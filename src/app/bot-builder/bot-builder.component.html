@@ -111,7 +111,7 @@
 
         <!-- Conexión Temporal (mientras se arrastra) -->
         <path *ngIf="isConnecting"
-              [attr.d]="'M ' + getPortCoords(connectionStart!.node, connectionStart!.port).x + ' ' + getPortCoords(connectionStart!.node, connectionStart!.port).y + ' C ' + (getPortCoords(connectionStart!.node, connectionStart!.port).x + 50) + ' ' + getPortCoords(connectionStart!.node, connectionStart!.port).y + ', ' + (mousePos.x - 50) + ' ' + mousePos.y + ', ' + mousePos.x + ' ' + mousePos.y"
+              [attr.d]="getTempConnectionPath()"
               class="connection-path temp-connection">
         </path>
 
