@@ -546,7 +546,7 @@ export class BotBuilderComponent implements OnInit {
       warnings.push('No hay bloque de Fin. El flujo puede quedar abierto indefinidamente.');
     }
     const disconnected = nodes.filter(n =>
-      n.type !== 'start' && !connections.some(c => c.to === n.id)
+      n.type !== 'start' && n.type !== 'ai_skill' && !connections.some(c => c.to === n.id)
     );
     if (disconnected.length > 0) {
       warnings.push(`${disconnected.length} bloque(s) sin entrada: ${disconnected.map(n => n.data.label).join(', ')}.`);
