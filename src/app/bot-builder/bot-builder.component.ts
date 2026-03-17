@@ -104,15 +104,23 @@ export class BotBuilderComponent implements OnInit {
   async ngOnInit() {
     this.merchantId = localStorage.getItem('active_merchant_id') || '';
     if (this.merchantId) {
+      // Cargar info del comercio primero para que no salga "Cargando..."
+      const { data: m } = await this.supabase.getMerchantById(this.merchantId);
+      if (m) {
+        this.merchantName = m.name;
+        this.botFlow.name = `Flujo de ${m.name}`;
+      }
       await this.loadFlow();
     }
   }
 
   // --- LOADING / SAVING ---
   async loadFlow() {
-    // Obtener nombre del comercio para el header
-    const { data: m } = await this.supabase.getMerchantById(this.merchantId);
-    if (m) this.merchantName = m.name;
+    // Info del merchant ya cargada en ngOnInit o recargamos si es necesario
+    if (this.merchantName === 'Cargando...') {
+      const { data: m } = await this.supabase.getMerchantById(this.merchantId);
+      if (m) this.merchantName = m.name;
+    }
 
     const { data, error } = await this.supabase.getBotFlows(this.merchantId);
     if (data && data.length > 0) {
@@ -927,24 +935,36 @@ export class BotBuilderComponent implements OnInit {
     else if (currentNode.type === 'ai_agent') {
       // 🧠 Simulación de respuesta de IA basada en el input del usuario
       this.chatMessages.push({ 
-        text: `🤖 [IA Respondiento a: "${input}"]: Basado en tu pregunta, estoy procesando una respuesta usando el modelo ${currentNode.data.model || 'Gemini'}...`, 
+        text: `🤖 [IA Pensando usando ${currentNode.data.model || 'Gemini'}... ]`, 
         sender: 'bot' 
       });
       
       // Simular un retraso para que parezca que la "IA" piensa
       setTimeout(async () => {
-        const skillsCount = this.botFlow.flow_data.connections.filter(c => c.to === currentNode.id && c.toPort === 'skills_in').length;
-        let response = "¡Hola! Entiendo perfectamente tu consulta. ";
-        if (skillsCount > 0) {
-          response += `He revisado mis herramientas (${skillsCount} conectadas) y puedo ayudarte con ello. `;
+        // Eliminar el mensaje de "Pensando"
+        this.chatMessages.pop();
+        
+        const skillConns = this.botFlow.flow_data.connections.filter(c => c.to === currentNode.id && c.toPort === 'skills_in');
+        const lowInput = input.toLowerCase();
+        let response = "";
+
+        // Lógica de simulación un poco más "inteligente" para el builder
+        if (lowInput.includes('hamburguesa') || lowInput.includes('menu') || lowInput.includes('que tienen')) {
+            response = "Actualmente tenemos una gran variedad de hamburguesas: la Clásica, la BBQ Especial y la Doble Carne con Queso. ¿Te gustaría conocer el precio de alguna o prefieres ver el menú completo?";
+        } else if (lowInput.includes('precio') || lowInput.includes('cuanto cuesta')) {
+            response = "Nuestras hamburguesas van desde los $12.000 hasta los $25.000 la más completa. ¿Te gustaría que añadiera alguna a tu carrito?";
+        } else if (lowInput.includes('gracias') || lowInput.includes('chau') || lowInput.includes('adios')) {
+            response = "¡Con gusto! Ha sido un placer ayudarte. Si necesitas algo más, aquí estaré. 👋";
+        } else {
+            response = `Entiendo que me preguntas sobre "${input}". Usando mis herramientas de ${skillConns.length > 0 ? 'Catálogo y Stock' : 'conocimiento base'} puedo confirmarte que tenemos lo que buscas. ¿Quieres proceder con el pedido?`;
         }
-        response += "Esta es una simulación de mi respuesta inteligente. ¿Deseas continuar?";
         
         this.chatMessages.push({ text: response, sender: 'bot' });
         
+        // El Agente IA en el builder avanza al siguiente nodo después de responder
         const nextId = this.findNextNodeId(currentNode.id, 'output');
-        await this.moveToNextNode(nextId);
-      }, 800);
+        if (nextId) await this.moveToNextNode(nextId);
+      }, 1000);
     }
     else if (currentNode.type === 'menu') {
       const options = currentNode.data.options || [];
@@ -1213,8 +1233,13 @@ export class BotBuilderComponent implements OnInit {
         msgs.push(msg);
       }
 
-      if (current.type === 'question' || current.type === 'menu' || current.type === 'end' || current.type === 'ai_agent') {
+      if (current.type === 'question' || current.type === 'menu' || current.type === 'ai_agent') {
         this.simulationState.currentNodeId = current.id;
+        break;
+      }
+
+      if (current.type === 'end') {
+        this.simulationState.currentNodeId = null; 
         break;
       }
 
