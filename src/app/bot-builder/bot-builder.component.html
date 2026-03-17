@@ -216,6 +216,13 @@
       <div *ngFor="let msg of chatMessages" class="msg" [class]="msg.sender">
         {{ msg.text }}
       </div>
+
+      <!-- Animación de Escribiendo -->
+      <div class="typing" *ngIf="isBotTyping">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
     </div>
 
     <div class="chat-input-area">

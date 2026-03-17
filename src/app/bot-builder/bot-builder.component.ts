@@ -93,6 +93,7 @@ export class BotBuilderComponent implements OnInit {
   userChatInput: string = '';
   simulationState: { currentNodeId: string | null, variables: any } = { currentNodeId: null, variables: {} };
   activeSimNodeId: string | null = null; // Nodo resaltado en el canvas durante simulación
+  isBotTyping: boolean = false; // Estado para animación de escribiendo
   
   // Connection delete state
   hoveredConnectionId: string | null = null;
@@ -934,15 +935,12 @@ export class BotBuilderComponent implements OnInit {
     }
     else if (currentNode.type === 'ai_agent') {
       // 🧠 Simulación de respuesta de IA basada en el input del usuario
-      this.chatMessages.push({ 
-        text: `🤖 [IA Pensando usando ${currentNode.data.model || 'Gemini'}... ]`, 
-        sender: 'bot' 
-      });
-      
+      this.isBotTyping = true;
+      setTimeout(() => this.scrollChatToBottom(), 50);
+
       // Simular un retraso para que parezca que la "IA" piensa
       setTimeout(async () => {
-        // Eliminar el mensaje de "Pensando"
-        this.chatMessages.pop();
+        this.isBotTyping = false;
         
         const skillConns = this.botFlow.flow_data.connections.filter(c => c.to === currentNode.id && c.toPort === 'skills_in');
         const lowInput = input.toLowerCase();
@@ -960,11 +958,12 @@ export class BotBuilderComponent implements OnInit {
         }
         
         this.chatMessages.push({ text: response, sender: 'bot' });
+        setTimeout(() => this.scrollChatToBottom(), 50);
         
         // El Agente IA en el builder avanza al siguiente nodo después de responder
         const nextId = this.findNextNodeId(currentNode.id, 'output');
         if (nextId) await this.moveToNextNode(nextId);
-      }, 1000);
+      }, 1500);
     }
     else if (currentNode.type === 'menu') {
       const options = currentNode.data.options || [];
@@ -1065,8 +1064,16 @@ export class BotBuilderComponent implements OnInit {
     }
 
     const messages = this.collectSimulationMessages(node);
-    messages.forEach(m => this.chatMessages.push({ text: m, sender: 'bot' }));
-    setTimeout(() => this.scrollChatToBottom(), 50);
+    if (messages.length > 0) {
+      this.isBotTyping = true;
+      setTimeout(() => this.scrollChatToBottom(), 50);
+      
+      setTimeout(() => {
+        this.isBotTyping = false;
+        messages.forEach(m => this.chatMessages.push({ text: m, sender: 'bot' }));
+        setTimeout(() => this.scrollChatToBottom(), 50);
+      }, 800);
+    }
   }
 
   private evaluateCondition(operator: string, actual: string, target: string): boolean {
