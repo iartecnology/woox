@@ -11,8 +11,8 @@
             <button class="users-mgr-btn" (click)="openGlobalUserManager()">
                 👥 Gestión de Usuarios
             </button>
-            <button class="agents-mgr-btn" (click)="openAgentManager()">
-                🤖 Gestionar Agentes IA
+            <button class="ai-logic-btn" (click)="router.navigate(['/bot-builder'])">
+                🤖 Diseñar Flujos (Bot Builder)
             </button>
             <button class="platform-config-btn" (click)="openPlatformConfig()">
                 ⚙️ Configurar Plataforma
@@ -156,7 +156,7 @@
                                                 (click)="goToBotBuilder(m)">🎨</button>
                                             <button *ngIf="m.industry_type === 'retail'" class="config-icon-btn catalog"
                                                 title="Catálogo" (click)="goToCatalog(m)">🍔</button>
-                                            <button *ngIf="m.industry_type === 'support'" class="config-icon-btn brain"
+                                            <button class="config-icon-btn brain"
                                                 title="Cerebro" (click)="goToBrain(m)">🧠</button>
                                             <button class="config-icon-btn res" title="Reservaciones"
                                                 (click)="goToReservations(m)">📅</button>
@@ -560,6 +560,22 @@
                         </select>
                     </div>
 
+                    <!-- PLATFORM TEST CHAT -->
+                    <div class="test-chat-section full-width" *ngIf="aiConnectionStatus === 'success' && platformAiSettings.ai_model">
+                        <h5 style="margin-top: 15px; font-size: 0.9rem; color: #4b5563;">🧪 Probar Respuesta de IA (Global)</h5>
+                        <div class="test-chat-input-group" style="display: flex; gap: 8px; margin-top: 8px;">
+                            <input type="text" [(ngModel)]="testMessage" placeholder="Escribe algo..." style="flex: 1; height: 36px;">
+                            <button class="action-btn" (click)="testPlatformAIChatResponse()" [disabled]="isTestingChat" style="height: 36px; white-space: nowrap;">
+                                {{ isTestingChat ? '⌛...' : '🚀 Probar' }}
+                            </button>
+                        </div>
+                        <div class="test-chat-response" *ngIf="testResponse" 
+                             style="margin-top: 10px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; color: #1e293b;">
+                            <strong>Respuesta:</strong><br>
+                            {{ testResponse }}
+                        </div>
+                    </div>
+
                     <div class="section-divider full-width">🧪 Entorno de Pruebas IA (Local)</div>
                     <div class="form-group full-width">
                         <p class="desc">Forzar que todos los agentes usen un modelo local (ej. LM Studio u Ollama) para fines de pruebas, ignorando la configuración individual de cada comercio.</p>
@@ -895,6 +911,22 @@
                                     <span *ngIf="aiConnectionStatus === 'error'">❌ Error: {{ aiConnectionMessage
                                         }}</span>
                                 </div>
+
+                                <!-- TEST CHAT SECTION -->
+                                <div class="test-chat-section" *ngIf="aiConnectionStatus === 'success' || selectedMerchant.ai_model">
+                                    <h5 style="margin-top: 20px; font-size: 0.9rem; color: #4b5563; border-top: 1px solid #e5e7eb; padding-top: 15px;">🧪 Probar Respuesta de IA</h5>
+                                    <div class="test-chat-input-group" style="display: flex; gap: 8px; margin-top: 10px;">
+                                        <input type="text" [(ngModel)]="testMessage" placeholder="Escribe algo..." style="flex: 1; height: 36px; font-size: 0.85rem;">
+                                        <button class="action-btn" (click)="testAIChatResponse()" [disabled]="isTestingChat" style="height: 36px; white-space: nowrap;">
+                                            {{ isTestingChat ? '⌛...' : '🚀 Probar' }}
+                                        </button>
+                                    </div>
+                                    <div class="test-chat-response" *ngIf="testResponse" 
+                                         style="margin-top: 10px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; line-height: 1.4; color: #1e293b; max-height: 150px; overflow-y: auto;">
+                                        <strong>Respuesta:</strong><br>
+                                        {{ testResponse }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -905,14 +937,15 @@
                                 <h4>Modelo y Agente</h4>
                             </div>
                             <div class="card-body">
-                                <div class="form-group">
-                                    <label>Agente Maestro (Personalidad)</label>
-                                    <select [(ngModel)]="selectedMerchant.agent_id">
-                                        <option [ngValue]="undefined">Seleccionar un agente base...</option>
-                                        <option *ngFor="let agent of agents" [value]="agent.id">
-                                            🤖 {{ agent.name }}
-                                        </option>
-                                    </select>
+                                <div class="form-group legacy-info">
+                                    <label>🤖 Configuración de Comportamiento</label>
+                                    <div class="info-banner">
+                                        Ahora la personalidad y las reglas se configuran en el 
+                                        <strong>Bot Builder</strong> para mayor flexibilidad por canal.
+                                    </div>
+                                    <button class="action-btn-outline" (click)="router.navigate(['/bot-builder'])" style="margin-top: 10px; width: 100%;">
+                                        Ir al Diseñador de Flujos
+                                    </button>
                                 </div>
 
                                 <div class="form-group">

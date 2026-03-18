@@ -171,12 +171,12 @@ Deno.serve(async (req) => {
             }
         }
 
-        if (channel === 'facebook') {
+        if (channel === 'facebook' || channel === 'instagram') {
             const fbToken = merchant?.facebook_page_token;
-            const fbUserId = customer?.facebook_user_id;
-            if (!fbToken || !fbUserId) throw new Error("Facebook config missing");
+            const fbUserId = channel === 'instagram' ? customer?.instagram_user_id : customer?.facebook_user_id;
+            if (!fbToken || !fbUserId) throw new Error(`${channel} config missing`);
 
-            // Simular "Typing..." en Messenger
+            // Simular "Typing..." en Messenger (Instagram soporta el sender_action typing_on)
             await fetch(`https://graph.facebook.com/v22.0/me/messages?access_token=${fbToken}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -200,7 +200,13 @@ Deno.serve(async (req) => {
             });
         }
 
-        // Si es simulador u otro canal no implementado aún, simplemente retornamos ok
+        // Si es simulador u otro canal (como web) no requiere llamada a proveedor externo
+        if (channel === 'simulator' || channel === 'web') {
+            return new Response(JSON.stringify({ ok: true, message: `Rendered directly in ${channel} interface` }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+        }
+
         return new Response(JSON.stringify({ ok: true, message: "Channel not supported for external delivery yet" }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" }
         });

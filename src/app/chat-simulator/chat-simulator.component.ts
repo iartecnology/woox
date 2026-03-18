@@ -439,17 +439,18 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
         
         // Si es modo BOT, procesar el primer mensaje (START) de forma silenciosa para obtener el saludo real
         if (this.botMode) {
+           console.log('[Simulator] Processing bot START flow...');
            const botRes = await this.botRuntime.processMessage(conv.id, this.merchantId, '');
            if (botRes && botRes.messages.length > 0) {
              this.messages = []; // Limpiar el "Iniciando..."
-             botRes.messages.forEach(msg => {
+             for (const msg of botRes.messages) {
                this.messages.push({ sender: 'ai', text: msg, time: new Date() });
-               this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg);
-             });
+               await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg, true);
+             }
            }
         } else {
           // Guardar el saludo inicial de la IA
-          await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', this.messages[0].text);
+          await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', this.messages[0].text, true);
         }
 
         // Suscribirse a mensajes para recibir respuestas humanas del panel
@@ -511,7 +512,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
     // Guardar mensaje del usuario en la DB
     if (this.dbConversationId) {
-      this.supabaseService.saveMessage(this.dbConversationId, 'customer', userText);
+      await this.supabaseService.saveMessage(this.dbConversationId, 'customer', userText, true);
     }
 
     this.userInput = '';
@@ -522,13 +523,13 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       if (this.botMode) {
         const botResponse = await this.botRuntime.processMessage(this.dbConversationId!, this.merchantId, userText);
         
-        setTimeout(() => {
+        setTimeout(async () => {
           this.isTyping = false;
           if (botResponse && botResponse.messages.length > 0) {
-            botResponse.messages.forEach(msg => {
+            for (const msg of botResponse.messages) {
               this.messages.push({ sender: 'ai', text: msg, time: new Date() });
-              this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg);
-            });
+              await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg, true);
+            }
           } else {
             this.messages.push({ sender: 'ai', text: 'Lo siento, no tengo una respuesta programada para eso.', time: new Date() });
           }
@@ -580,8 +581,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 3. Cada vez que el usuario agregue un producto: DEBES usar [UPDATE_CART:{"name":"...","price":0,"quantity":1}].
 4. Si el usuario pide el resumen, usa [SHOW_SUMMARY].
 5. **PROHIBIDO EL USO DE PUNTOS SUSPENSIVOS**: NUNCA pongas "..." o placeholders en los campos del JSON. Si no tienes el dato, no envíes el comando.
-6. El total actual del carrito es $${this.cartTotal.toFixed(2)}. 
-7. **SEGURIDAD DE PRECIOS**: Tus precios son FIJOS e INNEGOCIABLES.)`;
+6. El total actual del carrito es $${this.cartTotal.toFixed(2)}.)`;
 
       // 1. OBTENER PROMPT MAESTRO (Cerebro Central Agente 2.0)
       const { data: compiledPrompt } = await this.supabaseService.rpc('get_compiled_prompt', {
@@ -596,33 +596,36 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
         fullSystemInstruction += `\n\n### CONTEXTO ADICIONAL DE PRUEBA:\n${this.context}`;
       }
 
-      // --- RAG: BÚSQUEDA SEMÁNTICA EN TIEMPO REAL ---
-      // Obtenemos bloques relevantes de la DB usando el nuevo sistema vectorial
+      // --- RAG: BÚSQUEDA SEMÁNTICA EN TIEMPO REAL (NUEVO CEREBRO) ---
       try {
-        console.log('🔍 Buscando contexto semántico para:', userText);
-        // FIXME: Obtenemos el ID del agente a través del merchant para la búsqueda
-        const { data: merchantData } = await this.supabaseService.getMerchantById(this.merchantId);
+        console.log('🔍 Generando embedding para búsqueda semántica...');
+        const queryEmbedding = await this.supabaseService.generateEmbedding(userText, {
+          ai_api_key: this.aiApiKey,
+          ai_provider: this.aiProvider,
+          ollama_base_url: this.ollamaBaseUrl
+        });
 
-        if (merchantData && merchantData.agent_id) {
-          const { data: relevantBlocks } = await this.supabaseService.rpc('match_context_blocks', {
-            p_agent_id: merchantData.agent_id,
-            p_merchant_id: this.merchantId,
-            p_query: userText,
-            p_limit: 3
-          });
+        if (queryEmbedding) {
+          console.log('🔍 Buscando fragmentos relevantes en el Cerebro...');
+          const { data: relevantChunks, error: searchError } = await this.supabaseService.searchKnowledgeBase(
+            this.merchantId,
+            queryEmbedding,
+            0.4, // Threshold un poco más flexible
+            5    // Traer hasta 5 fragmentos
+          );
 
-          if (relevantBlocks && relevantBlocks.length > 0) {
-            console.log('✨ Contexto útil encontrado:', relevantBlocks);
-            fullSystemInstruction += `\n\n### 📚 CONOCIMIENTO EN TIEMPO REAL (RAG):\nBasado en la pregunta del usuario, aquí tienes información exacta de la base de datos que DEBES usar para responder:\n`;
-            relevantBlocks.forEach((block: any) => {
-              fullSystemInstruction += `- **${block.title}**: ${block.content}\n`;
+          if (relevantChunks && relevantChunks.length > 0) {
+            console.log('✨ Conocimiento encontrado:', relevantChunks.length, 'fragmentos');
+            fullSystemInstruction += `\n\n### 📚 CONOCIMIENTO EXTRAÍDO DEL CEREBRO (RAG):\nUsa esta información específica para responder con precisión:\n`;
+            relevantChunks.forEach((chunk: any) => {
+              fullSystemInstruction += `- ${chunk.content}\n`;
             });
           }
         }
       } catch (ragError) {
-        console.error('⚠️ Error leve en Búsqueda Semántica, continuando sin contexto extra:', ragError);
+        console.error('⚠️ Error en RAG (Vectorial):', ragError);
       }
-      // ----------------------------------------------
+      // -------------------------------------------------------------
 
       fullSystemInstruction += `${systemNudge}\n\nESTADO ACTUAL DEL CARRITO (TOTAL: $${this.cartTotal.toFixed(2)}):\n${JSON.stringify(this.cart)}`;
 
@@ -735,9 +738,20 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
         body: JSON.stringify(requestBody)
       });
 
-      // Fallback para Gemini: si falla con system_instruction, intentar como mensaje USER
+      // Fallback 1: Si falla con 404 (v1beta not found), probar con v1 estable
+      if (this.aiProvider === 'google_gemini' && response.status === 404 && apiUrl.includes('v1beta')) {
+        console.log('🔄 Reintentando Gemini con v1 estable...');
+        apiUrl = apiUrl.replace('v1beta', 'v1');
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(requestBody)
+        });
+      }
+
+      // Fallback 2: si falla con system_instruction (solicitado en el 400), intentar como mensaje USER
       if (this.aiProvider === 'google_gemini' && !response.ok && !modelName.toLowerCase().includes('gemma-3')) {
-        console.log('🔄 Reintentando Gemini con fallback de mensaje USER...');
+        console.log('🔄 Reintentando Gemini con fallback de mensaje USER (blend)...');
 
         const blendedContents = JSON.parse(JSON.stringify(chatContents.slice(-10)));
         if (blendedContents.length > 0 && blendedContents[0].role === 'user') {
@@ -928,7 +942,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
       // Guardar respuesta de la IA en la DB
       if (this.dbConversationId) {
-        this.supabaseService.saveMessage(this.dbConversationId, 'ai', aiText);
+        await this.supabaseService.saveMessage(this.dbConversationId, 'ai', aiText, true);
       }
 
       this.cdr.detectChanges();

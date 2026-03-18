@@ -61,6 +61,9 @@ Deno.serve(async (req: Request) => {
 
         const body = await req.json();
         const entry = body.entry?.[0];
+        const isInstagram = body.object === "instagram";
+        const channelType = isInstagram ? "instagram" : "facebook";
+
         const messaging = entry?.messaging?.[0];
 
         if (!messaging) return new Response("ok", { headers: corsHeaders });
@@ -81,12 +84,12 @@ Deno.serve(async (req: Request) => {
         if (existing) return new Response("ok", { headers: corsHeaders });
 
         // Obtener o crear cliente
-        let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", merchantIdInternal).eq("facebook_user_id", senderId).maybeSingle();
+        let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", merchantIdInternal).eq(isInstagram ? "instagram_user_id" : "facebook_user_id", senderId).maybeSingle();
         if (!customer) {
             const { data: nc } = await supabase.from("customers").insert({
                 merchant_id: merchantIdInternal,
-                full_name: "Usuario Messenger",
-                facebook_user_id: senderId
+                full_name: isInstagram ? "Usuario Instagram" : "Usuario Messenger",
+                [isInstagram ? "instagram_user_id" : "facebook_user_id"]: senderId
             }).select().single();
             customer = nc;
         }
@@ -97,7 +100,7 @@ Deno.serve(async (req: Request) => {
             const { data: nconv } = await supabase.from("conversations").insert({
                 merchant_id: merchantIdInternal,
                 customer_id: customer!.id,
-                channel: "facebook",
+                channel: channelType,
                 status: "active"
             }).select().single();
             conversation = nconv;

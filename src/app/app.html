@@ -192,8 +192,8 @@
                     <span>Catálogo</span>
                 </a>
 
-                <!-- Cerebro de Empresa: Solo para comercios de Soporte/Atención (así se cumple el 'se cambia') -->
-                <a *ngIf="merchantIndustryType !== 'retail'" routerLink="/merchant-brain" routerLinkActive="active"
+                <!-- Cerebro de Empresa: Ahora disponible para todos (RAG para todos) -->
+                <a routerLink="/merchant-brain" routerLinkActive="active"
                     (click)="closeSidebar()" class="brain-btn-highlight">
                     <span class="icon">🧠</span>
                     <span>Cerebro de Empresa</span>
@@ -297,8 +297,5 @@
             <div class="loader-logo">W</div>
         </div>
         <h2 class="loading-text">Cargando Woox...</h2>
-        <div class="loading-bar">
-            <div class="loading-progress"></div>
-        </div>
     </div>
 </div>

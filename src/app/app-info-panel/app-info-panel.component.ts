@@ -311,7 +311,7 @@ export interface FeatureCategory {
     `]
 })
 export class AppInfoPanelComponent {
-    currentVersion = '2.5.0';
+    currentVersion = '2.6.0';
     activeTab = 'overview';
 
     tabs = [
@@ -432,16 +432,30 @@ export class AppInfoPanelComponent {
             ]
         },
         {
-            icon: '🔗',
-            title: 'Biolink & Landing Pages',
-            description: 'Páginas de destino para cada negocio',
+            icon: '🏗️',
+            title: 'Bot Builder 2.0 (Low-Code)',
+            description: 'Editor visual de flujos con arrastrar y soltar',
             features: [
-                'Generador de Biolink con editor visual',
-                'Personalización de colores y logo',
-                'Botones de acción configurables',
-                'URL pública por comercio',
-                'Integración con catálogo de productos',
-                'Enlace directo a WhatsApp con mensaje pre-cargado',
+                'Diseño visual de conversaciones con nodos y conexiones',
+                'Seguimiento en tiempo real (estilo n8n) con contadores',
+                'Integración nativa con n8n y herramientas MCP',
+                'Nodos de lógica: Switch, Delay y Horario Comercial',
+                'Router Semántico impulsado por LLM para clasificar intenciones',
+                'Generación de imágenes y consultas RAG integradas',
+                'Simulador de chat integrado con depurador de paso a paso',
+            ]
+        },
+        {
+            icon: '🔗',
+            title: 'Ecosistema de Integraciones',
+            description: 'Conecta Woox con cualquier servicio externo',
+            features: [
+                'Ejecución de flujos n8n desde el constructor de bots',
+                'Uso de herramientas MCP (Model Context Protocol)',
+                'Consumo de APIs REST personalizadas',
+                'Webhooks entrantes y salientes configurables',
+                'Sincronización con catálogos externos',
+                'Mensajería transaccional vía Email y WhatsApp',
             ]
         },
     ];
@@ -480,6 +494,21 @@ export class AppInfoPanelComponent {
     ];
 
     changelog: ChangelogEntry[] = [
+        {
+            version: 'v2.6.0',
+            date: '17 Mar 2026',
+            type: 'feature',
+            changes: [
+                'Bot Builder 2.0: Lanzamiento del editor visual de flujos low-code.',
+                'Tracing n8n-style: Animaciones de ejecución y contadores en el canvas.',
+                'Integración MCP: Soporte para herramientas de Model Context Protocol.',
+                'Integración n8n: Nodo dedicado para disparar flujos externos.',
+                'E-commerce Nodes: Búsqueda en catálogo, carrito y checkout visual.',
+                'IA: Nodo de Semantic Router para clasificación inteligente de flujos.',
+                'UI: Íconos y descripciones integradas directamente en los bloques del builder.',
+                'Mejora: Sistema de depuración paso a paso en el simulador.',
+            ]
+        },
         {
             version: 'v2.5.0',
             date: '08 Mar 2026',

@@ -104,12 +104,18 @@ export class SupabaseService {
         audio.play().catch(err => console.warn('Error playing notification sound:', err));
     }
 
-    async refreshGlobalUnreadCount(merchantId: string) {
+    async refreshGlobalUnreadCount(merchantId: string, totalCount?: number) {
         if (!merchantId || !this.isValidUUID(merchantId)) return;
+        
+        if (totalCount !== undefined) {
+             this.unreadCount.set(totalCount);
+             return;
+        }
+
         const { data } = await this.getConversations(merchantId);
         if (data) {
             const total = data.reduce((acc: number, curr: any) => acc + (curr.unread_count || 0), 0);
-            console.log('Validando Global Unread Count:', total);
+            console.log('Validando Global Unread Count (fetched):', total);
             this.unreadCount.set(total);
         }
     }
@@ -200,33 +206,6 @@ export class SupabaseService {
 
         const { count, error } = await query;
         return { exists: (count || 0) > 0, error };
-    }
-
-    // --- AGENTES (AI AGENTS) ---
-    async getAgents() {
-        const { data, error } = await supabase
-            .from('agents')
-            .select('*')
-            .order('created_at', { ascending: false });
-        return { data, error };
-    }
-
-    async saveAgent(agent: any) {
-        const agentToSave = { ...agent };
-        delete agentToSave.created_at;
-        delete agentToSave.context_blocks; // UI-only field
-
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!agentToSave.id || !uuidRegex.test(agentToSave.id)) {
-            delete agentToSave.id;
-        }
-
-        const { data, error } = await supabase
-            .from('agents')
-            .upsert(agentToSave)
-            .select()
-            .single();
-        return { data, error };
     }
 
 
@@ -470,7 +449,7 @@ export class SupabaseService {
         supabase.removeChannel(channel);
     }
 
-    async saveMessage(conversationId: string, senderType: 'ai' | 'human_agent' | 'customer', content: string) {
+    async saveMessage(conversationId: string, senderType: 'ai' | 'human_agent' | 'customer', content: string, skipDelivery: boolean = false) {
         // 1. Insertar el mensaje
         const { data, error } = await supabase
             .from('messages')
@@ -492,8 +471,8 @@ export class SupabaseService {
                     })
                     .eq('id', conversationId);
 
-                // 3. SI EL EMISOR ES HUMANO O IA, ENTREGAR AL CANAL EXTERNO
-                if (senderType === 'human_agent' || senderType === 'ai') {
+                // 3. SI EL EMISOR ES HUMANO O IA, ENTREGAR AL CANAL EXTERNO (OJO: No se entrega si es simulador)
+                if (!skipDelivery && (senderType === 'human_agent' || senderType === 'ai')) {
                     console.log(`[SupabaseService] Enviando entrega externa para: ${senderType}`);
                     // Llamar a la Edge Function de entrega
                     const { data: fetchRes, error: fetchErr } = await supabase.functions.invoke('deliver-message', {
@@ -516,8 +495,8 @@ export class SupabaseService {
         return { data, error };
     }
 
-    async sendHumanMessage(conversationId: string, content: string) {
-        return await this.saveMessage(conversationId, 'human_agent', content);
+    async sendHumanMessage(conversationId: string, content: string, skipDelivery: boolean = false) {
+        return await this.saveMessage(conversationId, 'human_agent', content, skipDelivery);
     }
 
     async generateGeminiResponse(userPrompt: string, systemContext: string, apiKey: string) {
@@ -722,51 +701,6 @@ export class SupabaseService {
         return await supabase.rpc(functionName, params);
     }
 
-    // --- NUEVO SISTEMA DE SKILLS RELACIONAL ---
-
-    async getSkillsCatalog() {
-        return await supabase
-            .from('skills_catalog')
-            .select('*')
-            .order('category', { ascending: true });
-    }
-
-    async getAgentSkills(agentId: string) {
-        return await supabase
-            .from('agent_skills')
-            .select(`
-                *,
-                skills_catalog (
-                    id,
-                    slug,
-                    name,
-                    description,
-                    category
-                )
-            `)
-            .eq('agent_id', agentId);
-    }
-
-    async updateAgentSkill(agentId: string, skillId: string, isEnabled: boolean) {
-        return await supabase
-            .from('agent_skills')
-            .upsert({
-                agent_id: agentId,
-                skill_id: skillId,
-                is_enabled: isEnabled
-            }, {
-                onConflict: 'agent_id,skill_id'
-            });
-    }
-
-    async deleteAgent(id: string) {
-        return await supabase.from('agents').delete().eq('id', id);
-    }
-
-    async saveSkillToCatalog(skill: any) {
-        return await supabase.from('skills_catalog').upsert(skill).select().single();
-    }
-
     // --- BOT BUILDER (FLUJOS PROGRAMADOS) ---
     async getBotFlows(merchantId: string) {
         return await supabase
@@ -795,6 +729,30 @@ export class SupabaseService {
         return await supabase.rpc('get_active_bot_flow', { p_merchant_id: merchantId });
     }
 
+    // --- PLANTILLAS DE FLUJOS (PLANTILLAS PRO) ---
+    async getBotFlowTemplates() {
+        return await supabase
+            .from('bot_flow_templates')
+            .select('*')
+            .order('created_at', { ascending: false });
+    }
+
+    async saveBotFlowTemplate(template: any) {
+        return await supabase
+            .from('bot_flow_templates')
+            .upsert(template)
+            .select()
+            .single();
+    }
+
+    async deleteBotFlowTemplate(id: string) {
+        return await supabase
+            .from('bot_flow_templates')
+            .delete()
+            .eq('id', id);
+    }
+
+
     async getOrCreateBotSession(conversationId: string, merchantId: string, flowId: string, startNodeId: string) {
         return await supabase.rpc('get_or_create_bot_session', {
             p_conversation_id: conversationId,
@@ -814,10 +772,6 @@ export class SupabaseService {
             .eq('id', sessionId);
     }
 
-    async deleteSkillFromCatalog(id: string) {
-        return await supabase.from('skills_catalog').delete().eq('id', id);
-    }
-
     // --- PLATFORM SETTINGS ---
     async getPlatformSettings() {
         return await supabase
@@ -831,38 +785,6 @@ export class SupabaseService {
         return await supabase
             .from('platform_settings')
             .upsert({ id: 'global', ...updates });
-    }
-
-    // --- KNOWLEDGE BASE MANAGEMENT ---
-
-    async getAgentContextBlocks(agentId: string) {
-        return await supabase
-            .from('agent_context_blocks')
-            .select('*')
-            .eq('agent_id', agentId);
-    }
-
-    async saveAgentContextBlock(block: any) {
-        return await supabase.from('agent_context_blocks').upsert(block).select().single();
-    }
-
-    async deleteAgentContextBlock(id: string) {
-        return await supabase.from('agent_context_blocks').delete().eq('id', id);
-    }
-
-    async getMerchantContextBlocks(merchantId: string) {
-        return await supabase
-            .from('merchant_context_blocks')
-            .select('*')
-            .eq('merchant_id', merchantId);
-    }
-
-    async saveMerchantContextBlock(block: any) {
-        return await supabase.from('merchant_context_blocks').upsert(block).select().single();
-    }
-
-    async deleteMerchantContextBlock(id: string) {
-        return await supabase.from('merchant_context_blocks').delete().eq('id', id);
     }
 
     // --- AI LANDING PAGES ---
@@ -888,5 +810,225 @@ export class SupabaseService {
             .upsert(landing)
             .select()
             .single();
+    }
+
+    // --- SCALABLE RAG MANAGEMENT (DOCUMENTS & CHUNKS) ---
+
+    async getKnowledgeBaseDocuments(merchantId: string) {
+        return await supabase
+            .from('knowledge_base_documents')
+            .select('*')
+            .eq('merchant_id', merchantId)
+            .order('updated_at', { ascending: false });
+    }
+
+    async saveKnowledgeBaseDocument(doc: any) {
+        return await supabase
+            .from('knowledge_base_documents')
+            .upsert(doc)
+            .select()
+            .single();
+    }
+
+    async deleteKnowledgeBaseDocument(id: string) {
+        return await supabase
+            .from('knowledge_base_documents')
+            .delete()
+            .eq('id', id);
+    }
+
+    async getKnowledgeBaseChunks(documentId: string) {
+        return await supabase
+            .from('knowledge_base_chunks')
+            .select('*')
+            .eq('document_id', documentId)
+            .order('chunk_index', { ascending: true });
+    }
+
+    async saveKnowledgeBaseChunk(chunk: any) {
+        return await supabase
+            .from('knowledge_base_chunks')
+            .insert(chunk)
+            .throwOnError();
+    }
+
+    async deleteKnowledgeBaseChunks(documentId: string) {
+        return await supabase
+            .from('knowledge_base_chunks')
+            .delete()
+            .eq('document_id', documentId);
+    }
+
+    async searchKnowledgeBase(merchantId: string, embedding: number[], threshold: number = 0.5, limit: number = 5) {
+        return await supabase.rpc('match_knowledge_base_chunks', {
+            p_merchant_id: merchantId,
+            p_embedding: embedding,
+            p_match_threshold: threshold,
+            p_match_count: limit
+        });
+    }
+
+    async generateEmbedding(text: string, settings: any): Promise<number[] | null> {
+        const provider = settings?.embed_provider || 'google_gemini';
+        let model = settings?.embed_model;
+        
+        // Defaults inteligentes para vector(768)
+        if (!model) {
+            model = provider === 'google_gemini' ? 'models/gemini-embedding-001' : 'text-embedding-3-small';
+        }
+
+        const apiKey = settings?.embed_api_key || settings?.ai_api_key;
+        const ollamaUrl = settings?.ollama_base_url || 'http://localhost:11434';
+
+        if (!apiKey && provider !== 'ollama') return null;
+
+        try {
+            if (provider === 'google_gemini') {
+                // El modelo 'models/gemini-embedding-001' es el estándar actual verificado para esta API Key.
+                // 'gemini-embedding-2-preview' también funciona pero devuelve 3072 dimensiones.
+                let targetModelId = model || 'models/gemini-embedding-001';
+                
+                // Normalizar prefijo
+                const fullModelId = targetModelId.includes('/') ? targetModelId : `models/${targetModelId}`;
+                
+                const body: any = {
+                    content: { parts: [{ text }] }
+                };
+                
+                // Intentamos pedir 768 si es un modelo moderno que lo soporte (como el preview 2)
+                if (fullModelId.includes('preview')) {
+                    body.outputDimensionality = 768;
+                }
+
+                const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fullModelId}:embedContent?key=${apiKey}`, {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await resp.json();
+                
+                if (data.error) {
+                    // Fallback de emergencia al único modelo garantizado si falla el del usuario
+                    if (fullModelId !== 'models/gemini-embedding-001') {
+                         console.warn('Fallo con modelo específico, intentando con gemini-embedding-001...');
+                         return this.generateEmbedding(text, { ...settings, embed_model: 'models/gemini-embedding-001' });
+                    }
+                    throw new Error(data.error.message || 'Error en API de Google');
+                }
+                
+                let values = data.embedding?.values;
+                if (!values || !Array.isArray(values)) throw new Error('Respuesta de API sin vector válido');
+
+                // SOLUCIÓN A LAS DIMENSIONES:
+                // Si el modelo es el Preview 2 o similar, puede devolver 3072.
+                // Como usamos Matryoshka embeddings, truncar los primeros 768 es totalmente válido.
+                if (values.length > 768) {
+                    console.log(`Dimensiones de IA excedidas (${values.length}), truncando a 768 para compatibilidad DB...`);
+                    values = values.slice(0, 768);
+                }
+
+                if (values.length < 768) {
+                    throw new Error(`El modelo devolvió muy pocas dimensiones (${values.length}). Se requieren 768.`);
+                }
+
+                return values;
+            } else if (provider === 'openai') {
+                const resp = await fetch('https://api.openai.com/v1/embeddings', {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                    body: JSON.stringify({ 
+                        model: model || 'text-embedding-3-small', 
+                        input: text,
+                        dimensions: 768 
+                    })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error.message || 'Error en API OpenAI');
+                return data.data?.[0]?.embedding || null;
+            } else if (provider === 'ollama') {
+                const headers: any = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' };
+                if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+                const resp = await fetch(`${ollamaUrl}/api/embeddings`, {
+                    method: 'POST', headers: headers,
+                    body: JSON.stringify({ model, prompt: text })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error || 'Error en API Ollama');
+                return data.embedding || null;
+            }
+        } catch (e: any) { 
+            console.error('Error absoluto en generateEmbedding:', e); 
+            throw e; 
+        }
+        return null;
+    }
+
+    // =====================================================================
+    // STUBS DE COMPATIBILIDAD (tablas legacy eliminadas - retornan vacío)
+    // Estos métodos existen únicamente para evitar errores de compilación en
+    // componentes que aún no han sido migrados. Las tablas agents, agent_skills,
+    // agent_context_blocks, merchant_context_blocks y skills_catalog fueron
+    // eliminadas de la base de datos.
+    // =====================================================================
+
+    async getAgents() {
+        console.warn('⚠️ getAgents(): La tabla agents fue eliminada.');
+        return { data: [], error: null };
+    }
+
+    async saveAgent(agent: any): Promise<{ data: any; error: any }> {
+        console.warn('⚠️ saveAgent(): La tabla agents fue eliminada.');
+        return { data: null, error: new Error('La tabla agents no existe') };
+    }
+
+    async deleteAgent(id: string) {
+        console.warn('⚠️ deleteAgent(): La tabla agents fue eliminada.');
+        return { data: null, error: new Error('La tabla agents no existe') };
+    }
+
+    async getAgentSkills(agentId: string) {
+        console.warn('⚠️ getAgentSkills(): La tabla agent_skills fue eliminada.');
+        return { data: [], error: null };
+    }
+
+    async updateAgentSkill(agentId: string, skillId: string, isEnabled: boolean) {
+        console.warn('⚠️ updateAgentSkill(): La tabla agent_skills fue eliminada.');
+        return { data: null, error: new Error('La tabla agent_skills no existe') };
+    }
+
+    async getAgentContextBlocks(agentId: string) {
+        console.warn('⚠️ getAgentContextBlocks(): La tabla agent_context_blocks fue eliminada.');
+        return { data: [], error: null };
+    }
+
+    async saveAgentContextBlock(block: any) {
+        console.warn('⚠️ saveAgentContextBlock(): La tabla agent_context_blocks fue eliminada.');
+        return { data: null, error: new Error('La tabla agent_context_blocks no existe') };
+    }
+
+    async deleteAgentContextBlock(id: string) {
+        console.warn('⚠️ deleteAgentContextBlock(): La tabla agent_context_blocks fue eliminada.');
+        return { data: null, error: new Error('La tabla agent_context_blocks no existe') };
+    }
+
+    async saveMerchantContextBlock(block: any) {
+        console.warn('⚠️ saveMerchantContextBlock(): La tabla merchant_context_blocks fue eliminada.');
+        return { data: null, error: new Error('La tabla merchant_context_blocks no existe') };
+    }
+
+    async getSkillsCatalog() {
+        console.warn('⚠️ getSkillsCatalog(): La tabla skills_catalog fue eliminada.');
+        return { data: [], error: null };
+    }
+
+    async saveSkillToCatalog(skill: any) {
+        console.warn('⚠️ saveSkillToCatalog(): La tabla skills_catalog fue eliminada.');
+        return { data: null, error: new Error('La tabla skills_catalog no existe') };
+    }
+
+    async deleteSkillFromCatalog(id: string) {
+        console.warn('⚠️ deleteSkillFromCatalog(): La tabla skills_catalog fue eliminada.');
+        return { data: null, error: new Error('La tabla skills_catalog no existe') };
     }
 }

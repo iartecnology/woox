@@ -64,7 +64,7 @@
                 <div *ngFor="let customer of filteredCustomers" class="customer-row"
                     [class.active]="selectedCustomer?.id === customer.id" (click)="selectCustomer(customer)">
                     <div class="customer-avatar" [class]="customer.loyalty_level">
-                        {{ customer.full_name?.charAt(0) || '?' }}
+                        {{ customer.full_name.charAt(0) || '?' }}
                         <span class="loyalty-badge" *ngIf="customer.loyalty_level !== 'bronze'">
                             {{ getLoyaltyIcon(customer.loyalty_level) }}
                         </span>
@@ -142,7 +142,7 @@
                 </div>
                 <div class="history-item" *ngIf="selectedCustomer.tags && selectedCustomer.tags.length > 0">
                     <div class="history-date">Preferencias detectadas por IA:</div>
-                    <div class="history-desc">{{ selectedCustomer.tags?.join(', ') }}</div>
+                    <div class="history-desc">{{ selectedCustomer.tags.join(', ') }}</div>
                 </div>
             </div>
         </div>

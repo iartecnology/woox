@@ -24,7 +24,6 @@ export class AiConfigComponent implements OnInit {
         ai_personality: '',
         ai_welcome_message: '',
         ai_model: 'gemini-1.5-flash',
-        agent_id: '',
         ai_restrictions: '',
         ai_use_catalog: true,
         ai_enabled: true,
@@ -172,10 +171,6 @@ export class AiConfigComponent implements OnInit {
     ];
 
     availablePromptRules: any[] = [];
-    skillsCatalog: any[] = [];
-    agentSkills: any[] = [];
-    merchantKnowledgeBlocks: any[] = [];
-    agentKnowledgeBlocks: any[] = [];
 
     isSaving: boolean = false;
     private catalogService = inject(CatalogService);
@@ -189,19 +184,8 @@ export class AiConfigComponent implements OnInit {
 
         if (this.merchantId) {
             await this.loadConfig();
-            await this.loadAgents();
-            await this.loadSkillsCatalog();
             this.catalogContext = await this.catalogService.getAIContextForMerchant(this.merchantId);
-
-            // Cargar Bloques de Conocimiento del Comercio
-            const { data: mBlocks } = await this.supabaseService.getMerchantContextBlocks(this.merchantId);
-            if (mBlocks) this.merchantKnowledgeBlocks = mBlocks;
         }
-    }
-
-    async loadSkillsCatalog() {
-        const { data } = await this.supabaseService.getSkillsCatalog();
-        if (data) this.skillsCatalog = data;
     }
 
     async loadConfig() {
@@ -223,30 +207,6 @@ export class AiConfigComponent implements OnInit {
     }
 
 
-
-    async loadAgents() {
-        const { data } = await this.supabaseService.getAgents();
-        if (data) {
-            this.agents = data;
-            // Si hay un agente seleccionado, cargar sus skills
-            if (this.merchantConfig.agent_id) {
-                this.loadAgentSkills();
-            }
-        }
-    }
-
-    async loadAgentSkills() {
-        if (!this.merchantConfig.agent_id) return;
-
-        const [skillsRes, blocksRes] = await Promise.all([
-            this.supabaseService.getAgentSkills(this.merchantConfig.agent_id),
-            this.supabaseService.getAgentContextBlocks(this.merchantConfig.agent_id)
-        ]);
-
-        if (skillsRes.data) this.agentSkills = skillsRes.data;
-        if (blocksRes.data) this.agentKnowledgeBlocks = blocksRes.data;
-    }
-
     setTab(tab: 'general' | 'training' | 'remarketing' | 'schedule') {
         this.activeTab = tab;
     }
@@ -261,9 +221,7 @@ export class AiConfigComponent implements OnInit {
             ai_menu_context: this.merchantConfig.ai_menu_context,
             ai_api_key: this.merchantConfig.ai_api_key,
             ai_model: this.merchantConfig.ai_model,
-            agent_id: this.merchantConfig.agent_id,
-            ai_restrictions: this.merchantConfig.ai_restrictions,
-            ai_use_catalog: this.merchantConfig.ai_use_catalog,
+            ai_restrictions: this.merchantConfig.ai_restrictions,            ai_use_catalog: this.merchantConfig.ai_use_catalog,
             ai_enabled: this.merchantConfig.ai_enabled,
             remarketing_enabled: this.merchantConfig.remarketing_enabled,
             remarketing_delay_minutes: this.merchantConfig.remarketing_delay_minutes,
@@ -279,11 +237,6 @@ export class AiConfigComponent implements OnInit {
         if (updates.ai_provider !== 'ollama') delete updates.ollama_base_url;
         if (updates.ai_provider !== 'lmstudio') delete updates.lmstudio_base_url;
 
-        // --- FIXED: Validar UUID para agent_id ---
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (updates.agent_id && !uuidRegex.test(updates.agent_id)) {
-            updates.agent_id = null;
-        }
 
         const { error } = await this.supabaseService.updateMerchant(this.merchantId, updates);
 
@@ -429,9 +382,6 @@ export class AiConfigComponent implements OnInit {
         }
     }
 
-    get selectedAgent(): any {
-        return this.agents.find(a => a.id === this.merchantConfig.agent_id);
-    }
 
     toggleAiEnabled() {
         if (this.merchantConfig.ai_enabled) {
@@ -452,11 +402,9 @@ export class AiConfigComponent implements OnInit {
     }
 
     get fullContext(): string {
-        const agent = this.selectedAgent;
         const catalogContext = this.catalogContext;
 
-        if (!agent) {
-            return `Eres el asistente virtual de ${this.merchantConfig.name}. 
+        return `Eres el asistente virtual de ${this.merchantConfig.name}. 
 Personalidad: ${this.merchantConfig.ai_personality || 'amable, servicial y eficiente'}.
 
 INSTRUCCIONES DE IDENTIDAD:
@@ -478,78 +426,5 @@ PROTOCOLO DE CIERRE (PASO A PASO):
 
 MENÚ DISPONIBLE:
 ${catalogContext}`;
-        }
-
-        // 1. Preparar Bloques de Datos Dinámicos
-        const combinedMenu = [
-            this.merchantConfig.ai_system_prompt || '',
-            this.merchantConfig.ai_use_catalog ? catalogContext : ''
-        ].filter(c => !!c).join('\n\n');
-
-        // 2. Preparar Conocimiento (Cerebro)
-        const agentKB = this.agentKnowledgeBlocks.map(b => `• ${b.title}: ${b.content}`).join('\n');
-        const merchantKB = this.merchantKnowledgeBlocks.map(b => `• ${b.title}: ${b.content}`).join('\n');
-
-        // 3. Preparar Skills (Fragmentos de Sistema)
-        const skillsFragments = this.agentSkills
-            .filter(s => s.is_enabled)
-            .map(s => s.skills_catalog?.system_prompt_fragment)
-            .filter(f => !!f)
-            .join('\n\n');
-
-        const combinedRestrictions = [
-            agent.restrictions || '',
-            this.merchantConfig.ai_restrictions || ''
-        ].filter(r => !!r).join('\n');
-
-        // 4. Construir Prompt Base
-        let finalPrompt = agent.system_prompt || '';
-
-        // Prioridad de Reemplazo
-        finalPrompt = finalPrompt
-            .replace(/{{merchantName}}/g, this.merchantConfig.name || 'la empresa')
-            .replace(/{{personality}}/g, this.merchantConfig.ai_personality || agent.personality || 'amable')
-            .replace(/{{welcomeMessage}}/g, this.merchantConfig.ai_welcome_message || agent.welcome_message || '');
-
-        // Inyectar Skills
-        if (skillsFragments) {
-            finalPrompt += '\n\n### CAPACIDADES Y PROTOCOLOS ADICIONALES (SKILLS) ###\n' + skillsFragments;
-        }
-
-        // Inyectar Conocimiento Maestro y Local
-        if (agentKB) {
-            finalPrompt += '\n\n### CONOCIMIENTO MAESTRO (REGLAS GENERALES) ###\n' + agentKB;
-        }
-        if (merchantKB) {
-            finalPrompt += '\n\n### CONOCIMIENTO ESPECÍFICO DEL LOCAL (MÁXIMA PRIORIDAD) ###\n' + merchantKB;
-        }
-
-        // Reemplazar o Append de Instrucciones, Restricciones y Menú
-        if (finalPrompt.includes('{{systemPrompt}}')) {
-            finalPrompt = finalPrompt.replace(/{{systemPrompt}}/g, this.merchantConfig.ai_system_prompt || '');
-        } else if (this.merchantConfig.ai_system_prompt) {
-            finalPrompt += '\n\n### INSTRUCCIONES MANUALES DEL COMERCIO ###\n' + this.merchantConfig.ai_system_prompt;
-        }
-
-        if (finalPrompt.includes('{{restrictions}}')) {
-            finalPrompt = finalPrompt.replace(/{{restrictions}}/g, combinedRestrictions);
-        } else {
-            finalPrompt += '\n\n### RESTRICCIONES Y PROHIBICIONES ###\n' + (combinedRestrictions || 'No hay restricciones específicas.');
-        }
-
-        if (finalPrompt.includes('{{catalogContext}}')) {
-            finalPrompt = finalPrompt.replace(/{{catalogContext}}/g, combinedMenu);
-        } else {
-            finalPrompt += `\n\n### !!! FUENTE DE VERDAD ABSOLUTA - CATÁLOGO OFICIAL !!! ###
-IMPORTANTE: Olvida cualquier conocimiento previo sobre productos, menús o precios de este tipo de negocio que tengas de tu entrenamiento general.
-Tu ÚNICA fuente de verdad es la lista que se muestra a continuación. Si un producto NO está en esta lista, NO EXISTE para ti. No lo inventes ni lo menciones.
-
-LISTA DE PRODUCTOS REALES EN ${this.merchantConfig.name}:\n` + combinedMenu;
-        }
-
-        // Limpieza final de placeholders no reemplazados en fragments
-        finalPrompt = finalPrompt.replace(/{{merchantName}}/g, this.merchantConfig.name || 'la empresa');
-
-        return finalPrompt;
     }
 }

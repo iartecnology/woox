@@ -18,6 +18,9 @@
     <button id="btn-plantillas" class="btn-icon" (click)="openTemplateModal()">
       🔥 Plantillas Pro
     </button>
+    <button *ngIf="isSuperAdmin" class="btn-icon btn-outline" (click)="showSaveTemplateModal = true">
+      🎁 Guardar como Plantilla
+    </button>
     <button class="btn-icon" (click)="toggleChat()" [class.active]="showTestChat">
       {{ showTestChat ? '🚫 Cerrar Pruebas' : '▶ Probar Flujo' }}
     </button>
@@ -36,7 +39,10 @@
       <p>Elige una estructura base para comenzar tu flujo más rápido:</p>
       <div class="template-grid">
         <div class="template-card" *ngFor="let t of templates" (click)="selectTemplate(t.id)">
-          <div class="template-card-icon">{{ t.icon }}</div>
+          <div class="template-card-icon">
+            <i *ngIf="t.icon?.startsWith('fa-')" [class]="t.icon"></i>
+            <span *ngIf="!t.icon?.startsWith('fa-')">{{ t.icon || '📄' }}</span>
+          </div>
           <div class="template-card-body">
             <h4>{{ t.name }}</h4>
             <p>{{ t.description }}</p>
@@ -67,11 +73,16 @@
 <div class="builder-container">
   <!-- Paleta de Nodos -->
   <div class="nodes-palette">
-    <div class="palette-item" *ngFor="let item of paletteItems" 
-         [class]="'type-' + item.type"
-         (click)="addNode(item.type, 100, 100)">
-      <div class="icon">{{ item.icon }}</div>
-      <div class="label">{{ item.label }}</div>
+    <div class="palette-category" *ngFor="let cat of paletteCategories">
+      <h4 class="category-title">{{ cat.name }}</h4>
+      <div class="palette-items-group">
+        <div class="palette-item" *ngFor="let item of cat.items" 
+             [class]="'type-' + item.type"
+             (click)="addNode(item.type, 100, 100)">
+          <div class="icon">{{ item.icon }}</div>
+          <div class="label">{{ item.label }}</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -104,10 +115,19 @@
       <g [attr.transform]="'translate(' + viewTransform.x + ',' + viewTransform.y + ') scale(' + viewTransform.scale + ')'">
         
         <!-- Conexiones Existentes -->
-        <path *ngFor="let conn of botFlow.flow_data.connections"
-              [attr.d]="getConnectionPath(conn)"
-              class="connection-path active">
-        </path>
+        <g *ngFor="let conn of botFlow.flow_data.connections">
+          <path [attr.id]="'conn-' + conn.id"
+                [attr.d]="getConnectionPath(conn)"
+                class="connection-path"
+                [class.connection-active]="isConnectionActive(conn)"></path>
+                
+          <!-- Partícula de datos viajando (solo visible un momento después de ejecutar) -->
+          <circle *ngIf="isConnectionActive(conn)" r="6" fill="#10b981" class="data-particle">
+            <animateMotion dur="0.7s" repeatCount="1" fill="freeze">
+              <mpath [attr.href]="'#conn-' + conn.id"/>
+            </animateMotion>
+          </circle>
+        </g>
 
         <!-- Conexión Temporal (mientras se arrastra) -->
         <path *ngIf="isConnecting"
@@ -119,28 +139,67 @@
         <g *ngFor="let node of botFlow.flow_data.nodes" 
            class="node-group" 
            [class.selected]="selectedNode?.id === node.id"
+           [class.active-node]="activeSimNodeId === node.id"
+           [class.just-executed]="justExecutedNodeId === node.id"
            [attr.transform]="'translate(' + node.position.x + ',' + node.position.y + ')'"
            (mousedown)="onNodeMouseDown($event, node)"
            (dblclick)="onNodeDblClick($event, node)">
           
           <!-- Fondo del Nodo -->
-          <rect width="220" [attr.height]="node.type === 'menu' ? 80 + (node.data.options?.length || 0) * 24 : (node.type === 'condition' ? 95 : 80)" rx="12"
+          <rect width="220" [attr.height]="node.type === 'menu' ? 80 + (node.data.options?.length || 0) * 24 : (node.type === 'switch' ? 80 + (node.data.switch_cases?.length || 0) * 24 : (node.type === 'condition' ? 95 : (node.type === 'business_hours' ? 100 : 80)))" rx="12"
                 class="node-rect"
-                [attr.fill]="activeSimNodeId === node.id ? '#065f46' : (node.type === 'start' ? '#065f46' : (node.type === 'end' ? '#374151' : (node.type === 'condition' ? '#1e3a5f' : (node.type === 'ai_agent' ? '#581c87' : (node.type === 'ai_skill' ? '#0891b2' : '#1e293b')))))"
-                [attr.stroke]="activeSimNodeId === node.id ? '#10b981' : (selectedNode?.id === node.id ? '#4f46e5' : 'rgba(255,255,255,0.1)')"
-                [attr.stroke-width]="activeSimNodeId === node.id ? 3 : 1"
+                [attr.fill]="getNodeColor(node.type)"
+                [attr.stroke]="selectedNode?.id === node.id ? '#4f46e5' : 'rgba(255,255,255,0.1)'"
+                [attr.stroke-width]="selectedNode?.id === node.id ? 3 : 1"
                 filter="url(#shadow)" />
           
           <!-- Título -->
-          <text x="16" y="30" fill="white" font-size="14" font-weight="600" class="no-select">
-             {{ node.type === 'ai_agent' ? '🧠 ' + node.data.label : node.data.label }}
+          <text x="16" y="28" fill="white" font-size="13" font-weight="700" class="no-select">
+             {{ getNodeIcon(node.type) }} {{ node.data.label || getNodeLabel(node.type) }}
           </text>
+
+          <!-- Descripción -->
+          <text x="16" y="42" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="400" class="no-select">
+            {{ getNodeDescription(node.type) }}
+          </text>
+
+          <!-- ======================================================= -->
+          <!-- EXECUTION TRACKING (n8n-style) -->
+          <!-- ======================================================= -->
+
+          <!-- Badge de Contador de Ejecuciones (Top-Right) -->
+          <g *ngIf="getNodeExecutionCount(node.id) > 0" transform="translate(215, 12)" class="exec-count-badge">
+            <rect x="-10" y="-10" width="20" height="20" rx="4" fill="#6366f1" stroke="#1e1b4b" stroke-width="1.5"/>
+            <text fill="white" font-size="9" font-weight="900" text-anchor="middle" dominant-baseline="central"
+                  class="no-select">{{ getNodeExecutionCount(node.id) }}</text>
+          </g>
+
+          <!-- Ícono ✓ con BOUNCE (Top-Left) -->
+          <g *ngIf="justExecutedNodeId === node.id" transform="translate(10, 10)" class="exec-check-bounce">
+            <circle r="10" fill="#10b981" stroke="#064e3b" stroke-width="1.5"/>
+            <text fill="white" font-size="10" font-weight="900" text-anchor="middle" dominant-baseline="central"
+                  class="no-select">✓</text>
+          </g>
+          <!-- Anillo de progreso / Glow mientras está ACTIVO -->
+          <g *ngIf="activeSimNodeId === node.id">
+            <rect x="-4" y="-4" width="228" height="108" rx="14" fill="none" 
+                  stroke="#10b981" stroke-width="3" class="pulse-glow"/>
+          </g>
+
+          <!-- Spinner ACTIVO (Top-Center) -->
+          <g *ngIf="activeSimNodeId === node.id" transform="translate(110, -12)">
+            <rect x="-40" y="-8" width="80" height="16" rx="8" fill="#10b981" class="pulse-ring"/>
+            <text fill="white" font-size="8" font-weight="900" text-anchor="middle" dominant-baseline="central"
+                  class="no-select">RUNNING...</text>
+          </g>
+
+
 
           <!-- Divider para AI Agent -->
           <line *ngIf="node.type === 'ai_agent'" x1="16" y1="38" x2="200" y2="38" stroke="rgba(255,255,255,0.1)" />
 
           <!-- Previsualización contenido -->
-          <text x="16" [attr.y]="node.type === 'ai_agent' ? 56 : 52" fill="rgba(255,255,255,0.6)" font-size="11" class="no-select">
+          <text x="16" [attr.y]="node.type === 'ai_agent' ? 62 : 58" fill="rgba(255,255,255,0.5)" font-size="10" class="no-select">
             {{ getNodePreview(node) }}
           </text>
 
@@ -158,6 +217,7 @@
           </circle>
 
           <!-- Puertos de Salida -->
+          <!-- Puertos de Salida -->
           <ng-container [ngSwitch]="node.type">
             <!-- Sin salida -->
             <circle *ngSwitchCase="'menu'" [hidden]="true"></circle>
@@ -173,19 +233,43 @@
                       (mousedown)="onPortMouseDown($event, node, 'no')"></circle>
             </g>
 
-            <!-- Salida única para nodos normales -->
-            <circle *ngSwitchDefault
-                    cx="220" cy="40" r="7" fill="#0f172a" stroke="#10b981" stroke-width="2" class="port"
-                    (mousedown)="onPortMouseDown($event, node, 'output')">
-            </circle>
+            <!-- Business Hours: puertos Abierto y Cerrado -->
+            <g *ngSwitchCase="'business_hours'">
+              <text x="16" y="70" fill="#10b981" font-size="10" class="no-select">🕒 Abierto</text>
+              <circle cx="220" cy="67" r="6" fill="#0f172a" stroke="#10b981" stroke-width="2" class="port"
+                      (mousedown)="onPortMouseDown($event, node, 'open')"></circle>
+              <text x="16" y="86" fill="#ef4444" font-size="10" class="no-select">🌙 Cerrado</text>
+              <circle cx="220" cy="83" r="6" fill="#0f172a" stroke="#ef4444" stroke-width="2" class="port"
+                      (mousedown)="onPortMouseDown($event, node, 'closed')"></circle>
+            </g>
 
-            <!-- Puerto de salida para AI Skill (Circular/Módulo) -->
+            <!-- AI Skill Port -->
             <circle *ngSwitchCase="'ai_skill'"
                     cx="110" cy="0" r="8" fill="#0f172a" stroke="#0891b2" stroke-width="2" class="port"
                     (mousedown)="onPortMouseDown($event, node, 'skill_out')">
             </circle>
 
-            <!-- Puertos de menú por opción -->
+            <!-- Switch Cases -->
+            <g *ngSwitchCase="'switch'">
+              <g *ngFor="let c of node.data.switch_cases; let i = index">
+                 <text x="16" [attr.y]="75 + (i * 24)" fill="white" font-size="11" class="no-select">⮑ {{ c.label }}</text>
+                 <circle cx="220" [attr.cy]="70 + (i * 24)" r="6" fill="#0f172a" stroke="#1e3a8a" stroke-width="2" class="port"
+                         (mousedown)="onPortMouseDown($event, node, c.id)">
+                 </circle>
+              </g>
+            </g>
+
+            <!-- Semantic Router Ports -->
+            <g *ngSwitchCase="'semantic_router'">
+              <g *ngFor="let intent of node.data.ai_intents; let i = index">
+                 <text x="16" [attr.y]="75 + (i * 24)" fill="#ec4899" font-size="11" font-weight="bold" class="no-select">↱ {{ intent.name }}</text>
+                 <circle cx="220" [attr.cy]="70 + (i * 24)" r="6" fill="#0f172a" stroke="#ec4899" stroke-width="2" class="port"
+                         (mousedown)="onPortMouseDown($event, node, intent.id)">
+                 </circle>
+              </g>
+            </g>
+
+            <!-- Menu Options -->
             <g *ngSwitchCase="'menu'">
               <g *ngFor="let opt of node.data.options; let i = index">
                  <text x="16" [attr.y]="75 + (i * 24)" fill="white" font-size="11" class="no-select">{{ i + 1 }}. {{ opt.text }}</text>
@@ -194,43 +278,149 @@
                  </circle>
               </g>
             </g>
+
+            <!-- Nodes without output ports -->
+            <g *ngSwitchCase="'end'"></g>
+            <g *ngSwitchCase="'transfer_operator'"></g>
+
+            <!-- Default Single Output -->
+            <circle *ngSwitchDefault
+                    cx="220" cy="40" r="7" fill="#0f172a" stroke="#10b981" stroke-width="2" class="port"
+                    (mousedown)="onPortMouseDown($event, node, 'output')">
+            </circle>
           </ng-container>
         </g>
       </g>
     </svg>
   </div>
 
-  <!-- Simulador de Chat (Lado Derecho) -->
+  <!-- Simulador de Chat (Panel Derecho Mejorado con Tabs) -->
   <div class="test-chat-panel" [class.hidden]="!showTestChat">
-    <div class="chat-header">
-      <h4>🤖 Simulador de Bot</h4>
-      <button class="btn btn-sm btn-outline-secondary" (click)="resetChat()">🔄 Reiniciar</button>
+    
+    <!-- Tab Navigation -->
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab" [class.active]="activeSidebarTab === 'simulator'" (click)="activeSidebarTab = 'simulator'">
+        <i class="fa-solid fa-gamepad"></i> Simulador
+      </button>
+      <button class="sidebar-tab" [class.active]="activeSidebarTab === 'architect'" (click)="activeSidebarTab = 'architect'">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Arquitecto IA
+      </button>
     </div>
 
-    <div class="chat-messages" #chatScroll>
-      <div class="chat-empty" *ngIf="chatMessages.length === 0">
-        <span>🧪</span>
-        <p>Inicia una prueba para ver cómo interactúa tu bot.</p>
-      </div>
-      
-      <div *ngFor="let msg of chatMessages" class="msg" [class]="msg.sender">
-        {{ msg.text }}
+    <!-- Panel Content: Simulator -->
+    <div class="tab-panel-content" *ngIf="activeSidebarTab === 'simulator'">
+      <div class="chat-header">
+        <h4>🤖 Simulador de Bot</h4>
+        <div class="chat-header-actions">
+          <button class="btn-reset-session" (click)="clearSimulatorSession()" 
+                  *ngIf="totalSessionExecutions > 0" title="Limpiar contadores de sesión">🗑️</button>
+          <button class="btn btn-sm btn-outline-secondary" (click)="resetChat()">🔄</button>
+        </div>
       </div>
 
-      <!-- Animación de Escribiendo -->
-      <div class="typing" *ngIf="isBotTyping">
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
+      <!-- Barra de Estado de Sesión (aparece cuando hay ejecuciones) -->
+      <div class="sim-stats-bar" *ngIf="totalSessionExecutions > 0">
+        <div class="stat-pill">
+          <span class="stat-pill-icon">⚡</span>
+          <span class="stat-pill-val">{{ totalSessionExecutions }}</span>
+          <span class="stat-pill-label">runs</span>
+        </div>
+        <div class="stat-pill" *ngIf="activeSimNodeId">
+          <span class="stat-pill-icon">📍</span>
+          <span class="stat-pill-val stat-pill-val--sm">{{ getActiveNodeLabel() }}</span>
+        </div>
+        <div class="stat-pill" *ngIf="getVariableCount() > 0">
+          <span class="stat-pill-icon">📦</span>
+          <span class="stat-pill-val">{{ getVariableCount() }}</span>
+          <span class="stat-pill-label">vars</span>
+        </div>
+      </div>
+
+      <div class="chat-messages" #chatScroll>
+        <div class="chat-empty" *ngIf="chatMessages.length === 0">
+          <span>🧪</span>
+          <p>Inicia una prueba para ver cómo interactúa tu bot.</p>
+        </div>
+        
+        <div *ngFor="let msg of chatMessages" class="msg" [class]="msg.sender">
+          <div class="msg-text">{{ msg.text }}</div>
+          <div class="msg-meta" *ngIf="msg.meta && msg.sender === 'bot'">
+            <span>🪙 {{ msg.meta.tokens }} tokens</span>
+            <span>⏱️ {{ msg.meta.time }}ms</span>
+          </div>
+        </div>
+
+        <div class="typing" *ngIf="isBotTyping">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+
+      <!-- Historial de Ejecuciones de Sesión -->
+      <div class="exec-log-panel" *ngIf="sessionExecutionLog.length > 0">
+        <div class="exec-log-header">
+          <span>📊 Historial</span>
+          <span class="exec-log-count">{{ sessionExecutionLog.length }} pasos</span>
+        </div>
+        <div class="exec-log-scroll">
+          <div class="exec-log-entry" *ngFor="let entry of sessionExecutionLog">
+            <span class="entry-icon">{{ getNodeIcon(entry.nodeType) }}</span>
+            <span class="entry-label">{{ entry.nodeLabel }}</span>
+            <span class="entry-count">×{{ entry.totalCount }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" placeholder="Escribe un mensaje..." 
+               [(ngModel)]="userChatInput" (keyup.enter)="sendChatMessage()">
+        <button class="btn-send" (click)="sendChatMessage()"><i class="fa-solid fa-paper-plane"></i></button>
       </div>
     </div>
 
-    <div class="chat-input-area">
-      <input type="text" class="chat-input" placeholder="Escribe un mensaje..." 
-             [(ngModel)]="userChatInput" (keyup.enter)="sendChatMessage()">
-      <button class="btn-send" (click)="sendChatMessage()">🚀</button>
+    <!-- Panel Content: Architect (IA Assist) -->
+    <div class="tab-panel-content architect-mode" *ngIf="activeSidebarTab === 'architect'">
+      <div class="chat-header">
+        <h4>🏗️ Arquitecto de Flujos</h4>
+        <div class="badge-architect">IA Design</div>
+      </div>
+
+      <div class="chat-messages architect-chat-messages" #architectScroll>
+        <!-- Info Alert -->
+        <div class="alert alert-primary small mb-3 border-0" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+          💡 Pídeme crear un flujo para ventas, conectar nodos o añadir una skill específica.
+        </div>
+
+        <div *ngFor="let msg of architectMessages" class="msg" [class]="msg.sender">
+          <div class="msg-text">
+            {{ msg.text }}
+            
+            <!-- Botón para aplicar sugerencia -->
+            <div class="msg-actions mt-2" *ngIf="msg.suggestion">
+              <button class="btn btn-sm architect-accent text-white w-100" (click)="applyArchitectSuggestion(msg.suggestion)">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Aplicar este diseño
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="typing" *ngIf="isArchitectTyping">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" placeholder="¿Cómo quieres cambiar el flujo?..." 
+               [(ngModel)]="architectInput" (keyup.enter)="sendArchitectMessage()">
+        <button class="btn-send architect-accent" (click)="sendArchitectMessage()"><i class="fa-solid fa-sparkles"></i></button>
+      </div>
     </div>
+
   </div>
+
 </div>
 
 <!-- Modal de Propiedades Contextual -->
@@ -344,12 +534,11 @@
       <div class="tab-content" *ngIf="activeNodeTab === 'general'">
         <div class="form-group">
           <label>Modelo de IA</label>
-          <select class="form-control" [(ngModel)]="editingNode.data.model">
-            <option value="gemini-1.5-flash">Google Gemini 1.5 Flash (Rápido)</option>
-            <option value="gemini-1.5-pro">Google Gemini 1.5 Pro (Inteligente)</option>
-            <option value="gpt-4o">OpenAI GPT-4o (Premium)</option>
-            <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Económico)</option>
-          </select>
+          <div class="alert alert-secondary py-2 px-3 small d-flex align-items-center gap-2">
+            <span>⚙️</span>
+            <span>Usa la configuración global del comercio.</span>
+          </div>
+          <div class="label-hint">Puedes cambiar el modelo desde **Configuración > IA** en el panel principal.</div>
         </div>
         <div class="form-group">
           <label>Temperatura (Creatividad: {{editingNode.data.temperature}})</label>
@@ -396,25 +585,278 @@
     <!-- Campos del Nodo AI Skill -->
     <div *ngIf="editingNode.type === 'ai_skill'" class="ai-skill-properties" style="grid-column: span 2;">
       <div class="form-group">
-        <label>Habilidad Prediseñada (Skill)</label>
+        <label>Habilidad (Tool del Agente IA)</label>
         <select class="form-control" [(ngModel)]="editingNode.data.actionType">
-          <option value="catalog_search">🔍 Catálogo: Buscar productos</option>
-          <option value="inventory_check">📦 Stock: Consultar existencias</option>
-          <option value="order_status">🚚 Pedidos: Rastrear estado</option>
-          <option value="knowledge_base">📚 FAQ: Base de conocimientos</option>
-          <option value="human_support">🎧 Humano: Transferir a agente</option>
-          <option value="shopping_cart">🛒 Carrito: Ver/Limpiar pedido</option>
+          <optgroup label="📦 Catálogo y Stock">
+            <option value="catalog_search">🔍 Buscar productos en catálogo</option>
+            <option value="inventory_check">📦 Consultar stock disponible</option>
+          </optgroup>
+          <optgroup label="🛒 Carrito de Compras">
+            <option value="add_to_cart">➕ Añadir producto al carrito</option>
+            <option value="get_cart">👁️ Ver carrito actual</option>
+            <option value="remove_from_cart">🗑️ Eliminar producto del carrito</option>
+          </optgroup>
+          <optgroup label="📋 Pedidos">
+            <option value="register_order">✅ Confirmar y registrar pedido</option>
+            <option value="order_status">🚚 Consultar estado de pedido</option>
+          </optgroup>
+          <optgroup label="🧠 Conocimiento">
+            <option value="knowledge_base">📚 Consultar Base de Conocimiento (RAG)</option>
+          </optgroup>
+          <optgroup label="🎧 Soporte">
+            <option value="transfer_human">👤 Transferir a agente humano</option>
+          </optgroup>
         </select>
-        <div class="label-hint mt-2">Conecta este nodo al puerto inferior (TOOLS) del Agente IA.</div>
+        <div class="label-hint mt-2">Conecta este nodo al puerto inferior <b>TOOLS</b> del Agente IA.</div>
+      </div>
+
+      <!-- VISOR DE CONOCIMIENTO PARA RAG -->
+      <div class="knowledge-preview-section mt-3" *ngIf="editingNode.data.actionType === 'knowledge_base'">
+        <label class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-bold small">📚 Conocimiento Disponible ({{ knowledgeDocuments.length }})</span>
+          <button class="btn btn-sm btn-link p-0 text-decoration-none" (click)="loadKnowledgeDocuments()">🔄</button>
+        </label>
+        <div class="knowledge-mini-list">
+          <div class="k-mini-item d-flex justify-content-between align-items-center mb-2 p-2 border rounded" *ngFor="let doc of knowledgeDocuments" style="background: #f8fafc; font-size: 0.8rem;">
+            <div class="k-title text-truncate" style="max-width: 150px;">
+              <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10b981; margin-right: 6px;"></span>
+              {{ doc.title }}
+            </div>
+            <button class="btn btn-sm btn-outline-primary py-0" (click)="previewKnowledge(doc)" style="font-size: 0.7rem;">👁️ Ver</button>
+          </div>
+          <div *ngIf="knowledgeDocuments.length === 0" class="empty-k-msg small text-muted text-center p-3 border border-dashed rounded">
+             ⚠️ No hay documentos. Agrégalos en <b>Cerebro > Conocimiento</b>.
+          </div>
+        </div>
       </div>
       
       <div class="form-group mt-3">
-        <label>Descripción para la IA</label>
-        <textarea class="form-control" rows="3" [(ngModel)]="editingNode.data.message" 
-                  placeholder="Ej: Úsalo para saber si hay stock de una hamburguesa..."></textarea>
-         <div class="label-hint">Explícale a la IA exactamente para qué sirve esta herramienta.</div>
+        <label>Descripción para la IA <span style="color:#94a3b8">(opcional)</span></label>
+        <textarea class="form-control" rows="2" [(ngModel)]="editingNode.data.message" 
+                  placeholder="Deja en blanco para usar la descripción por defecto, o personaliza aquí..."></textarea>
+         <div class="label-hint">La IA usará esta descripción para decidir cuándo llamar a esta herramienta.</div>
       </div>
     </div>
+    <div *ngIf="editingNode.type === 'n8n'" class="form-group" style="grid-column: span 2;">
+      <label>URL del Webhook de N8n</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.n8n_webhook_url" placeholder="https://n8n.tu-dominio.com/webhook/..." />
+      
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" [(ngModel)]="editingNode.data.n8n_wait_for_response" id="waitN8nSwitch">
+        <label class="form-check-label" for="waitN8nSwitch">Esperar respuesta de N8n (Webhook Reply)</label>
+      </div>
+      <div class="label-hint">Si está desactivado, el flujo continuará inmediatamente (Fire & Forget).</div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'mcp'" class="form-group" style="grid-column: span 2;">
+      <label>Nombre de Herramienta MCP</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.mcp_tool_name" placeholder="ej. list_github_repos" />
+      
+      <label>Servidor MCP (Opcional ID)</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.mcp_server_id" placeholder="ID del servidor conectado" />
+      <div class="label-hint">Permite al bot ejecutar herramientas locales o remotas mediante Model Context Protocol.</div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'api'" class="form-group" style="grid-column: span 2;">
+      <label>Método de Petición HTTP</label>
+      <select class="form-control mb-3" [(ngModel)]="editingNode.data.api_method">
+        <option value="GET">GET</option>
+        <option value="POST">POST</option>
+        <option value="PUT">PUT</option>
+      </select>
+
+      <label>URL del Endpoint</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.api_url" placeholder="https://api.tu-servicio.com/v1/data" />
+      
+      <label>Body (JSON) <span style="color:#94a3b8">(opcional)</span></label>
+      <textarea class="form-control mb-3" rows="3" [(ngModel)]="editingNode.data.api_body" placeholder='{"clave": "valor"}'></textarea>
+
+      <label>Variable de mapeo de respuesta <span style="color:#94a3b8">(opcional)</span></label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.response_mapping" placeholder="ej. api_resultado" />
+      <div class="label-hint">Guarda la respuesta en esta variable para usarla luego en el flujo.</div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'memory_extract'" class="form-group" style="grid-column: span 2;">
+      <label>Instrucciones de Extracción para la IA</label>
+      <textarea class="form-control mb-3" rows="3" [(ngModel)]="editingNode.data.memory_prompt" placeholder="Ej: Extrae el email y teléfono del usuario..."></textarea>
+      
+      <label>Clave / Nombre de Variable de Guardado</label>
+      <input type="text" class="form-control" [(ngModel)]="editingNode.data.memory_key" placeholder="datos_extraidos" />
+      <div class="label-hint mt-2">La IA leerá el historial reciente y almacenará el dato extraído bajo esta variable.</div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'db_query'" class="form-group" style="grid-column: span 2;">
+      <label>Tabla a Consultar</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.db_table" placeholder="ej: orders" />
+      
+      <label>Operación</label>
+      <select class="form-control mb-3" [(ngModel)]="editingNode.data.db_operation">
+        <option value="select">Seleccionar / Buscar</option>
+        <option value="insert">Insertar Nuvo Registro</option>
+      </select>
+      
+      <label>Columna / Campo a buscar</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.db_column" placeholder="customer_id" />
+      
+      <label>Valor <span style="color:#94a3b8">(Valen variables)</span></label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.db_value" placeholder="valor estatico o dinamico" />
+      
+      <label>Guardar resultado en variable (Opcional)</label>
+      <input type="text" class="form-control" [(ngModel)]="editingNode.data.response_mapping" placeholder="resultado_db" />
+    </div>
+
+    <div *ngIf="editingNode.type === 'set_variable'" class="form-group" style="grid-column: span 2;">
+      <label>Clave de la Variable</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.variable_name" placeholder="ej: contador_intentos" />
+      
+      <label>Valor a Asignar</label>
+      <input type="text" class="form-control" [(ngModel)]="editingNode.data.variable_value" placeholder="ej: valor o variable matematica" />
+      <div class="label-hint mt-2">Puedes usar variables dinámicas.</div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'switch'" class="form-group" style="grid-column: span 2;">
+      <label>Variable a Evaluar</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.switch_variable" placeholder="nombre_variable" />
+      
+      <label class="d-flex justify-content-between">
+        Salidas (Cases)
+        <button class="btn btn-sm btn-link text-primary p-0" (click)="addSwitchCase()">+ Añadir Caso</button>
+      </label>
+      <div *ngFor="let c of editingNode.data.switch_cases; let i = index" class="mt-2 d-flex gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm" [(ngModel)]="c.value" placeholder="Valor (ej. Ventas)" />
+        <input type="text" class="form-control form-control-sm" [(ngModel)]="c.label" placeholder="Etiqueta" />
+        <button class="btn btn-sm btn-outline-danger" (click)="removeSwitchCase(i)">✕</button>
+      </div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'delay'" class="form-group" style="grid-column: span 2;">
+      <label>Tiempo de espera</label>
+      <div class="row">
+        <div class="col">
+          <label class="small text-muted">Horas</label>
+          <input type="number" class="form-control" [(ngModel)]="editingNode.data.delay_hours" />
+        </div>
+        <div class="col">
+          <label class="small text-muted">Minutos</label>
+          <input type="number" class="form-control" [(ngModel)]="editingNode.data.delay_minutes" />
+        </div>
+      </div>
+      <div class="label-hint mt-2">El bot pausará el flujo y lo retomará tras este tiempo.</div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'business_hours'" class="form-group" style="grid-column: span 2;">
+      <label>Zona Horaria</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.timezone" placeholder="America/Bogota" />
+      
+      <label class="mb-2">Configuración Semanal</label>
+      <div *ngFor="let h of editingNode.data.business_hours" class="d-flex gap-2 align-items-center mb-1 small">
+        <input type="checkbox" [(ngModel)]="h.enabled" />
+        <span style="width: 80px;">{{ h.day | titlecase }}</span>
+        <input type="text" class="form-control form-control-sm" [(ngModel)]="h.open" style="width: 70px;" />
+        <span>-</span>
+        <input type="text" class="form-control form-control-sm" [(ngModel)]="h.close" style="width: 70px;" />
+      </div>
+      </div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'semantic_router'" class="form-group" style="grid-column: span 2;">
+      <label>Texto a clasificar</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.variable" placeholder="Nombre de la variable (ej. message)" />
+      
+      <label class="d-flex justify-content-between">
+        Intenciones de IA
+        <button class="btn btn-sm btn-link text-primary p-0" (click)="addIntent()">+ Añadir Intención</button>
+      </label>
+      <div *ngFor="let intent of editingNode.data.ai_intents; let i = index" class="mt-2 p-2 border rounded" style="background: #f8fafc;">
+        <div class="d-flex gap-2 align-items-center mb-2">
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="intent.name" placeholder="Ej: comprar" />
+          <button class="btn btn-sm btn-outline-danger" (click)="removeIntent(i)">✕</button>
+        </div>
+        <textarea class="form-control form-control-sm" rows="1" [(ngModel)]="intent.description" placeholder="Ej: El usuario muestra interés en adquirir un producto..."></textarea>
+      </div>
+      <div class="label-hint mt-2">La IA decidirá la mejor ruta basándose en estas descripciones semánticas.</div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'image_generator'" class="form-group" style="grid-column: span 2;">
+      <label>Instrucciones de la Imagen (IA prompt)</label>
+      <textarea class="form-control mb-3" rows="3" [(ngModel)]="editingNode.data.image_prompt" placeholder="Ej: Un atardecer en Marte..."></textarea>
+      
+      <label>Tamaño</label>
+      <select class="form-control mb-3" [(ngModel)]="editingNode.data.image_size">
+        <option value="256x256">256x256</option>
+        <option value="512x512">512x512</option>
+        <option value="1024x1024">1024x1024</option>
+      </select>
+      
+      <label>Guardar URL en variable</label>
+      <input type="text" class="form-control" [(ngModel)]="editingNode.data.response_mapping" placeholder="ej: url_imagen" />
+    </div>
+
+    <div *ngIf="editingNode.type === 'knowledge_query'" class="form-group" style="grid-column: span 2;">
+      <label>Consulta Específica (RAG)</label>
+      <textarea class="form-control mb-3" rows="2" [(ngModel)]="editingNode.data.knowledge_query" placeholder="¿Cómo se prepara el café?"></textarea>
+      
+      <label>Documento de Origen (ID de Supabase)</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.knowledge_doc_id" placeholder="Deja vacío para búsqueda global" />
+      
+      <label>Guardar respuesta en variable</label>
+      <input type="text" class="form-control" [(ngModel)]="editingNode.data.response_mapping" placeholder="respuesta_ia" />
+      <div class="label-hint mt-2">Extrae información directa de tus documentos vectorizados.</div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'send_email'" class="form-group" style="grid-column: span 2;">
+      <label>Destinatario</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.email_to" placeholder="ej. {customer_email} o admin@woox.ai" />
+      
+      <label>Asunto</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.email_subject" placeholder="Asunto del correo" />
+      
+      <label>Cuerpo del Correo (HTML/Texto)</label>
+      <textarea class="form-control" rows="4" [(ngModel)]="editingNode.data.email_body" placeholder="Hola {name}, tu pedido ha sido recibido..."></textarea>
+    </div>
+
+    <div *ngIf="editingNode.type === 'transfer_operator'" class="form-group" style="grid-column: span 2;">
+      <div class="alert alert-info py-2 small">
+        ℹ️ Este nodo pausará el flujo y pondrá la conversación en espera de un humano. No requiere configuración extra.
+      </div>
+      <label>Mensaje de Transferencia (Opcional)</label>
+      <input type="text" class="form-control" [(ngModel)]="editingNode.data.message" placeholder="Un momento, te paso con un agente..." />
+    </div>
+
+    <div *ngIf="editingNode.type === 'wa_template'" class="form-group" style="grid-column: span 2;">
+      <label>Nombre de la Plantilla (Meta Dashboard)</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.wa_template_name" placeholder="ej. confirmacion_pedido" />
+      
+      <label>Parámetros (Variables)</label>
+      <textarea class="form-control mb-3" rows="2" placeholder="param1, param2..." 
+                [ngModel]="editingNode.data.wa_template_params?.join(', ')" (ngModelChange)="editingNode.data.wa_template_params = $event.split(',')"></textarea>
+      
+      <div class="label-hint">Pasa las variables separadas por coma en el mismo orden de Meta.</div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'catalog_search'" class="form-group" style="grid-column: span 2;">
+      <div class="alert alert-info py-2 small">
+        🛒 Este nodo mostrará automáticamente los 5 productos más relevantes o recientes de tu catálogo.
+      </div>
+      <label>Texto de Introducción (Opcional)</label>
+      <input type="text" class="form-control" [(ngModel)]="editingNode.data.message" placeholder="Aquí tienes nuestros productos:" />
+    </div>
+
+    <div *ngIf="editingNode.type === 'cart_summary'" class="form-group" style="grid-column: span 2;">
+      <div class="alert alert-info py-2 small">
+        🛍️ Resumen del carrito actual del cliente con total y cantidades.
+      </div>
+    </div>
+
+    <div *ngIf="editingNode.type === 'order_checkout'" class="form-group" style="grid-column: span 2;">
+      <div class="alert alert-success py-2 small">
+        🏁 Registra el pedido en la base de datos y genera el número de orden.
+      </div>
+      <label>Variable de Dirección de Entrega</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.variable" placeholder="direccion_entrega" />
+      <div class="label-hint">Asegúrate de haber capturado esta variable antes.</div>
+    </div>
+
   </div>
 </div>
 
@@ -437,4 +879,87 @@
     </div>
   </div>
 </div>
+<!-- Modal: Guardar como Plantilla Pro -->
+<div *ngIf="showSaveTemplateModal" class="delete-confirmation-overlay" style="display: flex !important;" (click)="showSaveTemplateModal = false">
+  <div class="delete-confirmation-dialog" style="max-width: 500px;" (click)="$event.stopPropagation()">
+    <div class="dialog-icon">🎁</div>
+    <h3>Crear Plantilla Pro</h3>
+    <p>Guarda este flujo como una plantilla global para otras empresas.</p>
+    
+    <div class="form-group mb-3">
+      <label style="display: block; text-align: left; font-size: 0.9rem; color: #64748b; margin-bottom: 0.5rem;">Nombre de la Plantilla</label>
+      <input type="text" class="form-control" [(ngModel)]="newTemplate.name" placeholder="Ej: Restaurante Gourmet" 
+             style="width: 100%; padding: 0.75rem; border-radius: 8px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b;">
+    </div>
 
+    <div class="form-group mb-3">
+      <label style="display: block; text-align: left; font-size: 0.9rem; color: #64748b; margin-bottom: 0.5rem;">Descripción</label>
+      <textarea class="form-control" [(ngModel)]="newTemplate.description" placeholder="Breve explicación del flujo..."
+                style="width: 100%; padding: 0.75rem; border-radius: 8px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; min-height: 80px;"></textarea>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+    <div class="mb-3">
+      <label style="display: block; text-align: left; font-size: 0.9rem; color: #64748b; margin-bottom: 0.5rem;">Selecciona un Ícono</label>
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; background: #f8fafc; padding: 1rem; border-radius: 12px; border: 1px solid #cbd5e1; max-height: 150px; overflow-y: auto;">
+        <div *ngFor="let icon of iconOptions" 
+             (click)="newTemplate.icon = icon"
+             [style.background]="newTemplate.icon === icon ? '#e0e7ff' : 'white'"
+             [style.borderColor]="newTemplate.icon === icon ? '#6366f1' : '#e2e8f0'"
+             style="aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8px; cursor: pointer; border: 2px solid; color: #6366f1; transition: all 0.2s;">
+          <i [class]="icon"></i>
+        </div>
+      </div>
+      <input type="text" class="form-control mt-2" [(ngModel)]="newTemplate.icon" placeholder="O escribe la clase FA manually"
+             style="width: 100%; padding: 0.5rem; border-radius: 8px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-size: 0.8rem;">
+    </div>
+
+      <div class="mb-3">
+        <label style="display: block; text-align: left; font-size: 0.9rem; color: #64748b; margin-bottom: 0.5rem;">Categoría</label>
+        <select class="form-select" [(ngModel)]="newTemplate.category"
+                style="width: 100%; padding: 0.75rem; border-radius: 8px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b;">
+          <option value="restaurante">Restaurante</option>
+          <option value="servicios">Servicios</option>
+          <option value="ecommerce">E-commerce</option>
+          <option value="general">General</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="delete-dialog-actions" style="margin-top: 2rem; display: flex; gap: 1rem;">
+      <button class="dialog-cancel-btn" style="flex: 1;" (click)="showSaveTemplateModal = false">Cancelar</button>
+      <button class="dialog-confirm-btn" style="flex: 1; background: #6366f1;" (click)="saveAsTemplate()">
+        🚀 Guardar Plantilla
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Vista Previa de Conocimiento (RAG) -->
+<div class="delete-confirmation-overlay" *ngIf="showKnowledgeModal" style="display: flex !important; z-index: 10000;" (click)="showKnowledgeModal = false">
+  <div class="delete-confirmation-dialog" style="max-width: 650px; width: 95%; max-height: 85vh; overflow-y: auto;" (click)="$event.stopPropagation()">
+    <div class="delete-icon-wrapper" style="background: #eef2ff; color: #6366f1; width: 60px; height: 60px; border-radius: 15px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 1.5rem;">📚</div>
+    <h3>{{ selectedKnowledgeDoc?.title }}</h3>
+    <p class="small text-muted mb-4">Fragmentos indexados para recuperación semántica (RAG)</p>
+    
+    <div *ngIf="isLoadingKnowledge" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-2 text-muted">Cargando fragmentos...</p>
+    </div>
+
+    <div class="knowledge-content-viewer" *ngIf="!isLoadingKnowledge" style="text-align: left;">
+      <div class="chunk-card mb-3 p-3 rounded border" *ngFor="let chunk of knowledgeChunks; let i = index" style="background: #f8fafc; border-color: #e2e8f0 !important;">
+        <div class="badge bg-secondary mb-2" style="font-size: 0.7rem;">Fragmento #{{ i + 1 }}</div>
+        <p class="chunk-text mb-0 small" style="white-space: pre-wrap; color: #334155; line-height: 1.5;">{{ chunk.content }}</p>
+      </div>
+
+      <div *ngIf="knowledgeChunks.length === 0" class="alert alert-warning py-3 text-center">
+         ⚠️ Este documento no tiene fragmentos vectorizados todavía.
+      </div>
+    </div>
+
+    <div class="delete-dialog-actions mt-4">
+      <button class="dialog-cancel-btn w-100" (click)="showKnowledgeModal = false" style="padding: 12px; border-radius: 10px; font-weight: 700;">Cerrar Vista</button>
+    </div>
+  </div>
+</div>

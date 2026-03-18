@@ -14,6 +14,7 @@ interface Message {
     sender_type: 'ai' | 'human_agent' | 'customer';
     content: string;
     created_at: Date;
+    formattedContent?: SafeHtml;
 }
 
 interface Conversation {
@@ -28,6 +29,7 @@ interface Conversation {
     status: 'open' | 'closed';
     messages: Message[];
     unread_count: number;
+    customer_name_initial?: string;
     justUpdated?: boolean;
     assigned_agent_id?: string;
 }
@@ -61,6 +63,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     showTagMenu: boolean = false;
     isLoadingList: boolean = false;
     isLoadingDetails: boolean = false;
+    lastRefreshTime: number = 0;
     merchantName: string = 'Mi Comercio';
 
     // Order Creation
@@ -123,8 +126,19 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
     formatMessage(content: string): SafeHtml {
         if (!content) return '';
-        const html = marked.parse(content, { breaks: true }) as string;
-        return this.sanitizer.bypassSecurityTrustHtml(html);
+        // Protección contra mensajes extremadamente largos que bloqueen el parser
+        if (content.length > 200000) {
+            console.warn('Mensaje muy largo truncado para visualización:', content.length);
+            content = content.substring(0, 200000) + '... [Mensaje truncado]';
+        }
+        
+        try {
+            const html = marked.parse(content, { breaks: true }) as string;
+            return this.sanitizer.bypassSecurityTrustHtml(html);
+        } catch (e) {
+            console.error('Error parsing markdown:', e);
+            return content; // Fallback to plain text
+        }
     }
 
     get filteredGroupedProducts(): { category: string, products: any[] }[] {
@@ -213,14 +227,14 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
                         }
                     }
 
-                    // Lógica de refuerzo para INSERTS (Garantizar visualización ante delays de DB)
+                    // Lógica de refuerzo para INSERTS con protección de debounce interno
                     if (eventType === 'INSERT') {
-                        console.log('Realtime: Iniciando refuerzo de carga para nuevo chat...');
-                        await new Promise(r => setTimeout(r, 2000));
-                        await this.loadConversations(true);
+                        const now = Date.now();
+                        if (now - this.lastRefreshTime < 1000) return; // Ya refrescamos recientemente
+                        this.lastRefreshTime = now;
 
-                        // Reintento final si la sincronización es muy lenta
-                        await new Promise(r => setTimeout(r, 2000));
+                        console.log('Realtime: Iniciando refuerzo de carga para nuevo chat...');
+                        await new Promise(r => setTimeout(r, 1500));
                         await this.loadConversations(true);
                     }
 
@@ -247,21 +261,9 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     }
 
     private setupMutationObserver() {
-        if (this.mutationObserver) {
-            this.mutationObserver.disconnect();
-        }
-
-        if (this.chatBody && this.chatBody.nativeElement) {
-            this.mutationObserver = new MutationObserver(() => {
-                this.scrollToBottom();
-            });
-            this.mutationObserver.observe(this.chatBody.nativeElement, {
-                childList: true,
-                subtree: true
-            });
-            // Scroll inicial al abrir
-            this.scrollToBottom();
-        }
+        // Removiendo MutationObserver para evitar bucles infinitos con CD
+        // Ahora usamos ngAfterViewChecked con la bandera shouldScrollToBottom
+        console.log('setupMutationObserver: Skipping for stability (using ngAfterViewChecked)');
     }
 
     ngOnDestroy() {
@@ -285,11 +287,10 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     }
 
     updateGlobalNotificationCount() {
-        // Actualizar el estado global en el servicio para que el Header lo refleje
-        this.supabaseService.refreshGlobalUnreadCount(this.merchantId);
-
-        // Mantener local por si acaso se usa en la vista del componente (opcional)
-        this.totalNotifications = this.conversations.reduce((acc, conv) => acc + (conv.unread_count || 0), 0);
+        const total = this.conversations.reduce((acc, conv) => acc + (conv.unread_count || 0), 0);
+        this.totalNotifications = total;
+        // Actualizar el estado global en el servicio sin hacer fetch extra
+        this.supabaseService.refreshGlobalUnreadCount(this.merchantId, total);
     }
 
     async loadMerchantData() {
@@ -429,6 +430,12 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     }
 
     async loadConversations(silent: boolean = false) {
+        if (this.isLoadingList) {
+            console.log('loadConversations: already loading, skipping...');
+            return;
+        }
+
+        console.log(`--- START loadConversations(silent=${silent}) ---`);
         if (!silent) {
             this.isLoadingList = true;
             this.cdr.detectChanges();
@@ -449,7 +456,8 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
                     ai_active: !!c.ai_active,
                     status: c.status || 'open',
                     unread_count: c.unread_count || 0,
-                    messages: []
+                    messages: [],
+                    customer_name_initial: (c.platform === 'simulator' ? 'S' : (c.customers?.full_name || c.customers?.name || c.customer_identifier || 'T')).charAt(0)
                 }));
 
                 this.updateGlobalNotificationCount();
@@ -531,6 +539,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     }
 
     async selectConversation(conv: Conversation) {
+        console.log('--- START selectConversation ---', conv.id);
         if (this.activeSubscription) {
             this.supabaseService.unsubscribe(this.activeSubscription);
         }
@@ -541,39 +550,49 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
         try {
             // Load Details (CRM, Tags, Notes)
+            console.log('Calling loadFullDeepDetails...');
             await this.loadFullDeepDetails(conv.id);
+            console.log('loadFullDeepDetails finished.');
 
             // Load Messages
-            const { data: messages } = await this.supabaseService.getMessages(conv.id);
+            console.log('Calling getMessages...');
+            const { data: messages, error: msgErr } = await this.supabaseService.getMessages(conv.id);
+            if (msgErr) console.error('Error loading messages:', msgErr);
+            
             if (messages) {
+                console.log(`Pre-formatting ${messages.length} messages.`);
                 this.selectedConversation.messages = messages.map((m: any) => ({
                     id: m.id,
                     sender_type: m.sender_type,
                     content: m.content,
-                    created_at: new Date(m.created_at)
+                    created_at: new Date(m.created_at),
+                    formattedContent: this.formatMessage(m.content)
                 }));
             }
+        } catch (err) {
+            console.error('Exception in selectConversation:', err);
         } finally {
+            console.log('Ending selectConversation, hiding spinner.');
             this.isLoadingDetails = false;
             this.shouldScrollToBottom = true;
             this.cdr.detectChanges();
         }
 
         // Subscribe Real-time
-        console.log('Suscribiendo a mensajes del chat:', conv.id);
+        console.log('Subscribing to realtime messages...');
         this.activeSubscription = this.supabaseService.subscribeToMessages(conv.id, (payload) => {
             this.ngZone.run(() => {
-                console.log('Message Payload:', payload);
+                console.log('Message received via Realtime:', payload.new.id);
                 const newMsg = payload.new;
                 if (this.selectedConversation && this.selectedConversation.id === newMsg.conversation_id) {
-                    // Evitar duplicados si por algún motivo llega doble
-                    const exists = this.selectedConversation.messages.find(m => m.id === newMsg.id);
+                    const exists = this.selectedConversation.messages.some(m => m.id === newMsg.id);
                     if (!exists) {
                         this.selectedConversation.messages.push({
                             id: newMsg.id,
                             sender_type: newMsg.sender_type,
                             content: newMsg.content,
-                            created_at: new Date(newMsg.created_at)
+                            created_at: new Date(newMsg.created_at),
+                            formattedContent: this.formatMessage(newMsg.content)
                         });
                         this.shouldScrollToBottom = true;
                         this.cdr.detectChanges();
@@ -583,43 +602,55 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
         });
 
         // Suscribirse a Typing
-        const typingChannel = this.supabaseService.channel(`typing:${conv.id}`);
-        typingChannel.on('broadcast', { event: 'typing' }, (payload: any) => {
-            this.ngZone.run(() => {
-                if (payload.payload.agentName !== localStorage.getItem('user_name')) {
-                    this.isAgentTyping = payload.payload.isTyping;
-                    this.typingAgentName = payload.payload.agentName;
-                    this.cdr.detectChanges();
+        try {
+          const typingChannel = this.supabaseService.channel(`typing:${conv.id}`);
+          typingChannel.on('broadcast', { event: 'typing' }, (payload: any) => {
+              this.ngZone.run(() => {
+                  if (payload.payload.agentName !== localStorage.getItem('user_name')) {
+                      this.isAgentTyping = payload.payload.isTyping;
+                      this.typingAgentName = payload.payload.agentName;
+                      this.cdr.detectChanges();
 
-                    if (this.isAgentTyping) {
-                        setTimeout(() => { this.isAgentTyping = false; this.cdr.detectChanges(); }, 5000);
-                    }
-                }
-            });
-        }).subscribe();
+                      if (this.isAgentTyping) {
+                          setTimeout(() => { this.isAgentTyping = false; this.cdr.detectChanges(); }, 5000);
+                      }
+                  }
+              });
+          }).subscribe();
+        } catch (e) {
+          console.warn('Could not subscribe to typing:', e);
+        }
 
         // Mark as Read
         if (conv.unread_count > 0) {
+            console.log('Marking as read...');
             await this.supabaseService.markAsRead(conv.id);
             conv.unread_count = 0;
-            // Update global count locally
             this.updateGlobalNotificationCount();
         }
 
         this.cdr.detectChanges();
         this.setupMutationObserver();
+        console.log('--- END selectConversation ---');
     }
 
     async loadFullDeepDetails(convId: string) {
-        const { data } = await this.supabaseService.getConversationWithCustomer(convId);
+        console.log('Fetching conversation with customer...', convId);
+        const { data, error: convErr } = await this.supabaseService.getConversationWithCustomer(convId);
+        if (convErr) console.error('Error fetching conversation with customer:', convErr);
+        
         if (data) {
+            console.log('Conversation data received:', data.id);
             this.customerCRM = data.customers || {};
             this.currentTags = data.tags?.map((t: any) => t.tags) || [];
 
             // Cargar estadísticas extra de pedidos
             if (this.customerCRM.id) {
-                const { data: stats } = await this.supabaseService.getCustomerStats(this.customerCRM.id);
+                console.log('Fetching customer stats for:', this.customerCRM.id);
+                const { data: stats, error: statsErr } = await this.supabaseService.getCustomerStats(this.customerCRM.id);
+                if (statsErr) console.error('Error fetching stats:', statsErr);
                 if (stats) {
+                    console.log('Stats received:', stats);
                     this.customerCRM.orders_count = stats.orders_count;
                     this.customerCRM.total_spent = stats.total_spent;
                 }
@@ -631,8 +662,11 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             }
         }
 
-        const { data: notes } = await this.supabaseService.getInternalNotes(convId);
+        console.log('Fetching internal notes...');
+        const { data: notes, error: notesErr } = await this.supabaseService.getInternalNotes(convId);
+        if (notesErr) console.error('Error fetching notes:', notesErr);
         this.internalNotes = notes || [];
+        console.log(`Internal notes loaded: ${this.internalNotes.length}`);
     }
 
     async saveCRM() {

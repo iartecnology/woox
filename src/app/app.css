@@ -723,22 +723,6 @@ body {
     margin: 0;
 }
 
-.loading-bar {
-    width: 200px;
-    height: 6px;
-    background: #e5e7eb;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.loading-progress {
-    width: 40%;
-    height: 100%;
-    background: #4F46E5;
-    border-radius: 10px;
-    animation: loadingProgress 2s ease-in-out infinite;
-    box-shadow: 0 0 15px rgba(79, 70, 229, 0.5);
-}
 
 @keyframes spin {
     0% {
@@ -750,22 +734,6 @@ body {
     }
 }
 
-@keyframes loadingProgress {
-    0% {
-        width: 0%;
-        transform: translateX(-100%);
-    }
-
-    50% {
-        width: 70%;
-        transform: translateX(50%);
-    }
-
-    100% {
-        width: 0%;
-        transform: translateX(200%);
-    }
-}
 
 @keyframes fadeInLoading {
     from {

@@ -105,6 +105,21 @@ export class BotRuntimeService {
             return await this.advanceAndCollect(flowData, nextNode, session, flow);
         }
 
+        if (currentNode.type === 'ai_agent') {
+            const variables = session.variables || {};
+            // Simulación básica de respuesta de IA para el runtime client-side
+            const response = `🤖 [IA]: He recibido tu mensaje: "${userInput}". Usando mis habilidades integradas, estoy procesando tu solicitud para asistirte mejor. ¿En qué más puedo ayudarte?`;
+            
+            const nextNodeId = this.getNextNodeId(flowData, currentNode.id, 'output');
+            const nextNode = nodes.find((n: any) => n.id === nextNodeId);
+            const nextResponse = await this.advanceAndCollect(flowData, nextNode, session, flow);
+            
+            return {
+                messages: [response, ...nextResponse.messages],
+                session: nextResponse.session
+            };
+        }
+
         return { messages: ['Lo siento, hubo un error en el flujo.'], session };
     }
 
@@ -117,7 +132,11 @@ export class BotRuntimeService {
         const messages: string[] = [];
         const nodes = flowData.nodes || [];
 
-        while (node) {
+        let iterations = 0;
+        const maxIterations = 50;
+
+        while (node && iterations < maxIterations) {
+            iterations++;
             switch (node.type) {
                 case 'message':
                     messages.push(this.resolveVariables(node.data?.message || '', session.variables, flow));
@@ -150,6 +169,12 @@ export class BotRuntimeService {
                     node = nodes.find((n: any) => n.id === nextActNodeId);
                     break;
 
+                case 'ai_agent':
+                    const aiMsg = node.data?.message || '🧠 [Agente Inteligente]: Hola, ¿cómo puedo ayudarte hoy?';
+                    messages.push(this.resolveVariables(aiMsg, session.variables, flow));
+                    await this.updateSession(session, node.id, 'ai_input');
+                    return { messages, session };
+
                 case 'end':
                     if (node.data?.message) {
                         messages.push(this.resolveVariables(node.data.message, session.variables, flow));
@@ -160,6 +185,10 @@ export class BotRuntimeService {
                 default:
                     node = null;
             }
+        }
+
+        if (iterations >= maxIterations) {
+            messages.push('⚠️ Alerta: Se detectó un posible bucle infinito en el flujo. La ejecución se detuvo por seguridad.');
         }
 
         // Si el bucle termina, actualizar estado final

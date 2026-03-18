@@ -130,10 +130,10 @@
       <header class="chat-banner">
         <div class="customer-info">
           <div class="customer-avatar">
-            {{ selectedConversation.customer_name.charAt(0) }}
+            {{ selectedConversation.customer_name_initial || '?' }}
           </div>
           <div class="customer-details">
-            <h3 class="customer-name">{{ selectedConversation.customer_name }}</h3>
+            <h3 class="customer-name">{{ selectedConversation.customer_name || 'Cliente' }}</h3>
             <span class="customer-status">
               {{ (selectedConversation.channel === 'simulator' || selectedConversation.platform === 'simulator') ?
               'Simulador' : (selectedConversation.channel | titlecase) }} • {{ selectedConversation.status | uppercase
@@ -162,7 +162,7 @@
           [class.sent]="msg.sender_type !== 'customer'" [class.received]="msg.sender_type === 'customer'">
 
           <div class="bubble" [class.agent]="msg.sender_type === 'human_agent'" [class.ai]="msg.sender_type === 'ai'"
-            [innerHTML]="formatMessage(msg.content)">
+            [innerHTML]="msg.formattedContent || msg.content">
           </div>
           <span style="font-size: 0.6rem; color: #94a3b8; margin-top: 4px; font-weight: 600;">
             {{ msg.created_at | date:'HH:mm' }} • {{ getSenderName(msg) | uppercase }}

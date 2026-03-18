@@ -55,41 +55,38 @@ declare const pdfjsLib: any;
                 </div>
             </div>
 
-            <!-- Columna Derecha: Lista de Bloques -->
+            <!-- Columna Derecha: Lista de Documentos -->
             <div class="mk-list-col">
                 <div class="list-header">
-                    <h4>📦 Bloques de Memoria Local ({{ blocks.length }})</h4>
-                    <button *ngIf="blocks.length > 0" class="mini-action-btn" (click)="syncAll()" [disabled]="isProcessingFile">
-                        {{ isProcessingFile ? '⏳ Sincronizando...' : '🔄 Vectorizar Todo' }}
-                    </button>
+                    <h4>📦 Base de Conocimiento ({{ documents.length }})</h4>
                 </div>
 
-                <div class="knowledge-grid" *ngIf="blocks.length > 0">
-                    <div *ngFor="let block of blocks" class="knowledge-item-card" [class.is-offline]="!block.embedding">
+                <div class="knowledge-grid" *ngIf="documents.length > 0">
+                    <div *ngFor="let doc of documents" class="knowledge-item-card">
                         <div class="k-item-header">
-                            <strong>{{ block.title }}</strong>
+                            <strong>{{ doc.title }}</strong>
                             <div class="k-item-actions">
-                                <button *ngIf="!block.embedding" class="sync-mini-btn" (click)="syncBlock(block)" title="Vectorizar">⚡</button>
-                                <button class="eye-icon" (click)="viewVector(block)" title="Ver Vector" *ngIf="block.embedding">👁️</button>
-                                <button class="edit-icon" (click)="editBlock(block)" title="Editar">✏️</button>
-                                <button class="delete-icon" (click)="confirmDeleteBlock(block)" title="Eliminar">🗑️</button>
+                                <button class="eye-icon" (click)="viewVector(doc)" title="Ver Fragmentos">👁️</button>
+                                <button class="edit-icon" (click)="editBlock(doc)" title="Editar">✏️</button>
+                                <button class="reprocess-icon" (click)="reprocessDocument(doc)" title="Re-generar Vectores" [disabled]="isProcessingFile">🔄</button>
+                                <button class="delete-icon" (click)="confirmDeleteBlock(doc)" title="Eliminar">🗑️</button>
                             </div>
                         </div>
-                        <p>{{ block.content | slice:0:160 }}{{ block.content.length > 160 ? '...' : '' }}</p>
+                        <p>{{ doc.description || doc.title }}</p>
                         <div class="k-item-meta">
-                            <span class="v-badge" [class.no-vector]="!block.embedding">
-                                {{ block.embedding ? '✅ Semántico' : '🛑 Solo Texto' }}
+                            <span class="v-badge">
+                                ✅ RAG Activo (v768)
                             </span>
-                            <span class="date" [title]="'Actualizado: ' + (block.updated_at || block.created_at | date:'medium')">
-                                {{ block.updated_at || block.created_at | date:'shortDate' }}
+                            <span class="date" [title]="'Actualizado: ' + (doc.updated_at || doc.created_at | date:'medium')">
+                                {{ doc.updated_at || doc.created_at | date:'shortDate' }}
                             </span>
                         </div>
                     </div>
                 </div>
 
-                <div *ngIf="blocks.length === 0" class="empty-knowledge">
+                <div *ngIf="documents.length === 0" class="empty-knowledge">
                     <div class="k-icon">🧠</div>
-                    <p>La memoria exclusiva de tu empresa está vacía.<br>Añade información específica que solo aplique a este negocio.</p>
+                    <p>La base de conocimiento escalable está vacía.<br>Sube documentos para entrenar a tu IA.</p>
                 </div>
             </div>
         </div>
@@ -121,18 +118,16 @@ declare const pdfjsLib: any;
             <h3>Análisis del Conocimiento</h3>
             
             <div class="vector-readable-info">
-                <label>Información Original:</label>
-                <div class="source-text-box">
-                    <strong>{{ selectedVectorBlock?.title }}</strong>
-                    <p>{{ selectedVectorBlock?.content }}</p>
-                </div>
-            </div>
-
-            <div class="vector-math-info mt-20">
-                <label>Representación Vectorial ({{ selectedVectorBlock?.embedding?.length }} dimensiones):</label>
-                <p class="vector-desc">Estos números son la "huella digital" semántica que permite a la IA encontrar esta información por significado y no solo por palabras clave.</p>
-                <div class="vector-content">
-                    <code>{{ selectedVectorBlock?.embedding | json }}</code>
+                <label>Fragmentos Vectorizados ({{ selectedDocumentChunks.length }} partes):</label>
+                <div *ngIf="isLoadingChunks" class="chunks-loader">⌛ Cargando fragmentos...</div>
+                <div class="chunks-list" *ngIf="!isLoadingChunks">
+                    <div *ngFor="let chunk of selectedDocumentChunks; let i = index" class="chunk-item">
+                        <div class="chunk-num">#{{ i + 1 }}</div>
+                        <div class="chunk-content">
+                            <p>{{ chunk.content }}</p>
+                            <div class="chunk-vector-tag">Vector: [{{ chunk.embedding?.slice(0, 3) }}... {{ chunk.embedding?.length }} dimensiones]</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -194,10 +189,19 @@ declare const pdfjsLib: any;
         .date { font-size: 0.75rem; color: #94a3b8; }
         .sync-mini-btn { background: #f0fdf4; border: 1px solid #bbf7d0; cursor: pointer; border-radius: 6px; padding: 3px 8px; font-size: 0.8rem; transition: all 0.2s; }
         .sync-mini-btn:hover { background: #dcfce7; }
-        .edit-icon, .eye-icon, .delete-icon { background: transparent; border: none; cursor: pointer; border-radius: 6px; padding: 5px; font-size: 1rem; transition: all 0.2s; }
+        .edit-icon, .eye-icon, .delete-icon, .reprocess-icon { background: transparent; border: none; cursor: pointer; border-radius: 6px; padding: 5px; font-size: 1rem; transition: all 0.2s; }
         .edit-icon:hover { background: #ede9fe; }
         .eye-icon:hover { background: #e0f2fe; }
+        .reprocess-icon:hover { background: #ecfdf5; }
         .delete-icon:hover { background: #fee2e2; }
+
+        .chunks-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 8px; }
+        .chunk-item { display: flex; gap: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; }
+        .chunk-num { background: #6366f1; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 800; flex-shrink: 0; }
+        .chunk-content p { margin: 0; font-size: 0.85rem; color: #334155; line-height: 1.4; }
+        .chunk-vector-tag { margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #94a3b8; }
+        .chunks-loader { padding: 40px; text-align: center; color: #64748b; font-size: 0.9rem; }
+        .vector-modal { max-width: 700px; width: 95%; }
 
         /* MODALES PREMIUM */
         .delete-modal-overlay {
@@ -247,7 +251,8 @@ export class MerchantKnowledgeComponent implements OnInit {
     private notificationService = inject(NotificationService);
 
     merchantId = '';
-    blocks: any[] = [];
+    blocks: any[] = []; // Compatibilidad o legado si se requiere, pero lo ocultaremos o migraremos
+    documents: any[] = [];
     newBlock = { title: '', content: '' };
     editingBlockId: string | null = null;
     isSaving = false;
@@ -259,6 +264,8 @@ export class MerchantKnowledgeComponent implements OnInit {
     blockToDelete: any = null;
     showVectorModal = false;
     selectedVectorBlock: any = null;
+    selectedDocumentChunks: any[] = [];
+    isLoadingChunks = false;
 
     // API Key y settings para embeddings
     platformSettings: any = null;
@@ -297,37 +304,75 @@ export class MerchantKnowledgeComponent implements OnInit {
 
     async loadBlocks() {
         if (!this.merchantId) return;
-        const { data } = await this.supabaseService.getMerchantContextBlocks(this.merchantId);
-        this.blocks = data || [];
-        console.log(`[Cerebro] Loaded ${this.blocks.length} blocks for ${this.merchantId}`);
+        // Cargamos los NUEVOS documentos de la base de conocimiento escalable
+        const { data } = await this.supabaseService.getKnowledgeBaseDocuments(this.merchantId);
+        this.documents = data || [];
+        console.log(`[Cerebro] Loaded ${this.documents.length} pro documents for ${this.merchantId}`);
     }
 
     async saveBlock() {
         if (!this.merchantId || !this.newBlock.title || !this.newBlock.content) return;
         this.isSaving = true;
+        this.fileStatus = 'Procesando conocimiento...';
         try {
-            let vector = null;
-            if (this.platformSettings?.embed_api_key || this.platformSettings?.ai_api_key) {
-                vector = await this.generateEmbedding(this.newBlock.title + ': ' + this.newBlock.content);
-            }
-            const payload: any = {
+            // 1. Guardar el Documento Maestro
+            const docPayload: any = {
                 merchant_id: this.merchantId,
                 title: this.newBlock.title,
-                content: this.newBlock.content,
-                embedding: vector
+                content: this.newBlock.content, // Guardamos el contenido completo
+                description: this.newBlock.content.substring(0, 100) + '...',
+                source_type: 'text',
+                is_active: true
             };
-            if (this.editingBlockId) payload.id = this.editingBlockId;
-            const { error } = await this.supabaseService.saveMerchantContextBlock(payload);
-            if (error) throw error;
+            if (this.editingBlockId) docPayload.id = this.editingBlockId;
+            
+            const { data: doc, error: docError } = await this.supabaseService.saveKnowledgeBaseDocument(docPayload);
+            if (docError) throw docError;
+
+            // 2. Fragmentar y Vectorizar (Limpiamos chunks anteriores si es edición)
+            if (this.editingBlockId) {
+                await this.supabaseService.deleteKnowledgeBaseChunks(this.editingBlockId);
+            }
+
+            const chunks = this.splitIntoChunks(this.newBlock.content);
+            this.fileStatus = `Generando ${chunks.length} vectores...`;
+            
+            for (let i = 0; i < chunks.length; i++) {
+                const chunkText = chunks[i];
+                const vector = await this.supabaseService.generateEmbedding(this.newBlock.title + ': ' + chunkText, this.platformSettings);
+                
+                await this.supabaseService.saveKnowledgeBaseChunk({
+                    document_id: doc.id,
+                    merchant_id: this.merchantId,
+                    content: chunkText,
+                    embedding: vector,
+                    chunk_index: i
+                });
+                this.fileStatus = `Procesando ${i+1}/${chunks.length}...`;
+            }
+
             this.newBlock = { title: '', content: '' };
             this.editingBlockId = null;
             await this.loadBlocks();
-            this.notificationService.show(vector ? '🧠 Conocimiento vectorizado y guardado' : '💾 Conocimiento guardado', 'success');
+            this.notificationService.show('🧠 Conocimiento fragmentado y vectorizado (Pro RAG)', 'success');
         } catch (e: any) {
+            console.error(e);
             this.notificationService.show('Error al guardar: ' + e.message, 'error');
         } finally {
             this.isSaving = false;
+            this.fileStatus = '';
         }
+    }
+
+    private splitIntoChunks(text: string, size: number = 1000, overlap: number = 200): string[] {
+        const chunks: string[] = [];
+        let start = 0;
+        while (start < text.length) {
+            const end = Math.min(start + size, text.length);
+            chunks.push(text.substring(start, end));
+            start += size - overlap;
+        }
+        return chunks;
     }
 
     editBlock(block: any) {
@@ -350,11 +395,13 @@ export class MerchantKnowledgeComponent implements OnInit {
         if (!this.blockToDelete) return;
         this.isSaving = true;
         try {
-            await this.supabaseService.deleteMerchantContextBlock(this.blockToDelete.id);
+            // Eliminar chunks primero (por integridad referencial si no es cascada)
+            await this.supabaseService.deleteKnowledgeBaseChunks(this.blockToDelete.id);
+            await this.supabaseService.deleteKnowledgeBaseDocument(this.blockToDelete.id);
             this.showDeleteConfirmModal = false;
             this.blockToDelete = null;
             await this.loadBlocks();
-            this.notificationService.show('Bloque eliminado', 'info');
+            this.notificationService.show('Documento eliminado', 'info');
         } catch (error) {
             this.notificationService.show('Error al eliminar', 'error');
         } finally {
@@ -362,15 +409,26 @@ export class MerchantKnowledgeComponent implements OnInit {
         }
     }
 
-    viewVector(block: any) {
-        this.selectedVectorBlock = block;
+    async viewVector(doc: any) {
+        this.selectedVectorBlock = doc;
+        this.selectedDocumentChunks = [];
+        this.isLoadingChunks = true;
         this.showVectorModal = true;
+        
+        try {
+            const { data } = await this.supabaseService.getKnowledgeBaseChunks(doc.id);
+            this.selectedDocumentChunks = data || [];
+        } catch (e) {
+            console.error('Error cargando fragmentos:', e);
+        } finally {
+            this.isLoadingChunks = false;
+        }
     }
 
     async syncBlock(block: any) {
         this.isProcessingFile = true;
         try {
-            const vector = await this.generateEmbedding(block.title + ': ' + block.content);
+            const vector = await this.supabaseService.generateEmbedding(block.title + ': ' + block.content, this.platformSettings);
             if (!vector) { this.notificationService.show('No hay API Key para vectorizar', 'error'); return; }
             await this.supabaseService.saveMerchantContextBlock({ ...block, embedding: vector });
             await this.loadBlocks();
@@ -386,7 +444,7 @@ export class MerchantKnowledgeComponent implements OnInit {
         this.isProcessingFile = true;
         for (const block of pending) {
             try {
-                const vector = await this.generateEmbedding(block.title + ': ' + block.content);
+                const vector = await this.supabaseService.generateEmbedding(block.title + ': ' + block.content, this.platformSettings);
                 if (vector) await this.supabaseService.saveMerchantContextBlock({ ...block, embedding: vector });
             } catch (e) { console.error('Error vectorizando bloque:', e); }
         }
@@ -410,32 +468,98 @@ export class MerchantKnowledgeComponent implements OnInit {
                 content = await file.text();
             }
 
-            if (content.length > 8000) content = content.substring(0, 8000);
+            if (content.length > 50000) content = content.substring(0, 50000); // Límite generoso para RAG
             const title = file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ');
 
-            this.fileStatus = '🧠 Generando embedding...';
-            let vector = null;
-            const apiKey = this.platformSettings?.embed_api_key || this.platformSettings?.ai_api_key;
-            if (apiKey) {
-                vector = await this.generateEmbedding(title + ': ' + content);
-            }
-
-            const { error } = await this.supabaseService.saveMerchantContextBlock({
+            // 1. Guardar el Documento
+            const { data: doc, error: docError } = await this.supabaseService.saveKnowledgeBaseDocument({
                 merchant_id: this.merchantId,
                 title,
-                content,
-                embedding: vector
+                content, // Guardar el contenido completo del archivo
+                description: `Archivo ${file.type}: ${file.name}`,
+                source_type: file.type === 'application/pdf' ? 'pdf' : 'file',
+                is_active: true
             });
+            if (docError) throw docError;
 
-            if (error) throw error;
+            // 2. Fragmentar y Vectorizar
+            const chunks = this.splitIntoChunks(content);
+            this.fileStatus = `🧠 Fragmentando en ${chunks.length} partes...`;
+            
+            for (let i = 0; i < chunks.length; i++) {
+                const chunkText = chunks[i];
+                const vector = await this.supabaseService.generateEmbedding(title + ': ' + chunkText, this.platformSettings);
+                
+                await this.supabaseService.saveKnowledgeBaseChunk({
+                    document_id: doc.id,
+                    merchant_id: this.merchantId,
+                    content: chunkText,
+                    embedding: vector,
+                    chunk_index: i
+                });
+                this.fileStatus = `🧠 Procesando ${i+1}/${chunks.length}...`;
+            }
+
             await this.loadBlocks();
-            this.notificationService.show(vector ? '📄 Documento vectorizado y guardado' : '📄 Documento guardado (sin vectorizar)', 'success');
+            this.notificationService.show(`📄 ${title} vectorizado en ${chunks.length} fragmentos`, 'success');
         } catch (e: any) {
-            this.notificationService.show('Error procesando archivo: ' + e.message, 'error');
+            console.error(e);
+            this.notificationService.show('Error procesando archivo: ' + (e.message || e), 'error');
         } finally {
             this.isProcessingFile = false;
             this.fileStatus = '';
-            (event.target as HTMLInputElement).value = '';
+        }
+    }
+
+    /**
+     * Re-procesa un documento existente (útil si falló la vectorización inicial)
+     */
+    async reprocessDocument(doc: any) {
+        let content = doc.content;
+        
+        // Si no tiene contenido, intentar recuperarlo de la BD por ID (por si el objeto está incompleto)
+        if (!content) {
+            const { data } = await this.supabaseService.getKnowledgeBaseDocuments(this.merchantId);
+            const fullDoc = data?.find((d: any) => d.id === doc.id);
+            content = fullDoc?.content;
+        }
+
+        if (!content) {
+            this.notificationService.show('Este documento no tiene texto base para procesar. Por favor re-súbelo.', 'warning');
+            return;
+        }
+
+        this.isProcessingFile = true;
+        this.fileStatus = '🔄 Trabajando...';
+
+        try {
+            // Limpiar previos
+            await this.supabaseService.deleteKnowledgeBaseChunks(doc.id);
+
+            const chunks = this.splitIntoChunks(content);
+            for (let i = 0; i < chunks.length; i++) {
+                const chunkText = chunks[i];
+                const vector = await this.supabaseService.generateEmbedding(doc.title + ': ' + chunkText, this.platformSettings);
+                
+                if (!vector) throw new Error("Fallo en generación de vector.");
+
+                await this.supabaseService.saveKnowledgeBaseChunk({
+                    document_id: doc.id,
+                    merchant_id: this.merchantId,
+                    content: chunkText,
+                    embedding: vector,
+                    chunk_index: i
+                });
+                this.fileStatus = `🔄 Procesando ${i+1}/${chunks.length}...`;
+            }
+
+            await this.loadBlocks();
+            this.notificationService.show('✅ Documento re-vectorizado con éxito', 'success');
+        } catch (e: any) {
+            this.notificationService.show('Error al re-procesar: ' + e.message, 'error');
+        } finally {
+            this.isProcessingFile = false;
+            this.fileStatus = '';
         }
     }
 
@@ -452,40 +576,4 @@ export class MerchantKnowledgeComponent implements OnInit {
         return text;
     }
 
-    async generateEmbedding(text: string): Promise<number[] | null> {
-        const provider = this.platformSettings?.embed_provider || 'google_gemini';
-        const model = this.platformSettings?.embed_model || (provider === 'google_gemini' ? 'text-embedding-004' : 'text-embedding-3-small');
-        const apiKey = this.platformSettings?.embed_api_key || this.platformSettings?.ai_api_key;
-        const ollamaUrl = this.platformSettings?.ollama_base_url || 'http://localhost:11434';
-
-        if (!apiKey && provider !== 'ollama') return null;
-
-        try {
-            if (provider === 'google_gemini') {
-                const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content: { parts: [{ text }] } })
-                });
-                const data = await resp.json();
-                return data.embedding?.values || null;
-            } else if (provider === 'openai') {
-                const resp = await fetch('https://api.openai.com/v1/embeddings', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                    body: JSON.stringify({ model, input: text })
-                });
-                const data = await resp.json();
-                return data.data?.[0]?.embedding || null;
-            } else if (provider === 'ollama') {
-                const headers: any = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' };
-                if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-                const resp = await fetch(`${ollamaUrl}/api/embeddings`, {
-                    method: 'POST', headers: headers,
-                    body: JSON.stringify({ model, prompt: text })
-                });
-                const data = await resp.json();
-                return data.embedding || null;
-            }
-        } catch (e) { console.error('Error generando embedding:', e); }
-        return null;
-    }
 }
