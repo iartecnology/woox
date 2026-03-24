@@ -35,9 +35,9 @@ interface CartItem {
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="simulator-overlay" (click)="close()">
+    <div class="simulator-overlay" [class.inline]="inline" (click)="close()">
       <div class="simulator-window" (click)="$event.stopPropagation()">
-        <header [style.background-color]="primaryColor">
+        <header *ngIf="!inline" [style.background-color]="primaryColor">
           <div class="merchant-info">
             <img [src]="logoUrl" alt="Logo">
             <div>
@@ -47,6 +47,26 @@ interface CartItem {
           </div>
           <button class="close-btn" (click)="close()">✕</button>
         </header>
+
+        <!-- Barra de Estadísticas Unificada -->
+        <div class="sim-stats-bar" *ngIf="botMode && totalSessionExecutions > 0 && showStats">
+          <div class="stat-pill">
+            <span class="stat-pill-icon">⚡</span>
+            <span class="stat-pill-val">{{ totalSessionExecutions }}</span>
+            <span class="stat-pill-label">runs</span>
+          </div>
+          <div class="stat-pill" *ngIf="activeSimNodeId">
+            <span class="stat-pill-icon">📍</span>
+            <span class="stat-pill-val stat-pill-val--sm">{{ getActiveNodeLabel() }}</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-pill-icon">📦</span>
+            <span class="stat-pill-val">{{ getVariableCount() }}</span>
+            <span class="stat-pill-label">vars</span>
+          </div>
+          <button class="reset-pill-btn" (click)="restartSession()" title="Reiniciar sesión">🔄</button>
+          <button class="reset-pill-btn" (click)="clearSimulatorSession()" title="Limpiar trazabilidad">🗑️</button>
+        </div>
 
         <div class="chat-body" #scrollMe [scrollTop]="scrollMe.scrollHeight">
           <div *ngFor="let msg of messages" class="message" [class.user]="msg.sender === 'user'">
@@ -94,6 +114,21 @@ interface CartItem {
           </div>
         </div>
 
+        <!-- Log de Ejecución Unificado -->
+        <div class="exec-log-panel" *ngIf="botMode && sessionExecutionLog.length > 0 && showLog">
+          <div class="exec-log-header" (click)="logCollapsed = !logCollapsed">
+            <span>📊 Pasos del Flujo ({{ sessionExecutionLog.length }})</span>
+            <span class="collapse-icon">{{ logCollapsed ? '▲' : '▼' }}</span>
+          </div>
+          <div class="exec-log-scroll" *ngIf="!logCollapsed">
+            <div class="exec-log-entry" *ngFor="let entry of sessionExecutionLog">
+              <span class="entry-icon">{{ getNodeIcon(entry.type) }}</span>
+              <span class="entry-label">{{ entry.label }}</span>
+              <span class="entry-count" *ngIf="entry.count > 1">×{{ entry.count }}</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Sugerencias y Carrito Flotante -->
         <div class="chat-actions-bar" *ngIf="!isTyping">
            <button class="action-pill cart-pill" *ngIf="cart.length > 0" (click)="quickAction('Ver mi resumen de pedido')">
@@ -116,57 +151,57 @@ interface CartItem {
     </div>
   `,
   styles: [`
-    .simulator-overlay {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6);
-      backdrop-filter: blur(8px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 5000;
+    .simulator-overlay.inline {
+      position: relative; width: 100%; height: 100%;
+      background: transparent; backdrop-filter: none; z-index: 1;
     }
-    .simulator-window {
-      width: 400px;
-      height: 600px;
-      background: #fdfdfd;
-      border-radius: 24px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      box-shadow: 0 30px 60px -12px rgba(0,0,0,0.25);
+    .simulator-overlay.inline .simulator-window {
+      width: 100%; height: 100%; border-radius: 0; box-shadow: none; border: none;
     }
-    header {
-      padding: 20px;
-      color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    
+    /* Stats Bar Styles */
+    .sim-stats-bar {
+      display: flex; gap: 6px; padding: 8px 12px;
+      background: #1e293b; border-bottom: 1px solid #334155;
+      flex-wrap: wrap; align-items: center;
     }
-    .merchant-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    .stat-pill {
+      display: flex; align-items: center; gap: 4px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px; padding: 2px 8px; font-size: 0.7rem; color: #e2e8f0;
     }
-    .merchant-info img {
-      width: 40px; height: 40px; border-radius: 50%; border: 2px solid white;
+    .stat-pill-val { font-weight: 800; color: #10b981; }
+    .stat-pill-val--sm { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stat-pill-label { color: #64748b; font-size: 0.65rem; }
+    .reset-pill-btn {
+      background: transparent; border: none; color: #94a3b8; font-size: 0.8rem;
+      cursor: pointer; margin-left: auto; padding: 2px 6px; border-radius: 4px;
     }
-    header h3 { margin: 0; font-size: 1rem; font-weight: 800; }
-    header p { margin: 0; font-size: 0.72rem; opacity: 0.9; font-weight: 500; }
-    .close-btn { 
-      background: rgba(255,255,255,0.2); 
-      border: none; 
-      color: white; 
-      width: 32px; 
-      height: 32px; 
-      border-radius: 50%; 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
-      cursor: pointer; 
-      transition: all 0.2s;
+    .reset-pill-btn:hover { background: rgba(255,255,255,0.1); color: #ef4444; }
+
+    /* Log Panel Styles */
+    .exec-log-panel {
+      border-top: 1px solid #e2e8f0; background: #f8fafc;
+      max-height: 150px; display: flex; flex-direction: column;
     }
-    .close-btn:hover { background: rgba(255,255,255,0.3); transform: rotate(90deg); }
+    .exec-log-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 12px; font-size: 0.7rem; font-weight: 700; color: #64748b;
+      cursor: pointer; background: #f1f5f9; border-bottom: 1px solid #e2e8f0;
+    }
+    .exec-log-scroll { overflow-y: auto; flex: 1; }
+    .exec-log-entry {
+      display: flex; align-items: center; gap: 8px; padding: 4px 12px;
+      font-size: 0.75rem; border-bottom: 1px solid #f1f5f9;
+    }
+    .entry-icon { font-size: 0.8rem; }
+    .entry-label { flex: 1; color: #374151; font-weight: 500; }
+    .entry-count { font-size: 0.65rem; background: #e0e7ff; color: #4338ca; padding: 1px 5px; border-radius: 6px; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1.0); }
+    }
 
     .chat-body {
       flex: 1;
@@ -358,20 +393,30 @@ interface CartItem {
 })
 export class ChatSimulatorComponent implements OnInit, OnDestroy {
   @Input() merchantName: string = '';
+  @Input() merchantId: string = '';
   @Input() logoUrl: string = '';
   @Input() primaryColor: string = '#4F46E5';
   @Input() aiProvider: string = 'google_gemini';
-  @Input() aiModel: string = 'gemini-1.5-flash'; // Default model corregido
+  @Input() aiModel: string = 'gemini-1.5-flash';
   @Input() aiApiKey: string = '';
-  @Input() ollamaBaseUrl: string = 'http://localhost:11434';
-  @Input() lmstudioBaseUrl: string = 'http://localhost:1234/v1';
   @Input() aiWelcomeMessage: string = '';
-  @Input() context: string = '';
-  @Input() merchantId: string = '';
   @Input() aiEnabled: boolean = true;
+  @Input() context: string = '';
   @Input() botMode: boolean = false;
   @Input() showMenuAction: boolean = true;
+  @Input() ollamaBaseUrl: string = 'http://localhost:11434';
+  @Input() lmstudioBaseUrl: string = 'http://localhost:1234/v1';
+  @Input() inline: boolean = false;
+  @Input() showStats: boolean = true;
+  @Input() showLog: boolean = true;
+  @Output() onNodeExecuted = new EventEmitter<string>();
   @Output() onClose = new EventEmitter<void>();
+
+  logCollapsed: boolean = false;
+  totalSessionExecutions: number = 0;
+  sessionExecutionLog: any[] = [];
+  activeSimNodeId: string | null = null;
+  sessionVariables: any = {};
 
   private liveOrderService = inject(LiveOrderService);
   private supabaseService = inject(SupabaseService);
@@ -397,7 +442,49 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
 
   constructor() { }
 
+  // --- Métodos de Trazabilidad Unificados ---
+  clearSimulatorSession() {
+    this.totalSessionExecutions = 0;
+    this.sessionExecutionLog = [];
+    this.activeSimNodeId = null;
+    this.sessionVariables = {};
+    this.messages = [];
+    if (this.aiWelcomeMessage) {
+      this.messages.push({ sender: 'ai', text: this.aiWelcomeMessage, time: new Date() });
+    }
+  }
+
+  async restartSession() {
+    this.clearSimulatorSession();
+    this.dbConversationId = null; // Forzar nueva conversación
+    await this.ngOnInit();
+  }
+
+  getActiveNodeLabel(): string {
+    if (!this.activeSimNodeId) return '—';
+    return this.activeSimNodeId.split('_')[0] || this.activeSimNodeId;
+  }
+
+  getVariableCount(): number {
+    return Object.keys(this.sessionVariables || {}).length;
+  }
+
+  getNodeIcon(type: string): string {
+    switch (type) {
+      case 'start': return '🚀';
+      case 'message': return '💬';
+      case 'question': return '❓';
+      case 'menu': return '📋';
+      case 'action': return '⚡';
+      case 'condition': return '🔀';
+      case 'ai_agent': return '🧠';
+      case 'end': return '🏁';
+      default: return '📍';
+    }
+  }
+
   async ngOnInit() {
+    this.clearSimulatorSession();
     // Cargar estado del comercio
     const { data: merchant } = await this.supabaseService.getMerchantById(this.merchantId);
     this.botMode = merchant?.bot_mode || false;
@@ -443,6 +530,18 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
            const botRes = await this.botRuntime.processMessage(conv.id, this.merchantId, '');
            if (botRes && botRes.messages.length > 0) {
              this.messages = []; // Limpiar el "Iniciando..."
+             
+             if (botRes.executionPath) {
+               this.totalSessionExecutions += botRes.executionPath.length;
+               for (const node of botRes.executionPath) {
+                 this.activeSimNodeId = node.id;
+                 this.onNodeExecuted.emit(node.id);
+                 const existing = this.sessionExecutionLog.find(l => l.id === node.id);
+                 if (existing) existing.count = (existing.count || 1) + 1;
+                 else this.sessionExecutionLog.push({ ...node, count: 1 });
+               }
+             }
+
              for (const msg of botRes.messages) {
                this.messages.push({ sender: 'ai', text: msg, time: new Date() });
                await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg, true);
@@ -522,6 +621,18 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
       // --- LÓGICA DE BOT (NUEVA) ---
       if (this.botMode) {
         const botResponse = await this.botRuntime.processMessage(this.dbConversationId!, this.merchantId, userText);
+        
+        // PROCESAR EXECUTION PATH
+        if (botResponse && botResponse.executionPath) {
+          this.totalSessionExecutions += botResponse.executionPath.length;
+          for (const node of botResponse.executionPath) {
+            this.activeSimNodeId = node.id;
+            this.onNodeExecuted.emit(node.id);
+            const existing = this.sessionExecutionLog.find(l => l.id === node.id);
+            if (existing) existing.count = (existing.count || 1) + 1;
+            else this.sessionExecutionLog.push({ ...node, count: 1 });
+          }
+        }
         
         setTimeout(async () => {
           this.isTyping = false;

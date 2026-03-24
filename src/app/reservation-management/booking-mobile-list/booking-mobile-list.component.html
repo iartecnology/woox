@@ -1,0 +1,24 @@
+<div class="mobile-chat-list">
+    <div *ngFor="let b of bookings" class="chat-row" (click)="selectBooking(b)">
+        <div class="date-time-bubble">
+            <span class="d-day">{{ b.date | date:'EEE d' | titlecase }}</span>
+            <span class="d-time">{{ b.time }}</span>
+        </div>
+        <div class="chat-body">
+            <div class="chat-main">
+                <span class="chat-name">{{ b.customerName }}</span>
+                <span class="status-pill-small" [ngClass]="getStatusClass(b.status)">
+                    {{ getStatusText(b.status) }}
+                </span>
+            </div>
+            <div class="chat-sub">
+                <span class="chat-preview">{{ b.service }} · {{ getResourceName(b.resourceId) }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div *ngIf="bookings.length === 0" class="empty-bookings-mobile">
+    <div class="eb-icon">📅</div>
+    <p>No hay citas para mostrar</p>
+</div>

@@ -1,0 +1,108 @@
+.mobile-chat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 110px; /* Safe space for bottom nav + FAB */
+}
+
+.chat-row {
+    display: flex;
+    align-items: center;
+    padding: 14px;
+    background: white;
+    border-bottom: 1px solid #f1f5f9;
+    gap: 12px;
+}
+
+.chat-row:active {
+    background: #f8f9fa;
+}
+
+.date-time-bubble {
+    width: 60px;
+    height: 60px;
+    background: #f1f5f9;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid #e2e8f0;
+}
+
+.d-day {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+}
+
+.d-time {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin-top: 2px;
+}
+
+.chat-body {
+    flex: 1;
+    overflow: hidden;
+}
+
+.chat-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.chat-name {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-sub {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chat-preview {
+    font-size: 0.85rem;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-pill-small {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Status Colors */
+.status-pill-small.confirmed { background: #dcfce7; color: #166534; }
+.status-pill-small.pending { background: #fef9c3; color: #854d0e; }
+.status-pill-small.cancelled { background: #fee2e2; color: #991b1b; }
+.status-pill-small.completed { background: #e0e7ff; color: #3730a3; }
+.status-pill-small.no-show { background: #f1f5f9; color: #475569; }
+
+.empty-bookings-mobile {
+    padding: 60px 40px;
+    text-align: center;
+    color: #94a3b8;
+}
+
+.eb-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+}

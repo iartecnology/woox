@@ -1,6 +1,6 @@
 <div class="crm-container">
     <!-- HEADER CON KPIs -->
-    <header class="crm-header">
+    <header class="crm-header" *ngIf="!isMobile() || (!selectedCustomer && !showCampaignModal)">
         <div>
             <h1>👥 CRM de Clientes</h1>
             <p>Gestiona y fideliza tu base de clientes con IA</p>
@@ -12,25 +12,18 @@
             </div>
             <div class="kpi-chip gold">
                 <span class="kpi-val">{{ vipCount }}</span>
-                <span class="kpi-lbl">VIPs ⭐</span>
-            </div>
-            <div class="kpi-chip danger" *ngIf="churnCount > 0">
-                <span class="kpi-val">{{ churnCount }}</span>
-                <span class="kpi-lbl">En Riesgo 🔴</span>
-            </div>
-            <div class="kpi-chip purple">
-                <span class="kpi-val">{{ formatCurrency(totalClv) }}</span>
-                <span class="kpi-lbl">CLV Total</span>
+                <span class="tab-count" *ngIf="isMobile()">⭐</span>
+                <span class="kpi-lbl" *ngIf="!isMobile()">VIPs ⭐</span>
             </div>
             <button class="campaign-btn" (click)="openCampaignModal()">
-                🚀 Campaña de Remarketing
+                🚀 {{ isMobile() ? 'Campaña' : 'Campaña de Remarketing' }}
             </button>
         </div>
     </header>
 
-    <div class="crm-content">
+    <div class="crm-content" [class.mobile-active]="isMobile()">
         <!-- LISTA DE CLIENTES -->
-        <div class="customers-sidebar">
+        <div class="customers-sidebar" *ngIf="!isMobile() || (!selectedCustomer && !showCampaignModal)">
             <div class="search-box">
                 <input type="text" [(ngModel)]="searchTerm" (input)="search()"
                     placeholder="🔍 Buscar por nombre o teléfono...">
@@ -91,7 +84,11 @@
         </div>
 
         <!-- DETALLE DEL CLIENTE -->
-        <div class="customer-detail" *ngIf="selectedCustomer">
+        <div class="customer-detail" *ngIf="selectedCustomer && (!isMobile() || selectedCustomer)">
+            <!-- Mobile Header con botón Volver -->
+            <div class="mobile-detail-nav" *ngIf="isMobile()" (click)="goBackToList()">
+                <button class="back-btn">← Volver al Listado</button>
+            </div>
             <div class="detail-header">
                 <div class="detail-main">
                     <h2>{{ selectedCustomer.full_name }}</h2>

@@ -260,6 +260,104 @@
     }
 }
 
+/* RESPONSIVE MÓVIL (Woox Pattern) */
+@media (max-width: 768px) {
+    .crm-container {
+        padding: 12px;
+        height: 100vh;
+        gap: 0;
+    }
+
+    .crm-header {
+        margin-bottom: 12px;
+    }
+
+    .crm-header h1 {
+        font-size: 1.2rem;
+    }
+
+    .crm-content {
+        display: block; /* Una sola columna */
+        height: calc(100vh - 80px); /* Ajustar espacio */
+        position: relative;
+    }
+
+    .customers-sidebar {
+        height: 100%;
+        border-radius: 0;
+        border: none;
+    }
+
+    .customer-list {
+        padding-bottom: 120px; /* EVITAR QUE EL MENU TAPE EL ÚLTIMO */
+    }
+
+    .customer-detail {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1001; /* Sobre todo */
+        border-radius: 0;
+        padding: 0;
+        background: white;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .mobile-detail-nav {
+        background: #6366f1;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        color: white;
+    }
+
+    .mobile-detail-nav .back-btn {
+        background: transparent;
+        border: none;
+        color: white;
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+    }
+
+    .detail-header {
+        padding: 20px;
+        margin-bottom: 0;
+    }
+
+    .stats-grid {
+        padding: 0 20px;
+        grid-template-columns: 1fr 1fr; /* 2 columnas en móvil */
+        gap: 12px;
+    }
+
+    .history-section {
+        padding: 20px;
+    }
+
+    .stat-card .value {
+        font-size: 0.95rem;
+    }
+
+    /* Modal Mobile */
+    .modal-content {
+        margin: 0;
+        height: 100vh;
+        border-radius: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+    }
+
+    .modal-actions {
+        margin-top: auto;
+        padding-bottom: 40px;
+    }
+}
+
 /* CAMPAIGN HISTORY (Sidebar Bottom) */
 .campaign-history {
     padding: 16px;

@@ -11,6 +11,7 @@ import { NotificationService } from '../notification.service';
 import { CatalogService } from '../catalog.service';
 import { SupabaseService } from '../supabase.service';
 import { AppInfoPanelComponent } from '../app-info-panel/app-info-panel.component';
+import { MobileService } from '../mobile.service';
 
 interface Team {
     id: string;
@@ -319,10 +320,15 @@ export class SuperAdminComponent implements OnInit {
     private supabaseService = inject(SupabaseService);
     private notificationService = inject(NotificationService);
     private catalogService = inject(CatalogService);
+    public mobileService = inject(MobileService);
     public router = inject(Router);
     private cdr = inject(ChangeDetectorRef);
     private ngZone = inject(NgZone);
     private sanitizer = inject(DomSanitizer);
+
+    isMobile() {
+        return this.mobileService.isMobile();
+    }
 
     constructor() { }
 

@@ -1,8 +1,19 @@
 <div class="orders-container" style="position: relative;">
+    <!-- Mobile Header -->
+    <div class="mobile-module-header" *ngIf="isMobile() && !selectedOrder">
+        <h2 class="module-title-mobile" style="text-align: left !important; margin-left: 0 !important;">Pedidos</h2>
+        <div class="header-actions">
+            <button class="refresh-btn-green" (click)="loadOrders()">
+                <i class="fa-solid fa-rotate"></i>
+            </button>
+        </div>
+    </div>
     <!-- Header with Search and Stats -->
     <div class="orders-header-styled"
         style="padding: 24px; background: white; border-radius: 16px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        
+        <!-- Desktop Only Title/Buttons -->
+        <div *ngIf="!isMobile()" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
             <div>
                 <h2 style="margin: 0; font-size: 1.5rem; font-weight: 800; color: #111827;">Gestión de Pedidos</h2>
                 <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 0.9rem;">Administra y monitorea tus pedidos en
@@ -33,40 +44,37 @@
             </div>
         </div>
 
-        <!-- Search and Status Tabs -->
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <!-- Search and Status Tabs (Visible on Both) -->
+        <div [style.display]="isMobile() ? 'block' : 'flex'" style="justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
             <!-- Tabs -->
-            <div class="status-tabs-styled"
-                style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; max-width: 100%;">
-                <button class="status-tab-styled" [class.active]="selectedStatus === 'all'"
+            <div class="status-tabs-styled">
+                <button class="status-tab-item" [class.active]="selectedStatus === 'all'"
                     (click)="setStatusFilter('all')">
-                    Todos <span class="tab-count-styled">{{ statusCounts.all }}</span>
+                    Todos <span class="tab-count-badge">{{ statusCounts.all }}</span>
                 </button>
-                <button class="status-tab-styled" [class.active]="selectedStatus === 'pending'"
+                <button class="status-tab-item" [class.active]="selectedStatus === 'pending'"
                     (click)="setStatusFilter('pending')">
-                    Pendientes <span class="tab-count-styled">{{ statusCounts.pending }}</span>
+                    Confirmar Pago <span class="tab-count-badge">{{ statusCounts.pending }}</span>
                 </button>
-                <button class="status-tab-styled" [class.active]="selectedStatus === 'cooking'"
+                <button class="status-tab-item" [class.active]="selectedStatus === 'cooking'"
                     (click)="setStatusFilter('cooking')">
-                    En Cocina <span class="tab-count-styled">{{ statusCounts.cooking }}</span>
+                    Cocina <span class="tab-count-badge">{{ statusCounts.cooking }}</span>
                 </button>
-                <button class="status-tab-styled" [class.active]="selectedStatus === 'ready'"
+                <button class="status-tab-item" [class.active]="selectedStatus === 'ready'"
                     (click)="setStatusFilter('ready')">
-                    Listos <span class="tab-count-styled">{{ statusCounts.ready }}</span>
+                    Listos <span class="tab-count-badge">{{ statusCounts.ready }}</span>
                 </button>
-                <button class="status-tab-styled" [class.active]="selectedStatus === 'delivered'"
+                <button class="status-tab-item" [class.active]="selectedStatus === 'delivered'"
                     (click)="setStatusFilter('delivered')">
-                    Entregados <span class="tab-count-styled">{{ statusCounts.delivered }}</span>
+                    Entregados <span class="tab-count-badge">{{ statusCounts.delivered }}</span>
                 </button>
             </div>
 
-            <!-- Search -->
-            <div class="search-box-styled" style="position: relative; width: 100%; max-width: 350px;">
-                <span
-                    style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); opacity: 0.5;">🔍</span>
-                <input type="text" [(ngModel)]="searchTerm" (ngModelChange)="onSearch()"
-                    placeholder="Buscar por ID o Cliente..."
-                    style="width: 100%; padding: 10px 10px 10px 40px; border: 1px solid #e5e7eb; border-radius: 10px; outline: none; transition: all 0.2s; font-size: 0.9rem;">
+            <!-- Search Block -->
+            <div class="search-box-styled" style="flex: 1; position: relative;">
+                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.9rem;"></i>
+                <input type="text" [(ngModel)]="searchTerm" placeholder="Buscar pedido o cliente..."
+                    style="width: 100%; padding: 12px 16px 12px 42px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 0.95rem; outline: none; transition: all 0.2s;">
             </div>
         </div>
     </div>
@@ -78,8 +86,10 @@
             <div class="kanban-column" cdkDropList [cdkDropListData]="ordersByStatus.pending"
                 (cdkDropListDropped)="onDrop($event, 'pending')">
                 <div class="column-header">
-                    <h3>Pendientes</h3>
-                    <span class="count">{{ ordersByStatus.pending.length }}</span>
+                    <h3 style="color: #92400e; display: flex; align-items: center; gap: 8px;">
+                      <i class="fa-solid fa-clock"></i> Confirmar Pago
+                    </h3>
+                    <span class="count" style="background: #fef3c7; color: #92400e;">{{ ordersByStatus.pending.length }}</span>
                 </div>
                 <div class="order-cards">
                     <div *ngFor="let order of ordersByStatus.pending" class="order-card" cdkDrag
@@ -182,40 +192,49 @@
                 </thead>
                 <tbody>
                     <tr *ngFor="let order of paginatedOrders" (click)="selectOrder(order)"
-                        [class.active]="selectedOrder?.id === order.id" style="cursor: pointer;">
-                        <td><strong>{{ order.id }}</strong></td>
-                        <td style="font-size: 0.8rem; color: #6b7280;">
-                            <div>{{ order.created_at | date:'dd/MM/yyyy' }}</div>
-                            <div style="font-weight: 600;">{{ order.created_at | date:'shortTime' }}</div>
-                        </td>
-                        <td>
-                            <div><strong>{{ order.customer_name }}</strong></div>
-                            <div style="display: flex; gap: 4px; margin-top: 4px;">
-                                <span *ngIf="order.items && order.items.length > 0"
-                                    style="background: #eef2ff; color: #4f46e5; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 800;">
-                                    📦 {{ order.items.length }} prod.
+                        [class.active]="selectedOrder?.id === order.id" class="order-list-item">
+                        
+                        <!-- VIEW: MOBILE CHAT-STYLE -->
+                        <ng-container *ngIf="isMobile()">
+                            <td class="order-avatar-cell">
+                                <div class="order-avatar">{{ order.customer_name[0] | uppercase }}</div>
+                            </td>
+                            <td class="order-main-cell">
+                                <div class="order-top-row">
+                                    <span class="order-customer-name">{{ order.customer_name }}</span>
+                                    <span class="order-time">{{ order.created_at | date:'HH:mm' }}</span>
+                                </div>
+                                <div class="order-bottom-row">
+                                    <span class="order-id-badge">#{{ order.id }}</span>
+                                    <span class="order-summary">
+                                        {{ order.items && order.items.length > 0 ? order.items.length + ' prod.' : 'Sin items' }} • ${{ order.total.toFixed(2) }}
+                                    </span>
+                                    <span class="status-badge-compact" [class]="order.status" style="font-size: 0.65rem;">
+                                        {{ getStatusLabel(order.status) }}
+                                    </span>
+                                </div>
+                            </td>
+                        </ng-container>
+
+                        <!-- VIEW: DESKTOP TABLE-STYLE -->
+                        <ng-container *ngIf="!isMobile()">
+                            <td><strong>{{ order.id }}</strong></td>
+                            <td class="text-muted">{{ order.created_at | date:'HH:mm' }} ({{ order.created_at | date:'dd/MM' }})</td>
+                            <td><strong>{{ order.customer_name }}</strong></td>
+                            <td><strong>${{ order.total.toFixed(2) }}</strong></td>
+                            <td>
+                                <span class="status-badge-compact" [class]="order.status">
+                                    {{ getStatusLabel(order.status) }}
                                 </span>
-                                <span *ngIf="!order.items || order.items.length === 0"
-                                    style="background: #fff1f2; color: #e11d48; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 800;">
-                                    ⚠️ Sin items
-                                </span>
-                            </div>
-                        </td>
-                        <td><strong>${{ order.total.toFixed(2) }}</strong></td>
-                        <td>
-                            <span class="status-badge-compact" [class]="order.status">
-                                {{ getStatusLabel(order.status) }}
-                            </span>
-                        </td>
-                        <td style="text-align: right;">
-                            <button *ngIf="order.status !== 'delivered' && order.status !== 'cancelled'"
-                                (click)="$event.stopPropagation(); updateStatus(order, order.status === 'pending' ? 'cooking' : (order.status === 'cooking' ? 'ready' : 'delivered'))"
-                                class="quick-action-btn" [disabled]="order.processing"
-                                style="padding: 4px 8px; border-radius: 6px; border: 1px solid #10b981; color: #10b981; background: white; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                                {{ order.status === 'pending' ? '🔪 Cocinar' : (order.status === 'cooking' ? '📦 Listo'
-                                : '✅ Entregar') }}
-                            </button>
-                        </td>
+                            </td>
+                            <td style="text-align: right;">
+                                <button *ngIf="order.status !== 'delivered' && order.status !== 'cancelled'"
+                                    (click)="$event.stopPropagation(); updateStatus(order, order.status === 'pending' ? 'cooking' : (order.status === 'cooking' ? 'ready' : 'delivered'))"
+                                    class="quick-action-btn">
+                                    {{ order.status === 'pending' ? 'Cocinar' : (order.status === 'cooking' ? 'Listo' : 'Entregar') }}
+                                </button>
+                            </td>
+                        </ng-container>
                     </tr>
                 </tbody>
             </table>
@@ -250,8 +269,8 @@
             <ng-container *ngTemplateOutlet="orderDetailTemplate"></ng-container>
         </div>
 
-        <!-- Mensaje si no hay selección -->
-        <div class="order-detail empty-state" *ngIf="!selectedOrder">
+        <!-- Mensaje si no hay selección (Desktop Only) -->
+        <div class="order-detail empty-state" *ngIf="!selectedOrder && !isMobile()">
             <div style="text-align: center; padding: 60px 20px; color: #9ca3af;">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                     style="margin: 0 auto 16px;">
@@ -270,7 +289,12 @@
 <!-- Template Unificado para el Detalle del Pedido -->
 <ng-template #orderDetailTemplate>
     <div class="detail-header" *ngIf="selectedOrder">
-        <h2>Detalle del Pedido {{ selectedOrder.id }}</h2>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <button *ngIf="isMobile()" (click)="backToList()" class="back-btn-premium">
+                <i class="fa-solid fa-chevron-left"></i> Volver
+            </button>
+            <h2 style="font-size: 1.1rem; font-weight: 800; margin: 0;">Pedido {{ selectedOrder.id }}</h2>
+        </div>
         <div class="status-badge" [class]="selectedOrder.status">
             {{ getStatusLabel(selectedOrder.status) }}
         </div>
@@ -280,6 +304,10 @@
         <p><strong>Cliente:</strong> {{ selectedOrder.customer_name }}</p>
         <p><strong>Dirección:</strong> {{ selectedOrder.delivery_address }}</p>
         <p><strong>Canal de Venta:</strong> {{ selectedOrder.channel | uppercase }}</p>
+        <div class="order-notes-box" *ngIf="selectedOrder.notes" 
+             style="margin-top: 12px; padding: 12px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; color: #9a3412; font-size: 0.9rem;">
+            <strong>📝 Notas del Pedido:</strong> {{ selectedOrder.notes }}
+        </div>
     </div>
 
     <div class="items-list" *ngIf="selectedOrder">
@@ -288,10 +316,15 @@
             style="padding: 12px; text-align: center; color: #6b7280; font-style: italic; background: #f9fafb; border-radius: 8px;">
             No hay productos registrados en este pedido.
         </div>
-        <div class="item-row" *ngFor="let item of selectedOrder.items">
-            <span class="qty">{{ item.quantity }}x</span>
-            <span class="name">{{ item.product_name }}</span>
-            <span class="price">${{ (item.unit_price * item.quantity).toFixed(2) }}</span>
+        <div class="item-card-mini" *ngFor="let item of selectedOrder.items" style="margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;">
+            <div class="item-row" style="margin-bottom: 0;">
+                <span class="qty">{{ item.quantity }}x</span>
+                <span class="name">{{ item.product_name }}</span>
+                <span class="price">${{ (item.unit_price * item.quantity).toFixed(2) }}</span>
+            </div>
+            <div class="item-specs" *ngIf="item.notes" style="font-size: 0.8rem; color: #ef4444; font-weight: 600; margin-left: 36px;">
+                ↳ Instrucción: {{ item.notes }}
+            </div>
         </div>
         <div class="total-row" *ngIf="selectedOrder.items && selectedOrder.items.length > 0">
             <span>Total</span>
@@ -300,10 +333,10 @@
     </div>
 
     <div class="action-buttons" *ngIf="selectedOrder">
-        <button *ngIf="selectedOrder.status === 'pending'" class="primary-btn pulse"
+        <button *ngIf="selectedOrder.status === 'pending'" class="success-btn pulse"
             [disabled]="selectedOrder.processing" (click)="updateStatus(selectedOrder, 'cooking')">
-            <span *ngIf="!selectedOrder.processing">👩‍🍳 Empezar a Cocinar</span>
-            <span *ngIf="selectedOrder.processing">⌛ Procesando...</span>
+            <span *ngIf="!selectedOrder.processing">💳 Confirmar Pago y Cocinar</span>
+            <span *ngIf="selectedOrder.processing">⌛ Confirmando...</span>
         </button>
         <button *ngIf="selectedOrder.status === 'cooking'" class="primary-btn" [disabled]="selectedOrder.processing"
             (click)="updateStatus(selectedOrder, 'ready')">

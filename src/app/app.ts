@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { Title } from '@angular/platform-browser';
 import { NotificationService } from './notification.service';
 import { SupabaseService } from './supabase.service';
+import { MobileService } from './mobile.service';
 
 @Component({
   selector: 'app-root',
@@ -18,13 +19,21 @@ export class App {
   private notificationService = inject(NotificationService);
   private supabaseService = inject(SupabaseService);
   private titleService = inject(Title);
+  public mobileService = inject(MobileService);
 
   toasts = this.notificationService.toasts;
   unreadCount = this.supabaseService.unreadCount;
   isSoundEnabled = this.supabaseService.isSoundEnabled;
   agentStatus = this.supabaseService.agentStatus;
   isLoading = signal(true);
+  isMobile = this.mobileService.isMobile;
   private merchantSubscription: any = null;
+
+  private checkMobile() {
+    if (this.isMobile()) {
+      this.closeSidebar();
+    }
+  }
 
   async updateStatus(status: 'online' | 'busy' | 'offline') {
     await this.supabaseService.updateAgentStatus(status);
@@ -42,7 +51,7 @@ export class App {
     confirm_password: ''
   };
 
-  constructor(private router: Router) {
+  constructor(public router: Router) {
     // Efecto para actualizar el título de la pestaña con (N) Plataforma - Comercio
     effect(() => {
       const count = this.unreadCount();
@@ -53,6 +62,8 @@ export class App {
     setTimeout(() => {
       this.isLoading.set(false);
     }, 1500);
+
+    this.checkMobile();
   }
 
   openGlobalSimulator() {
@@ -108,6 +119,14 @@ export class App {
 
   get isBioLinkPage() {
     return this.router.url.startsWith('/bio/');
+  }
+
+  get isImmersivePage() {
+    const url = this.router.url;
+    return url.startsWith('/chats') || 
+           url.startsWith('/orders') || 
+           url.startsWith('/reservations') ||
+           url.startsWith('/crm');
   }
 
   get isSuperAdmin() {

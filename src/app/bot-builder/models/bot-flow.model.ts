@@ -1,6 +1,6 @@
 export interface FlowNode {
   id: string;
-  type: 'start' | 'message' | 'question' | 'menu' | 'condition' | 'action' | 'ai_agent' | 'end' | 'ai_skill' | 'n8n' | 'mcp' | 'api' | 'memory_extract' | 'db_query' | 'set_variable' | 'switch' | 'delay' | 'business_hours' | 'semantic_router' | 'image_generator' | 'knowledge_query' | 'send_email' | 'transfer_operator' | 'wa_template' | 'catalog_search' | 'cart_summary' | 'order_checkout';
+  type: 'start' | 'message' | 'question' | 'menu' | 'condition' | 'action' | 'ai_agent' | 'end' | 'ai_skill' | 'n8n' | 'mcp' | 'api' | 'memory_extract' | 'db_query' | 'set_variable' | 'switch' | 'delay' | 'business_hours' | 'semantic_router' | 'image_generator' | 'knowledge_query' | 'send_email' | 'transfer_operator' | 'wa_template' | 'catalog_search' | 'cart_summary' | 'order_checkout' | 'reservation_check' | 'reservation_create' | 'calendar_sync';
   position: { x: number; y: number };
   data: {
     label: string;
@@ -64,6 +64,11 @@ export interface FlowNode {
     email_body?: string;
     wa_template_name?: string;
     wa_template_params?: string[];
+    // Reservas e Inventario
+    resource_id?: string;
+    start_time?: string;
+    pax?: number;
+    external_ical_url?: string;
   };
 }
 

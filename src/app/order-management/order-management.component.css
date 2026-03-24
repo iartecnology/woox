@@ -4,6 +4,8 @@
     margin: 20px auto;
     font-family: 'Inter', sans-serif;
     position: relative;
+    padding: 24px;
+    background: #f9fafb;
 }
 
 /* Kanban Layout Wrapper */
@@ -248,30 +250,314 @@
     gap: 12px;
 }
 
+/* Mobile Setup for Orders */
+@media (max-width: 768px) {
+    .orders-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1500;
+        padding: 16px;
+        padding-top: 10px;
+        overflow-y: auto;
+        background: white;
+        height: 100dvh;
+        margin: 0;
+        max-width: none;
+    }
+
+    .orders-header-styled {
+        padding: 16px !important;
+        margin-bottom: 16px !important;
+        border-radius: 12px !important;
+    }
+
+    /* Mobile Header Premium Style */
+    .mobile-module-header {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 12px 16px !important;
+        background: white !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 2500 !important;
+        height: 65px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        margin-bottom: 16px !important;
+    }
+
+    .back-btn-premium {
+        background: #eef2ff !important;
+        border: none !important;
+        padding: 8px 14px !important;
+        border-radius: 12px !important;
+        cursor: pointer !important;
+        color: #4f46e5 !important;
+        display: flex !important;
+        align-items: center !important;
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+        gap: 8px !important;
+        transition: all 0.2s !important;
+        text-decoration: none !important;
+        white-space: nowrap !important;
+    }
+
+    .refresh-btn-green {
+        background: #10b981 !important;
+        color: white !important;
+        border: none !important;
+        width: 42px !important;
+        height: 42px !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2) !important;
+        transition: all 0.2s !important;
+    }
+
+    .module-title-mobile {
+        font-size: 1.1rem !important;
+        font-weight: 800 !important;
+        color: #111827 !important;
+        margin: 0 !important;
+        flex: 1 !important;
+        text-align: center !important;
+    }
+
+    .orders-header-styled h2 {
+        font-size: 1.2rem !important;
+    }
+
+    .view-toggle-styled {
+        display: none !important; /* Force list on mobile */
+    }
+
+    .status-tabs-styled {
+        width: 100%;
+        gap: 4px !important;
+        padding-bottom: 10px !important;
+    }
+
+    .status-tab-styled {
+        font-size: 0.7rem !important;
+        padding: 6px 10px !important;
+    }
+
+    .orders-list-container {
+        display: block !important;
+        padding: 0 !important;
+        margin-top: 0 !important;
+        height: auto !important;
+        width: 100% !important;
+    }
+
+    .orders-list-section {
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        margin-bottom: 80px; /* Space for bottom nav or footer */
+    }
+
+    /* Mobile List Styles (Similar to Chats) */
+    .orders-table-compact {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .orders-table-compact thead {
+        display: none !important;
+    }
+
+    .desktop-only {
+        display: none !important;
+    }
+
+    .order-list-item {
+        display: flex !important;
+        padding: 12px 16px !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+        background: white !important;
+        cursor: pointer;
+        position: relative;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .order-list-item.active {
+        background: #f5f3ff !important;
+    }
+
+    .order-avatar-cell {
+        display: block !important;
+        padding: 0 !important;
+        width: 44px;
+        flex-shrink: 0;
+    }
+
+    .order-avatar {
+        width: 44px;
+        height: 44px;
+        background: #ede9fe;
+        color: #7c3aed;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 1.1rem;
+    }
+
+    .order-main-cell {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1;
+        padding: 0 !important;
+        min-width: 0;
+    }
+
+    .order-top-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+    }
+
+    .order-customer-name {
+        font-weight: 700;
+        color: #1f2937;
+        font-size: 1rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .order-time {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+
+    .order-bottom-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .order-id-badge {
+        font-size: 0.7rem;
+        background: #f1f5f9;
+        color: #64748b;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 700;
+    }
+
+    .order-summary {
+        font-size: 0.8rem;
+        color: #64748b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+    }
+
+    .order-status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .order-status-dot.pending { background: #f59e0b; }
+    .order-status-dot.cooking { background: #3b82f6; }
+    .order-status-dot.ready { background: #10b981; }
+    .order-status-dot.delivered { background: #94a3b8; }
+    .order-status-dot.cancelled { background: #ef4444; }
+
+    /* Order Detail Overlay on Mobile */
+    .order-detail.active-list {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        z-index: 2000 !important;
+        background: white !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 24px !important;
+        overflow-y: auto !important;
+        max-height: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .pagination-footer-styled {
+        flex-direction: column !important;
+        gap: 12px !important;
+        padding: 16px !important;
+    }
+
+    .orders-list-section {
+        padding-bottom: 110px !important;
+    }
+}
+
 .primary-btn,
 .success-btn,
-.cancel-btn {
-    padding: 14px;
-    border-radius: 12px;
-    font-weight: 700;
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s;
+.cancel-btn,
+.secondary-btn {
+    padding: 16px 24px !important;
+    border-radius: 14px !important;
+    font-weight: 800 !important;
+    font-size: 1rem !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: all 0.25s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+.primary-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(79, 70, 229, 0.3) !important;
+}
+
+.success-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3) !important;
 }
 
 .primary-btn {
-    background: #4F46E5;
-    color: white;
+    background: #4F46E5 !important;
+    color: white !important;
 }
 
 .success-btn {
-    background: #10B981;
-    color: white;
+    background: #10B981 !important;
+    color: white !important;
+}
+
+.secondary-btn {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
 }
 
 .cancel-btn {
-    background: #fef2f2;
-    color: #991b1b;
+    background: #fef2f2 !important;
+    color: #991b1b !important;
 }
 
 .pulse {
@@ -317,9 +603,64 @@
     transform: scale(1.05);
 }
 
-.secondary-btn:hover {
-    background: #cbd5e1 !important;
-    transform: translateY(-1px);
+/* Search and Tabs - Synchronized with Chats */
+.status-tabs-styled {
+    display: flex;
+    gap: 4px;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 12px;
+    margin-bottom: 0;
+    overflow-x: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.status-tabs-styled::-webkit-scrollbar {
+    display: none;
+}
+
+.status-tab-item {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.status-tab-item.active {
+    background: white;
+    color: #4f46e5;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.tab-count-badge {
+    font-size: 0.7rem;
+    background: #e2e8f0;
+    color: #64748b;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-weight: 800;
+}
+
+.status-tab-item.active .tab-count-badge {
+    background: #eef2ff;
+    color: #4f46e5;
+}
+
+@media (max-width: 768px) {
+    .status-tabs-styled {
+        margin-bottom: 12px;
+        width: 100%;
+    }
 }
 
 /* Drag and Drop Styles */

@@ -1,7 +1,8 @@
-import { Component, OnInit, OnDestroy, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, ChangeDetectorRef, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SupabaseService } from '../supabase.service';
 import { NotificationService } from '../notification.service';
+import { MobileService } from '../mobile.service';
 import { FormsModule } from '@angular/forms';
 import {
     DragDropModule,
@@ -14,6 +15,7 @@ interface OrderItem {
     product_name: string;
     quantity: number;
     unit_price: number;
+    notes?: string;
 }
 
 interface Order {
@@ -26,6 +28,8 @@ interface Order {
     status: 'pending' | 'cooking' | 'ready' | 'delivered' | 'cancelled';
     created_at: Date;
     delivery_address: string;
+    notes?: string;
+    metadata?: any;
     processing?: boolean; // Para estado de carga local
 }
 
@@ -129,8 +133,16 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
 
     private supabaseService = inject(SupabaseService);
     private notificationService = inject(NotificationService);
+    private mobileService = inject(MobileService);
+    isMobile = this.mobileService.isMobile;
 
-    constructor() { }
+    constructor() {
+        effect(() => {
+            if (this.isMobile()) {
+                this.viewMode = 'list';
+            }
+        });
+    }
 
     private orderSubscription: any;
 
@@ -148,6 +160,11 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
             await this.loadOrders();
             this.setupRealtime();
         }
+
+        if (this.isMobile()) {
+            this.viewMode = 'list';
+        }
+        this.mobileService.setImmersive(false);
     }
 
     setupRealtime() {
@@ -213,6 +230,7 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
                         status: o.status || 'pending',
                         created_at: new Date(o.created_at),
                         delivery_address: o.delivery_address || 'Sin dirección',
+                        notes: o.notes || '',
                         items: (rawItems || []).map((item: any) => {
                             let pName = item.product_name || '';
 
@@ -226,7 +244,8 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
                             return {
                                 product_name: pName,
                                 quantity: Number(item.quantity || 1),
-                                unit_price: Number(item.unit_price || item.price || 0)
+                                unit_price: Number(item.unit_price || item.price || 0),
+                                notes: item.notes || ''
                             };
                         })
                     };
@@ -235,7 +254,7 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
                 // Re-sincronizar el pedido seleccionado con el objeto fresco de la lista
                 if (oldSelectedUuid) {
                     this.selectedOrder = this.orders.find(o => o.uuid === oldSelectedUuid) || this.orders[0] || null;
-                } else if (this.orders.length > 0) {
+                } else if (!this.isMobile() && this.orders.length > 0) {
                     this.selectedOrder = this.orders[0];
                 }
             }
@@ -247,6 +266,14 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
 
     selectOrder(order: Order) {
         this.selectedOrder = order;
+        if (this.isMobile()) {
+            this.mobileService.setImmersive(true);
+        }
+    }
+
+    backToList() {
+        this.selectedOrder = null;
+        this.mobileService.setImmersive(false);
     }
 
     async updateStatus(order: Order, newStatus: any) {
@@ -363,7 +390,7 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
 
     getStatusLabel(status: string): string {
         const labels: { [key: string]: string } = {
-            'pending': 'Pendiente',
+            'pending': 'Confirmar Pago',
             'cooking': 'En Cocina',
             'ready': 'Listo',
             'delivered': 'Entregado',

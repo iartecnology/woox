@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { inject } from '@angular/core';
 import { SupabaseService } from '../supabase.service';
 import { supabase } from '../supabase-config';
+import { MobileService } from '../mobile.service';
 
 interface Customer {
     id: string;
@@ -35,6 +36,7 @@ interface CampaignResult {
 })
 export class CustomerCrmComponent implements OnInit {
     private supabaseService = inject(SupabaseService);
+    public mobileService = inject(MobileService);
     customers: Customer[] = [];
     merchantId: string = '';
 
@@ -70,13 +72,19 @@ export class CustomerCrmComponent implements OnInit {
         this.loadCampaignHistory();
     }
 
+    isMobile(): boolean {
+        return this.mobileService.isMobile();
+    }
+
     async loadCustomers() {
         if (!this.merchantId) return;
         const { data } = await this.supabaseService.getMerchantCustomers(this.merchantId);
         if (data) {
             this.customers = data as unknown as Customer[];
             this.applyFilter();
-            if (this.customers.length > 0) this.selectedCustomer = this.filteredCustomers[0];
+            if (this.customers.length > 0 && !this.isMobile()) {
+                this.selectedCustomer = this.filteredCustomers[0];
+            }
         }
     }
 
@@ -149,6 +157,16 @@ export class CustomerCrmComponent implements OnInit {
 
     selectCustomer(customer: Customer) {
         this.selectedCustomer = customer;
+        if (this.isMobile()) {
+            this.mobileService.setImmersive(true);
+        }
+    }
+
+    goBackToList() {
+        this.selectedCustomer = null;
+        if (this.isMobile()) {
+            this.mobileService.setImmersive(false);
+        }
     }
 
     openCampaignModal() {

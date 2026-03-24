@@ -13,7 +13,10 @@ function resolveVariables(text: string, variables: any, flowName?: string): stri
         if (cart.length === 0) {
             text = text.replace(/{{cartSummary}}/g, '_El carrito está vacío_');
         } else {
-            const summary = cart.map((it: any) => `- ${it.name} x${it.qty} ($${it.price * it.qty})`).join('\n');
+            const summary = cart.map((it: any) => {
+                const notes = it.notes ? ` (${it.notes})` : '';
+                return `- ${it.name} x${it.qty}${notes} ($${it.price * it.qty})`;
+            }).join('\n');
             const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
             text = text.replace(/{{cartSummary}}/g, `${summary}\n\n💰 *Total: $${total}*`);
         }
@@ -165,13 +168,28 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
     } else if (actionType === 'add_to_cart') {
         const productId = node.data.params?.product_id || variables['last_selected_product_id'];
         const qty = parseInt(variables['cantidad_actual'] || '1') || 1;
+        const notes = variables['last_product_notes_value'] || variables['last_product_notes'] || '';
         if (productId) {
             const { data: product } = await supabase.from('products').select('id, name, price').eq('id', productId).single();
             if (product) {
                 const cart = variables['cart'] || [];
                 const existing = cart.find((i: any) => i.id === productId);
-                if (existing) { existing.qty += qty; } else { cart.push({ id: product.id, name: product.name, price: product.price, qty }); }
+                if (existing) {
+                    existing.qty += qty;
+                    // Añadir notas si las hay (concatenar si ya existían)
+                    if (notes && notes.toLowerCase() !== 'no') {
+                        existing.notes = existing.notes ? `${existing.notes}, ${notes}` : notes;
+                    }
+                } else {
+                    const item: any = { id: product.id, name: product.name, price: product.price, qty };
+                    if (notes && notes.toLowerCase() !== 'no') {
+                        item.notes = notes;
+                    }
+                    cart.push(item);
+                }
                 variables['cart'] = cart;
+                // Limpiar variables temporales
+                variables['last_product_notes_value'] = '';
             }
         }
     }
@@ -313,6 +331,87 @@ async function executeAgentTool(
             return `📦 Pedido #${ord.order_number || ord.id.substring(0, 8)}\nEstado: ${statusMap[ord.status] || ord.status}\nTotal: $${ord.total}`;
         }
 
+        case 'get_available_slots': {
+            const resourceId = toolArgs?.resource_id || variables['resource_id'];
+            const date = toolArgs?.date || new Date().toISOString().split('T')[0];
+            const pax = toolArgs?.pax || 1;
+            
+            if (!resourceId) return "Necesito saber qué recurso o servicio quieres consultar.";
+            
+            const { data, error } = await supabase.rpc('get_available_slots', {
+                p_resource_id: resourceId,
+                p_date: date,
+                p_pax: pax
+            });
+            
+            if (error) return `Error al consultar disponibilidad: ${error.message}`;
+            if (!data || data.length === 0) return `No encontré horarios disponibles para el ${date}. ¿Deseas intentar con otra fecha?`;
+            
+            return `Horarios disponibles para el ${date}:\n${data.map((s: any) => `• ${s.slot_start.split('T')[1].substring(0, 5)}`).join('\n')}`;
+        }
+
+        case 'check_availability': {
+            const resourceId = toolArgs?.resource_id || variables['resource_id'];
+            const startStr = toolArgs?.start; // "YYYY-MM-DD HH:MM"
+            const pax = toolArgs?.pax || 1;
+            
+            if (!resourceId || !startStr) return "Faltan datos para verificar disponibilidad (servicio o fecha/hora).";
+            
+            const start = new Date(startStr.replace(' ', 'T'));
+            if (isNaN(start.getTime())) return "El formato de fecha/hora es inválido. Usa YYYY-MM-DD HH:MM.";
+
+            const { data: resInfo } = await supabase.from('reservable_resources').select('duration_minutes').eq('id', resourceId).single();
+            const duration = resInfo?.duration_minutes || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+            
+            const { data, error } = await supabase.rpc('check_resource_availability', {
+                p_resource_id: resourceId,
+                p_start_time: start.toISOString(),
+                p_end_time: end.toISOString(),
+                p_pax: pax
+            });
+            
+            if (error) return `Error técnico: ${error.message}`;
+            if (data.available) {
+                variables['last_checked_start'] = start.toISOString();
+                variables['last_checked_resource'] = resourceId;
+                return `✅ ¡Sí! Hay disponibilidad para el ${startStr}. ¿Confirmamos tu reserva?`;
+            } else {
+                return `❌ Lo siento, no está disponible en ese horario: ${data.reason}`;
+            }
+        }
+
+        case 'create_booking': {
+            const resourceId = toolArgs?.resource_id || variables['last_checked_resource'] || variables['resource_id'];
+            const startStr = toolArgs?.start || variables['last_checked_start'];
+            const pax = toolArgs?.pax || 1;
+            const name = toolArgs?.name || variables['customer_name'] || 'Cliente';
+            
+            if (!resourceId || !startStr) return "No tengo clara la fecha o el recurso para agendar. ¿Puedes confirmarlos?";
+            
+            const { data: resInfo } = await supabase.from('reservable_resources').select('duration_minutes, base_price').eq('id', resourceId).single();
+            const duration = resInfo?.duration_minutes || 60;
+            const start = new Date(startStr);
+            const end = new Date(start.getTime() + duration * 60000);
+            
+            const { data: booking, error: bErr } = await supabase.from('bookings').insert({
+                merchant_id: merchantId,
+                customer_id: customerId,
+                resource_id: resourceId,
+                start_time: start.toISOString(),
+                end_time: end.toISOString(),
+                pax: pax,
+                status: 'pending',
+                channel: 'whatsapp',
+                total_price: resInfo?.base_price || 0,
+                conversation_id: conversationId
+            }).select().single();
+            
+            if (bErr) return `Error al registrar la reserva: ${bErr.message}`;
+            
+            return `🎉 ¡Listo! Reserva agendada con éxito.\n📅 Fecha: ${new Date(startStr).toLocaleString()}\n👤 A nombre de: ${name}\n🔢 Personas: ${pax}\n\n¡Te esperamos!`;
+        }
+
         case 'transfer_human': {
             await supabase.from('conversations').update({ ai_active: false }).eq('id', conversationId);
             variables['transferred_to_human'] = true;
@@ -402,6 +501,46 @@ const TOOL_DEFINITIONS: Record<string, any> = {
         name: 'transfer_human',
         description: 'Transfiere la conversación a un agente humano. Úsala cuando el cliente lo solicite explícitamente o cuando no puedas resolver su consulta.',
         parameters: { type: 'object', properties: {} }
+    },
+    get_available_slots: {
+        name: 'get_available_slots',
+        description: 'Consulta los horarios disponibles para un recurso o servicio en una fecha específica.',
+        parameters: {
+            type: 'object',
+            properties: {
+                resource_id: { type: 'string', description: 'ID del recurso (UUID)' },
+                date: { type: 'string', description: 'Fecha a consultar (YYYY-MM-DD)' },
+                pax: { type: 'number', description: 'Número de personas' }
+            },
+            required: ['resource_id', 'date']
+        }
+    },
+    check_availability: {
+        name: 'check_availability',
+        description: 'Verifica si un horario específico está disponible para reservar.',
+        parameters: {
+            type: 'object',
+            properties: {
+                resource_id: { type: 'string', description: 'ID del recurso (UUID)' },
+                start: { type: 'string', description: 'Fecha y hora deseada (YYYY-MM-DD HH:MM)' },
+                pax: { type: 'number', description: 'Número de personas' }
+            },
+            required: ['resource_id', 'start']
+        }
+    },
+    create_booking: {
+        name: 'create_booking',
+        description: 'Crea y confirma una reserva en el sistema.',
+        parameters: {
+            type: 'object',
+            properties: {
+                resource_id: { type: 'string', description: 'ID del recurso (UUID)' },
+                start: { type: 'string', description: 'Fecha y hora (YYYY-MM-DD HH:MM)' },
+                pax: { type: 'number', description: 'Número de personas' },
+                name: { type: 'string', description: 'Nombre del cliente' }
+            },
+            required: ['resource_id', 'start']
+        }
     }
 };
 
@@ -477,15 +616,11 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
             const varName = currentNode.data.variable || 'last_input';
             variables[varName] = messageText.trim();
 
-            if (varName === 'cantidad_actual' && variables['last_selected_product_id']) {
-                const qty = parseInt(messageText) || 1;
-                const pid = variables['last_selected_product_id'];
-                const pname = variables['last_selected_product_name'] || 'Producto';
-                const pprice = variables['last_selected_product_price'] || 0;
-                const cart = variables['cart'] || [];
-                const existing = cart.find((i: any) => i.id === pid);
-                if (existing) { existing.qty += qty; } else { cart.push({ id: pid, name: pname, price: pprice, qty }); }
-                variables['cart'] = cart;
+            // NOTA: El carrito se actualiza en el nodo action (add_to_cart), no aquí.
+            // Guardamos la cantidad para que el action la use.
+            // También guardamos las notas del producto para usarlas en el carrito.
+            if (varName === 'last_product_notes' && variables['last_selected_product_id']) {
+                variables['last_product_notes_value'] = messageText.trim();
             }
 
             const conn = connections.find((c: any) => c.from === currentNodeId && c.fromPort === 'output');
@@ -1033,6 +1168,73 @@ ${customNodeInstructions}
             const result = evaluateCondition(node.data.operator || '==', String(actualVal), node.data.value || '');
             const conn = connections.find((c: any) => c.from === currentNodeId && c.fromPort === (result ? 'yes' : 'no'));
             if (conn) { currentNodeId = conn.to; continue; } else break;
+        }
+
+        // ── CATEGORÍA: RESERVAS ──────────────────────
+        if (node.type === 'reservation_check') {
+            console.log(`[BOT-ENGINE] Nodo Reserva Check: ${node.data.resource_id}`);
+            const resourceId = node.data.resource_id;
+            const startStr = resolveVariables(node.data.start_time || '{{fecha_cita}} {{hora_cita}}', variables, flow.name);
+            const pax = parseInt(resolveVariables(node.data.pax || '1', variables, flow.name)) || 1;
+            
+            const start = new Date(startStr.replace(' ', 'T'));
+            if (!isNaN(start.getTime())) {
+                const { data: resInfo } = await supabase.from('reservable_resources').select('duration_minutes').eq('id', resourceId).single();
+                const duration = resInfo?.duration_minutes || 60;
+                const end = new Date(start.getTime() + duration * 60000);
+
+                const { data } = await supabase.rpc('check_resource_availability', {
+                    p_resource_id: resourceId,
+                    p_start_time: start.toISOString(),
+                    p_end_time: end.toISOString(),
+                    p_pax: pax
+                });
+
+                variables['reservation_available'] = data?.available || false;
+                variables['reservation_reason'] = data?.reason || '';
+            } else {
+                variables['reservation_available'] = false;
+                variables['reservation_reason'] = 'Formato de fecha inválido';
+            }
+        }
+
+        if (node.type === 'reservation_create') {
+            console.log(`[BOT-ENGINE] Nodo Reserva Create: ${node.data.resource_id}`);
+            const resourceId = node.data.resource_id;
+            const startStr = resolveVariables(node.data.start_time || '{{fecha_cita}} {{hora_cita}}', variables, flow.name);
+            const pax = parseInt(resolveVariables(node.data.pax || '1', variables, flow.name)) || 1;
+            
+            const start = new Date(startStr.replace(' ', 'T'));
+            if (!isNaN(start.getTime())) {
+                const { data: resInfo } = await supabase.from('reservable_resources').select('duration_minutes, base_price').eq('id', resourceId).single();
+                const duration = resInfo?.duration_minutes || 60;
+                const end = new Date(start.getTime() + duration * 60000);
+
+                const { data: booking, error: bErr } = await supabase.from('bookings').insert({
+                    merchant_id: merchantId,
+                    customer_id: customerId,
+                    resource_id: resourceId,
+                    start_time: start.toISOString(),
+                    end_time: end.toISOString(),
+                    pax: pax,
+                    status: 'confirmed',
+                    channel: 'whatsapp',
+                    total_price: resInfo?.base_price || 0,
+                    conversation_id: conversationId
+                }).select().single();
+                
+                if (booking) {
+                    variables['booking_id'] = booking.id;
+                    variables['booking_status'] = 'success';
+                } else {
+                    variables['booking_status'] = 'error';
+                    variables['booking_error'] = bErr?.message;
+                }
+            }
+        }
+
+        if (node.type === 'calendar_sync') {
+            messagesToReturn.push('🔄 Sincronizando con calendarios externos...');
         }
 
         // ── MENSAJE ──────────────────────────────────

@@ -1,9 +1,9 @@
-<div class="chat-dashboard">
+<div class="chat-dashboard" [class.mobile-view]="isMobile()">
 
   <!-- PANEL 1: LISTA DE CHATS -->
-  <aside class="panel-list">
+  <aside class="panel-list" *ngIf="!isMobile() || (isMobile() && !selectedConversation)">
     <div class="panel-header">
-      <div class="header-top">
+      <div class="header-top" *ngIf="!isMobile()">
         <h2 class="panel-title">Chats</h2>
         <div class="header-actions" style="display: flex; gap: 6px;">
           <button class="icon-btn" (click)="loadConversations()" title="Recargar"
@@ -53,7 +53,16 @@
       </div>
     </div>
 
-    <div class="conversation-list" style="overflow-y: auto; flex: 1; position: relative;">
+    <div class="conversation-list" style="overflow-y: auto; flex: 1; position: relative;"
+         (touchstart)="onTouchStart($event)" 
+         (touchmove)="onTouchMove($event)" 
+         (touchend)="onTouchEnd($event)">
+      
+      <!-- Pull to refresh indicator -->
+      <div *ngIf="isRefreshing" style="display: flex; justify-content: center; padding: 10px;">
+        <div class="spinner-premium" style="width: 24px; height: 24px; border-width: 3px;"></div>
+      </div>
+
       <!-- Spinner Lista -->
       <div *ngIf="isLoadingList"
         style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 0; color: #64748b; gap: 12px;">
@@ -119,7 +128,24 @@
   </aside>
 
   <!-- PANEL 2: CHAT ACTIVO -->
-  <main class="panel-chat" style="position: relative;">
+  <main class="panel-chat" *ngIf="!isMobile() || (isMobile() && selectedConversation)" style="position: relative;">
+    
+    <!-- Mobile Back Header -->
+    <div class="mobile-chat-header" *ngIf="isMobile() && selectedConversation">
+        <button class="back-btn" (click)="backToList()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <div class="mobile-chat-title" (click)="showCrmPanel = !showCrmPanel">
+            <span class="m-avatar">{{ selectedConversation.customer_name_initial }}</span>
+            <div class="m-info">
+                <strong>{{ (selectedConversation.customer_name.length > 20) ? (selectedConversation.customer_name | slice:0:20) + '...' : selectedConversation.customer_name }}</strong>
+                <small>En línea</small>
+            </div>
+        </div>
+        <div class="mobile-chat-actions">
+             <button class="m-action-btn" (click)="showCrmPanel = !showCrmPanel">👤</button>
+        </div>
+    </div>
     <!-- Overlay de Carga Detalles -->
     <div *ngIf="isLoadingDetails"
       style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; backdrop-filter: blur(2px);">
@@ -218,7 +244,12 @@
   </main>
 
   <!-- PANEL 3: CRM / INFO -->
-  <aside class="panel-crm" *ngIf="selectedConversation">
+  <aside class="panel-crm" [class.mobile-active]="showCrmPanel" *ngIf="selectedConversation && (!isMobile() || showCrmPanel)">
+    
+    <!-- Mobile CRM Close -->
+    <div class="mobile-crm-close" *ngIf="isMobile()">
+        <button (click)="showCrmPanel = false">← Volver al chat</button>
+    </div>
     <div class="crm-section">
       <div class="crm-section-title">Información del Cliente</div>
       <div class="info-grid">

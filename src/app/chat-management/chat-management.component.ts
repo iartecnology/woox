@@ -8,6 +8,7 @@ import { SupabaseService } from '../supabase.service';
 import { ChatSimulatorComponent } from '../chat-simulator/chat-simulator.component';
 import { CatalogService } from '../catalog.service';
 import { NotificationService } from '../notification.service';
+import { MobileService } from '../mobile.service';
 
 interface Message {
     id: string;
@@ -45,6 +46,9 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     @ViewChild('chatBody') private chatBody!: ElementRef;
     @ViewChild('scrollAnchor') private scrollAnchor!: ElementRef;
     private mutationObserver?: MutationObserver;
+
+    public mobileService = inject(MobileService);
+    isMobile = this.mobileService.isMobile;
 
     conversations: Conversation[] = [];
     selectedConversation: Conversation | null = null;
@@ -90,6 +94,11 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     typingAgentName: string = '';
     merchantData: any = null;
 
+    // Pull-to-refresh
+    touchStartY: number = 0;
+    touchMoveY: number = 0;
+    isRefreshing: boolean = false;
+
     private cdr = inject(ChangeDetectorRef);
     private supabaseService = inject(SupabaseService);
     private notificationService = inject(NotificationService);
@@ -98,6 +107,14 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     private route = inject(ActivatedRoute);
     private router = inject(Router);
     private ngZone = inject(NgZone);
+
+    showCrmPanel: boolean = false;
+
+    backToList() {
+        this.selectedConversation = null;
+        this.mobileService.setImmersive(false);
+        this.cdr.detectChanges();
+    }
 
     agentStatus = this.supabaseService.agentStatus;
 
@@ -174,6 +191,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     }
 
     async ngOnInit() {
+        this.mobileService.setImmersive(false);
         this.merchantId = localStorage.getItem('active_merchant_id') || localStorage.getItem('merchant_id') || '';
 
         this.route.queryParams.subscribe(params => {
@@ -264,6 +282,36 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
         // Removiendo MutationObserver para evitar bucles infinitos con CD
         // Ahora usamos ngAfterViewChecked con la bandera shouldScrollToBottom
         console.log('setupMutationObserver: Skipping for stability (using ngAfterViewChecked)');
+    }
+
+    // --- Pull to Refresh Logic ---
+    onTouchStart(e: TouchEvent) {
+        if (!this.isMobile() || this.isLoadingList) return;
+        const target = e.currentTarget as HTMLElement;
+        // Sólo permitir refresh si estamos arriba del todo
+        if (target.scrollTop === 0) {
+            this.touchStartY = e.touches[0].clientY;
+            this.touchMoveY = this.touchStartY;
+        } else {
+            this.touchStartY = 0;
+        }
+    }
+
+    onTouchMove(e: TouchEvent) {
+        if (!this.touchStartY || !this.isMobile() || this.isLoadingList) return;
+        this.touchMoveY = e.touches[0].clientY;
+    }
+
+    async onTouchEnd(e?: TouchEvent) {
+        if (!this.touchStartY || !this.isMobile() || this.isLoadingList || this.isRefreshing) return;
+        const pullDistance = this.touchMoveY - this.touchStartY;
+        if (pullDistance > 80) { // Umbral de 80px para recargar
+            this.isRefreshing = true;
+            await this.loadConversations(true);
+            this.isRefreshing = false;
+        }
+        this.touchStartY = 0;
+        this.touchMoveY = 0;
     }
 
     ngOnDestroy() {
@@ -462,8 +510,8 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
                 this.updateGlobalNotificationCount();
 
-                // Auto-select first chat if none selected
-                if (this.conversations.length > 0 && !this.selectedConversation) {
+                // Auto-select first chat if none selected (Only on Desktop)
+                if (this.conversations.length > 0 && !this.selectedConversation && !this.isMobile()) {
                     this.selectConversation(this.conversations[0]);
                 }
             }
@@ -545,6 +593,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
         }
 
         this.selectedConversation = conv;
+        this.mobileService.setImmersive(true);
         this.isLoadingDetails = true;
         this.cdr.detectChanges();
 

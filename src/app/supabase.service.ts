@@ -261,11 +261,98 @@ export class SupabaseService {
         return { data, error };
     }
 
+    // --- RESERVAS (BOOKINGS) ---
+    async getOrCreateCustomer(merchant_id: string, phone: string, full_name?: string) {
+        // 1. Buscar si ya existe por teléfono en este comercio
+        const { data: existing } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('merchant_id', merchant_id)
+            .eq('phone', phone)
+            .maybeSingle();
+
+        if (existing) return existing.id;
+
+        // 2. Si no, crearlo (registra en el CRM)
+        const { data, error } = await supabase
+            .from('customers')
+            .insert({
+                merchant_id,
+                phone,
+                full_name: full_name || 'Cliente Nuevo',
+                status: 'lead'
+            })
+            .select('id')
+            .single();
+
+        if (error) {
+            console.error('Error creando cliente:', error);
+            return null;
+        }
+        return data.id;
+    }
+
+    async createReservation(reservation: any) {
+        if (!reservation.merchant_id || !this.isValidUUID(reservation.merchant_id)) {
+            return { data: null, error: { message: 'ID de comercio inválido' } };
+        }
+
+        // 1. Asegurar cliente (CRM)
+        const customerId = await this.getOrCreateCustomer(
+            reservation.merchant_id, 
+            reservation.customer_phone, 
+            reservation.customer_name
+        );
+
+        if (!customerId) return { data: null, error: { message: 'No se pudo crear/obtener el cliente en CRM' } };
+
+        // 2. Preparar el booking para la tabla oficial
+        // Si start_time es un string "Dom 19 Mar 10:00", hay que convertirlo a ISO o Date.
+        // Asumimos que viene formateado o es manejable. 
+        // Si viene de bot-runtime como "Mar 11 Mar 10:00", necesitamos parsearlo.
+        
+        // Calcular end_time sumando 60 min por defecto o traer duración del recurso
+        let start = new Date(reservation.start_time);
+        if (isNaN(start.getTime())) {
+            // Intento de parseo manual simple para el bot builder
+            const now = new Date();
+            const timeMatch = reservation.start_time.match(/(\d{2}):(\d{2})/);
+            if (timeMatch) {
+                start = new Date();
+                start.setHours(parseInt(timeMatch[1]), parseInt(timeMatch[2]), 0, 0);
+            } else {
+                start = now;
+            }
+        }
+        const end = new Date(start.getTime() + (reservation.duration || 60) * 60000);
+
+        const booking = {
+            merchant_id: reservation.merchant_id,
+            customer_id: customerId,
+            resource_id: reservation.resource_id,
+            start_time: start.toISOString(),
+            end_time: end.toISOString(),
+            pax: reservation.pax || 1,
+            status: reservation.status || 'confirmed',
+            channel: 'whatsapp',
+            metadata: { 
+                customer_name_manual: reservation.customer_name,
+                source: 'Bot Simulation/Live'
+            }
+        };
+
+        return await supabase
+            .from('bookings')
+            .insert(booking)
+            .select()
+            .single();
+    }
+
     // --- PEDIDOS (ORDERS) ---
     async getOrders(merchantId: string) {
         const { data, error } = await supabase
             .from('orders')
-            .select('*, customers(full_name), items:order_items(*, products(name, id))')
+            .select('*, customers(full_name), order_items(*, products(name, id))')
             .eq('merchant_id', merchantId)
             .order('created_at', { ascending: false });
         return { data, error };
@@ -308,7 +395,8 @@ export class SupabaseService {
                 product_name: String(it.product_name || 'Producto'),
                 quantity: Number(it.quantity) || 0,
                 unit_price: Number(it.unit_price) || 0,
-                subtotal: Number(it.subtotal) || 0
+                subtotal: Number(it.subtotal) || 0,
+                notes: it.notes || ''
             }));
 
             const { data, error } = await supabase

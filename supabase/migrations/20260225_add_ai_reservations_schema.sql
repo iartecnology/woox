@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS public.availability_exceptions (
     start_datetime TIMESTAMP WITH TIME ZONE NOT NULL,
     end_datetime TIMESTAMP WITH TIME ZONE NOT NULL,
     reason TEXT, -- Ej: 'Mantenimiento', 'Hora de Almuerzo'
-    is_block BOOLEAN DEFAULT true, -- Si es true, bloquea la disponibilidad. Si es false, podría agregar horas extra.
+    is_block BOOLEAN DEFAULT true, -- Si es true, bloquea la disponibilidad
+    metadata JSONB DEFAULT '{}'::jsonb, -- Para guardar info extra (ej: {source: 'ical', iuid: '...'})
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

@@ -6,10 +6,12 @@ import { NotificationService } from '../notification.service';
 import { FlowNode, FlowConnection, FlowData, BotFlow } from './models/bot-flow.model';
 import { BotRuntimeService } from './services/bot-runtime.service';
 
+import { ChatSimulatorComponent } from '../chat-simulator/chat-simulator.component';
+
 @Component({
   selector: 'app-bot-builder',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ChatSimulatorComponent],
   templateUrl: './bot-builder.component.html',
   styleUrl: './bot-builder.component.css'
 })
@@ -27,6 +29,7 @@ export class BotBuilderComponent implements OnInit {
   // --- STATE ---
   merchantId: string = '';
   merchantName: string = 'Cargando...';
+  logoUrl: string = '';
   botFlow: BotFlow = {
     merchant_id: '',
     name: 'Flujo de Ventas',
@@ -142,6 +145,14 @@ export class BotBuilderComponent implements OnInit {
         { type: 'cart_summary', label: 'Carrito', icon: '🛍️', description: 'Resumen de compra' },
         { type: 'order_checkout', label: 'Pagar / Pedido', icon: '🏁', description: 'Registrar transacción' }
       ]
+    },
+    {
+      name: 'Reservas y Agendamiento',
+      items: [
+        { type: 'reservation_check', label: 'Consultar Cupo', icon: '📅', description: 'Verificar disponibilidad' },
+        { type: 'reservation_create', label: 'Agendar Cita', icon: '📝', description: 'Crear reserva/cita' },
+        { type: 'calendar_sync', label: 'Sincronizar iCal', icon: '🔄', description: 'Google/Airbnb Sync' }
+      ]
     }
   ];
 
@@ -176,8 +187,14 @@ export class BotBuilderComponent implements OnInit {
     name: '',
     description: '',
     icon: 'fa-solid fa-robot',
-    category: 'general'
+    category: 'ia_bot'
   };
+
+  templateCategories = [
+    { id: 'commerce', name: '🛒 Comercio / Ventas',     icon: '🛍️' },
+    { id: 'booking',  name: '📅 Reservas / Citas',       icon: '📅' },
+    { id: 'tools',    name: '⚙️ Herramientas',           icon: '🔌' }
+  ];
 
   iconOptions = [
     'fa-solid fa-robot', 'fa-solid fa-brain', 'fa-solid fa-rocket', 'fa-solid fa-stars',
@@ -215,8 +232,9 @@ export class BotBuilderComponent implements OnInit {
       const { data: m } = await this.supabase.getMerchantById(this.merchantId);
       if (m) {
         this.merchantName = m.name;
+        this.logoUrl = m.logo_url || '';
         this.botFlow.name = `Flujo de ${m.name}`;
-        this.cdr.detectChanges(); // Asegurar que el nombre se actualice en la UI
+        this.cdr.detectChanges(); 
       }
       await this.loadFlow();
     }
@@ -294,39 +312,60 @@ export class BotBuilderComponent implements OnInit {
   async loadTemplates() {
     const { data: dbTemplates } = await this.supabase.getBotFlowTemplates();
     
-    // Plantillas base hardcoded (Generadores dinámicos)
+    // Catálogo de Plantillas Inteligentes (6 plantillas)
     const baseTemplates = [
+      // GRUPO: Comercio / Ventas
+      {
+        id: 'store_bot',
+        name: 'Tienda Bot',
+        description: 'Bot estructurado que lee tus categorías y productos reales para generar menús de navegación, carrito y checkout automáticamente.',
+        icon: '🛍️',
+        category: 'commerce'
+      },
+      {
+        id: 'store_ai',
+        name: 'Tienda con IA',
+        description: 'Vendedor autónomo con IA que busca en catálogo, añade al carrito y cierra pedidos sin intervención humana.',
+        icon: '🧠',
+        category: 'commerce'
+      },
+      // GRUPO: Reservas / Citas
+      {
+        id: 'booking_bot',
+        name: 'Reservas Bot',
+        description: 'Bot estructurado que lee tus servicios y guía al usuario por etapas: especialista → disponibilidad → datos de contacto → confirmación en CRM.',
+        icon: '📅',
+        category: 'booking'
+      },
+      {
+        id: 'booking_ai',
+        name: 'Reservas con IA',
+        description: 'Agente IA que consulta disponibilidad en lenguaje natural y registra automáticamente al cliente en tu agenda con su nombre y teléfono.',
+        icon: '🧠',
+        category: 'booking'
+      },
+      // GRUPO: Herramientas
       {
         id: 'rag_expert',
-        name: '🧠 Consultoría Experta RAG',
-        description: 'Ideal para soporte técnico, FAQs y manuales. La IA responde basándose en tus documentos subidos.',
+        name: 'Consultoría RAG',
+        description: 'La IA responde basándose en tus documentos subidos. Ideal para FAQs técnicas y soporte especializado.',
         icon: '📚',
-        category: 'general'
+        category: 'tools'
       },
       {
-        id: 'ia_catalog',
-        name: '🤖 Ventas con IA Flash',
-        description: 'Vendedor automático que busca en tu catálogo, gestiona stock y toma pedidos sin intervención humana.',
-        icon: '✨',
-        category: 'ecommerce'
-      },
-      {
-        id: 'products',
-        name: '🛒 E-commerce Dinámico',
-        description: 'Flujo tradicional con menús de categorías, carrito visual y captura de datos de envío.',
-        icon: '🛍️',
-        category: 'ecommerce'
-      },
-      {
-        id: 'services',
-        name: '📅 Agendamiento de Servicios',
-        description: 'Perfecto para clínicas, consultorios o spas. Menú de servicios y selección de fecha/hora.',
-        icon: '🩺',
-        category: 'servicios'
+        id: 'n8n_sync',
+        name: 'Sincronización n8n',
+        description: 'Envía datos del cliente a n8n para CRM externo, Google Sheets, bases de datos propias o cualquier automatización.',
+        icon: '🔌',
+        category: 'tools'
       }
     ];
 
     this.templates = [...baseTemplates, ...(dbTemplates || [])];
+  }
+
+  getTemplatesByCategory(catId: string) {
+    return this.templates.filter(t => t.category === catId || (!t.category && catId === 'tools'));
   }
 
   // --- LOADING / SAVING ---
@@ -339,7 +378,10 @@ export class BotBuilderComponent implements OnInit {
 
     const { data, error } = await this.supabase.getBotFlows(this.merchantId);
     if (data && data.length > 0) {
-      this.botFlow = data[0];
+      // PASO 1 FIX: Priorizar el flujo activo (is_active = true) en lugar de data[0]
+      // Esto garantiza que ambos simuladores (Builder y Comercio) lean el mismo flujo
+      const activeFlow = data.find((f: any) => f.is_active) || data[0];
+      this.botFlow = activeFlow;
       // Asegurar que existan nodos y conexiones
       if (!this.botFlow.flow_data.nodes) this.botFlow.flow_data.nodes = [];
       if (!this.botFlow.flow_data.connections) this.botFlow.flow_data.connections = [];
@@ -384,26 +426,29 @@ export class BotBuilderComponent implements OnInit {
       this.cdr.detectChanges();
 
       try {
-        // Fallback para plantillas hardcoded antiguas (opcional)
-        if (templateId === 'products') {
-          this.botFlow.flow_data = { nodes: [], connections: [] };
-          await this.generateProductFlow();
-        } else if (templateId === 'services') {
-          this.botFlow.flow_data = { nodes: [], connections: [] };
-          await this.generateServiceFlow();
-        } else if (templateId === 'ia_catalog') {
-          this.botFlow.flow_data = { nodes: [], connections: [] };
-          await this.generateIACatalogFlow();
+        // PASO 3: Mapa de IDs → Generadores dinámicos
+        this.botFlow.flow_data = { nodes: [], connections: [] };
+
+        if (templateId === 'store_bot') {
+          await this.generateProductFlow();           // Lee categorías + productos reales
+        } else if (templateId === 'store_ai') {
+          await this.generateIACatalogFlow();         // Agente IA + 6 skills de catálogo
+        } else if (templateId === 'booking_bot') {
+          await this.generateServiceFlow();           // Lee reservable_resources con etapas
+        } else if (templateId === 'booking_ai') {
+          await this.generateReservationIAFlow();     // Agente IA + 3 skills de reservas
         } else if (templateId === 'rag_expert') {
-          this.botFlow.flow_data = { nodes: [], connections: [] };
-          await this.generateRAGFlow();
+          await this.generateRAGFlow();               // Agente IA + knowledge_base
+        } else if (templateId === 'n8n_sync') {
+          await this.generateN8nFlow();               // Webhook + datos a n8n
         } else {
-          // Cargar desde DB
+          // Cargar desde DB (plantillas Pro guardadas)
           const template = this.templates.find(t => t.id === templateId);
           if (template && template.flow_data) {
-            // Clonar datos para evitar referencias
             this.botFlow.flow_data = JSON.parse(JSON.stringify(template.flow_data));
-            console.log('✨ Template loaded from DB:', template.name);
+            console.log('✨ Template Pro loaded from DB:', template.name);
+          } else {
+            this.notification.show('Esta plantilla no tiene datos configurados', 'warning');
           }
         }
         
@@ -542,23 +587,28 @@ REGLAS:
     const aiAgentNode = this.createSpecificNode('ai_agent', x, y, { 
       label: 'Asistente de Ventas IA', 
       prompt: `Eres un asistente de ventas experto y amigable de {{merchantName}}.
+      
+Tu MISIÓN es guiar al cliente desde la elección de productos hasta el registro exitoso de su pedido.
 
-Tu objetivo es ayudar al cliente a:
-1. Encontrar los productos que busca (usa catalog_search)
-2. Verificar disponibilidad (usa inventory_check)
-3. Añadir productos al carrito (usa add_to_cart)
-4. Revisar su pedido (usa get_cart)
-5. Confirmar y registrar el pedido (usa register_order cuando el cliente confirme)
+### 🔄 FLUJO DE CHECKOUT OBLIGATORIO:
+Cuando el usuario indique que desea finalizar su compra o diga "pagar/confirmar/así está bien":
 
-REGLAS IMPORTANTES:
-- Siempre usa las herramientas para obtener información real, nunca inventes datos
-- Sé breve y orientado a la venta
-- Cuando el cliente diga "sí", "confirmar", "quiero ese" → añade al carrito o registra el pedido según el contexto
-- Después de añadir algo al carrito, pregunta si quiere algo más o confirmar el pedido`,
+1. **RESUMEN Y CONFIRMACIÓN**: Muestra el resumen del pedido (productos, cantidades y total usando 'get_cart') y pregunta: "¿Confirmas este pedido para proceder con tus datos de envío?".
+2. **CAPTURA DE DATOS**: Solo tras la confirmación, solicita amablemente:
+   - **Nombre Completo**.
+   - **Teléfono Celular**.
+   - **Dirección Exacta** (con torre/apto si aplica).
+3. **VALIDACIÓN FINAL**: Una vez tengas los datos, resume todo (pedido y envío) y pregunta: "¿Tus datos para el envío son correctos?".
+4. **REGISTRO**: SOLO cuando el usuario confirme que los datos son correctos, llama a 'register_order'.
+
+### ⚠️ REGLAS:
+- **Catálogo**: Usa 'catalog_search' para precios y disponibilidad reales.
+- **Notas**: Si el usuario dice "sin cebolla/extra queso", incluye eso en 'add_to_cart'.
+- **Eficiencia**: Sé directo, profesional y enfocado en cerrar la venta.`,
       user_prompt: '{{message}}',
       model: 'gemini-2.0-flash',
       temperature: 0.7,
-      memory_limit: 6
+      memory_limit: 8
     });
     this.connectNodes(startNode.id, 'output', aiAgentNode.id, 'input');
 
@@ -662,13 +712,21 @@ REGLAS IMPORTANTES:
     const phoneNode = this.createSpecificNode('question', x + 800, y + 450, { label: 'Teléfono', message: 'Gracias {{customer_name}}, ¿a qué número telefónico podemos contactarte?', variable: 'phone', validation: 'phone' });
     const addressNode = this.createSpecificNode('question', x + 800, y + 600, { label: 'Dirección', message: 'Por último, ¿cuál es la dirección de entrega?', variable: 'direccion_entrega' });
     
+    // 4.5 Notas Generales del Pedido (Opcional)
+    const orderNotesNode = this.createSpecificNode('question', x + 1050, y + 675, { 
+      label: 'Notas de Entrega', 
+      message: '¿Alguna instrucción adicional para la entrega o para nosotros? (Si no, escribe "no")', 
+      variable: 'notas_pedido' 
+    });
+
     this.connectNodes(decisionNode.id, 'opt_finish', nameNode.id, 'input');
     this.connectNodes(nameNode.id, 'output', phoneNode.id, 'input');
     this.connectNodes(phoneNode.id, 'output', addressNode.id, 'input');
+    this.connectNodes(addressNode.id, 'output', orderNotesNode.id, 'input');
     
     // 5. Acción Final: Registrar Pedido
     const actionNode = this.createSpecificNode('action', x + 800, y + 750, { label: 'Registrar Pedido', actionType: 'register_order' });
-    this.connectNodes(addressNode.id, 'output', actionNode.id, 'input');
+    this.connectNodes(orderNotesNode.id, 'output', actionNode.id, 'input');
 
     const endNode = this.createSpecificNode('end', x + 800, y + 900, { 
       label: 'Despedida', 
@@ -698,12 +756,27 @@ REGLAS IMPORTANTES:
         // 7. Preguntar cantidad por cada producto
         const qtyNode = this.createSpecificNode('question', prodX - 300, prodY + 100, { label: 'Cantidad', message: '¿Cuántas unidades deseas ordenar?', variable: 'cantidad_actual', validation: 'number' });
         
+        // 7.5 Preguntar por notas adicionales (especificaciones)
+        const specsNode = this.createSpecificNode('question', prodX - 550, prodY + 150, { 
+          label: 'Personalización', 
+          message: '¿Alguna instrucción especial? (ej: Sin cebolla, extra queso). Si no, escribe "no"', 
+          variable: 'last_product_notes' 
+        });
+
+        // 7.8 Nodo de Acción: Añadir al Carrito
+        const addActionNode = this.createSpecificNode('action', prodX - 800, prodY + 100, {
+          label: 'Añadir al Carrito',
+          actionType: 'add_to_cart'
+        });
+
         products.forEach(p => {
           this.connectNodes(prodMenu.id, `prod_${p.id}`, qtyNode.id, 'input');
         });
 
-        // 8. Después de la cantidad, ir al nodo de confirmación y luego a la decisión
-        this.connectNodes(qtyNode.id, 'output', addedConfirmNode.id, 'input');
+        // 8. Flujo: Cantidad -> Notas -> Acción -> Confirmación
+        this.connectNodes(qtyNode.id, 'output', specsNode.id, 'input');
+        this.connectNodes(specsNode.id, 'output', addActionNode.id, 'input');
+        this.connectNodes(addActionNode.id, 'output', addedConfirmNode.id, 'input');
       }
     });
 
@@ -714,38 +787,231 @@ REGLAS IMPORTANTES:
   private async generateServiceFlow() {
     const { data: resources } = await this.supabase.getReservableResources(this.merchantId);
     if (!resources || resources.length === 0) {
-      this.notification.show('No hay servicios/recursos configurados para generar el flujo', 'warning');
+      this.notification.show('No hay servicios o recursos configurados. Añade recursos en la sección de Reservas.', 'warning');
       return;
     }
 
-    let x = 400;
-    let y = 100;
+    const activeResources = resources.filter((r: any) => r.is_active !== false).slice(0, 10);
+    let x = 100;
+    let y = 300;
 
-    // 1. Start
-    const startNode = this.createSpecificNode('start', x, y, { label: 'Inicio', message: '¡Hola! ¿Deseas agendar un servicio?' });
-    y += 150;
+    // 1. Inicio
+    const startNode = this.createSpecificNode('start', x, y, { label: 'Inicio' });
+    x += 250;
 
-    // 2. Services Menu
-    const options = resources.slice(0, 10).map(res => ({ id: `res_${res.id}`, text: res.name, value: res.id }));
-    const menuNode = this.createSpecificNode('menu', x, y, { label: 'Catálogo de Servicios', message: 'Elige el servicio que te interesa:', options });
-    this.connectNodes(startNode.id, 'output', menuNode.id, 'input');
-
-    // 3. Question (Date/Time)
-    y += 250;
-    const questionNode = this.createSpecificNode('question', x, y, { label: 'Agendar', message: '¿Para qué fecha y hora deseas tu reserva?', variable: 'booking_datetime', validation: 'text' });
-    
-    resources.slice(0, 10).forEach(res => {
-      this.connectNodes(menuNode.id, `res_${res.id}`, questionNode.id, 'input');
+    // 2. Bienvenida
+    const welcomeNode = this.createSpecificNode('message', x, y, {
+      label: 'Bienvenida',
+      message: `📅 ¡Hola! Bienvenido a {{merchantName}}. Estoy aquí para ayudarte a agendar tu cita.`
     });
+    this.connectNodes(startNode.id, 'output', welcomeNode.id, 'input');
+    x += 300;
 
-    // 4. Action
-    y += 200;
-    const actionNode = this.createSpecificNode('action', x, y, { label: 'Crear Reserva', actionType: 'create_booking' });
-    this.connectNodes(questionNode.id, 'output', actionNode.id, 'input');
+    // 3. Menú de Servicios/Especialistas
+    const resourceOptions = activeResources.map((res: any) => ({
+      id: `res_${res.id}`,
+      text: res.name + (res.duration_minutes ? ` (${res.duration_minutes} min)` : ''),
+      value: res.id
+    }));
+    const menuNode = this.createSpecificNode('menu', x, y, {
+      label: 'Elegir Servicio',
+      message: 'Por favor, selecciona el servicio o especialista de tu elección:',
+      options: resourceOptions
+    });
+    this.connectNodes(welcomeNode.id, 'output', menuNode.id, 'input');
+    x += 350;
 
-    // Organizar linealmente de forma automática
-    setTimeout(() => this.organizeFlow(), 100);
+    // 4. Verificar disponibilidad
+    const checkNode = this.createSpecificNode('reservation_check', x, y, {
+      label: 'Verificar Disponibilidad',
+      start_time: '{{vars.booking_start}}'
+    });
+    // Conectar menú a check
+    activeResources.forEach((res: any) => {
+      this.connectNodes(menuNode.id, `res_${res.id}`, checkNode.id, 'input');
+    });
+    x += 350;
+
+    // 5. NUEVO: Pedir Nombre (si está disponible)
+    const nameNode = this.createSpecificNode('question', x, y, {
+      label: 'Pedir Nombre',
+      message: 'Para finalizar, ¿cuál es tu nombre completo?',
+      variable: 'customer_name',
+      validation: 'text'
+    });
+    this.connectNodes(checkNode.id, 'available', nameNode.id, 'input');
+    x += 300;
+
+    // 6. NUEVO: Pedir Teléfono
+    const phoneNode = this.createSpecificNode('question', x, y, {
+      label: 'Pedir Teléfono',
+      message: '¡Excelente! ¿Y un número de teléfono de contacto?',
+      variable: 'customer_phone',
+      validation: 'phone'
+    });
+    this.connectNodes(nameNode.id, 'output', phoneNode.id, 'input');
+    x += 300;
+
+    // 7. Crear Reserva
+    const createNode = this.createSpecificNode('reservation_create', x, y, {
+      label: 'Confirmar Reserva',
+      start_time: '{{vars.booking_start}}',
+      pax: 1
+    });
+    this.connectNodes(phoneNode.id, 'output', createNode.id, 'input');
+    x += 350;
+
+    // ── GESTIÓN DE ERROR ─────────────────
+    // 8. Mensaje Sin Cupo (un poco más abajo)
+    const errorNode = this.createSpecificNode('message', x - 950, y + 200, {
+      label: 'Sin Disponibilidad',
+      message: '⚠️ Lo sentimos, no hay disponibilidad para ese horario en este momento. Intenta con otra fecha.'
+    });
+    this.connectNodes(checkNode.id, 'unavailable', errorNode.id, 'input');
+    this.connectNodes(errorNode.id, 'output', menuNode.id, 'input');
+
+    // 9. Éxito
+    const successNode = this.createSpecificNode('message', x + 300, y, {
+      label: 'Éxito',
+      message: '✅ ¡Listo {{vars.customer_name}}! Tu cita para {{vars.__resource_name}} el {{vars.__selected_day}} a las {{vars.__selected_time}} ha sido agendada. Nos vemos pronto en {{merchantName}}.'
+    });
+    this.connectNodes(createNode.id, 'success', successNode.id, 'input');
+    x += 600;
+
+    // 10. Fin
+    const endNode = this.createSpecificNode('end', x, y, { label: 'Fin' });
+    this.connectNodes(successNode.id, 'output', endNode.id, 'input');
+
+    this.cdr.detectChanges();
+    setTimeout(() => this.organizeFlow(), 200);
   }
+
+  // PASO 5: Agente IA para Reservas con 3 nuevas skills
+  private async generateReservationIAFlow() {
+    const { data: resources } = await this.supabase.getReservableResources(this.merchantId);
+    const resourceList = (resources || []).filter((r: any) => r.is_active !== false)
+      .map((r: any) => `- ${r.name} (ID: ${r.id})`).join('\n');
+
+    let x = 400;
+    let y = 150;
+
+    // 1. Inicio
+    const startNode = this.createSpecificNode('start', x, y, { label: 'Inicio' });
+    y += 250;
+
+    // 2. Agente IA con instrucciones de reservas
+    const aiAgentNode = this.createSpecificNode('ai_agent', x, y, {
+      label: 'Asistente de Reservas IA',
+      model: 'gemini-2.0-flash',
+      temperature: 0.4,
+      memory_limit: 8,
+      prompt: `Eres un asistente experto en gestión de citas y reservas de {{merchantName}}.
+      
+Servicios disponibles:
+${resourceList || '(sin recursos configurados aún)'}
+
+Tu MISIÓN es:
+1. Preguntar por el servicio o especialista.
+2. Usar 'get_slots' para mostrar horarios disponibles.
+3. Verificar disponibilidad con 'check_availability'.
+4. SOLICITAR SIEMPRE el Nombre Completo y Número de Teléfono antes de agendar. Es obligatorio para el CRM.
+5. Usar 'create_booking' SOLO cuando tengas fecha, hora, nombre y teléfono confirmados.
+
+REGLAS:
+- No agendes sin haber preguntado el nombre y teléfono del cliente.
+- Si el usuario no da su teléfono, explícale cordialmente que es necesario para enviarle el recordatorio.
+- Confirma todos los detalles en un resumen final antes de procesar la reserva.
+- Tono: profesional, amable y ejecutivo.`,
+      user_prompt: '{{message}}'
+    });
+    this.connectNodes(startNode.id, 'output', aiAgentNode.id, 'input');
+
+    // 3. Skills de Reservas (3 nuevas)
+    const reservationSkills = [
+      { type: 'check_availability', label: '🔍 Verificar Disponibilidad', desc: 'Verifica si un recurso tiene cupo en una fecha y hora específica.', dx: -250 },
+      { type: 'get_slots',          label: '📅 Obtener Horarios Libres', desc: 'Retorna los slots de tiempo disponibles para una fecha y recurso.',  dx: 0 },
+      { type: 'create_booking',     label: '✅ Registrar Reserva',        desc: 'Crea la reserva final en el sistema con todos los datos.',           dx: 250 },
+    ];
+
+    for (const sk of reservationSkills) {
+      const skillNode = this.createSpecificNode('ai_skill', x + sk.dx, y + 280, {
+        label: sk.label,
+        actionType: sk.type,
+        message: sk.desc
+      });
+      this.connectNodes(skillNode.id, 'skill_out', aiAgentNode.id, 'skills_in');
+    }
+
+    // Skill extra: Transferir a Humano
+    const humanSkill = this.createSpecificNode('ai_skill', x + 450, y + 280, {
+      label: '👤 Soporte Humano',
+      actionType: 'transfer_human',
+      message: 'Transfiere al cliente con un agente si no puede resolver su solicitud.'
+    });
+    this.connectNodes(humanSkill.id, 'skill_out', aiAgentNode.id, 'skills_in');
+
+    // 4. Nodo Fin
+    const endNode = this.createSpecificNode('end', x, y + 550, { label: 'Fin' });
+    this.connectNodes(aiAgentNode.id, 'output', endNode.id, 'input');
+
+    this.cdr.detectChanges();
+  }
+
+  // PASO 6: Flujo simple de Sincronización con n8n
+  private async generateN8nFlow() {
+    let x = 100;
+    let y = 300;
+
+    const startNode = this.createSpecificNode('start', x, y, { label: 'Inicio' });
+    x += 250;
+
+    const welcomeNode = this.createSpecificNode('message', x, y, {
+      label: 'Bienvenida',
+      message: '🔗 ¡Hola! Vamos a recopilar tus datos para procesar tu solicitud.'
+    });
+    this.connectNodes(startNode.id, 'output', welcomeNode.id, 'input');
+    x += 300;
+
+    const nameNode = this.createSpecificNode('question', x, y, {
+      label: 'Nombre', question: '¿Cuál es tu nombre completo?', variable: 'customer_name'
+    });
+    this.connectNodes(welcomeNode.id, 'output', nameNode.id, 'input');
+    x += 250;
+
+    const emailNode = this.createSpecificNode('question', x, y, {
+      label: 'Email', question: '¿Cuál es tu correo electrónico?', variable: 'customer_email'
+    });
+    this.connectNodes(nameNode.id, 'output', emailNode.id, 'input');
+    x += 250;
+
+    const msgNode = this.createSpecificNode('question', x, y, {
+      label: 'Mensaje', question: '¿Cómo podemos ayudarte? Cuéntanos brevemente:', variable: 'customer_message'
+    });
+    this.connectNodes(emailNode.id, 'output', msgNode.id, 'input');
+    x += 300;
+
+    const webhookNode = this.createSpecificNode('action', x, y, {
+      label: 'Enviar a n8n',
+      actionType: 'webhook',
+      webhook_url: 'https://tu-n8n.com/webhook/woox',
+      payload: { name: '{{vars.customer_name}}', email: '{{vars.customer_email}}', message: '{{vars.customer_message}}' }
+    });
+    this.connectNodes(msgNode.id, 'output', webhookNode.id, 'input');
+    x += 250;
+
+    const confirmNode = this.createSpecificNode('message', x, y, {
+      label: 'Confirmación',
+      message: '✅ ¡Listo, {{vars.customer_name}}! Tus datos han sido enviados. Te contactaremos pronto.'
+    });
+    this.connectNodes(webhookNode.id, 'output', confirmNode.id, 'input');
+    x += 250;
+
+    const endNode = this.createSpecificNode('end', x, y, { label: 'Fin' });
+    this.connectNodes(confirmNode.id, 'output', endNode.id, 'input');
+
+    this.cdr.detectChanges();
+  }
+
 
   private createSpecificNode(type: string, x: number, y: number, data: any): FlowNode {
     const node: FlowNode = {
@@ -848,7 +1114,11 @@ REGLAS IMPORTANTES:
         image_prompt: type === 'image_generator' ? 'Una foto realista de un plato de pasta' : undefined,
         image_size: type === 'image_generator' ? '512x512' : undefined,
         email_to: type === 'send_email' ? '{{customer_email}}' : undefined,
-        email_subject: type === 'send_email' ? 'Confirmación de Pedido' : undefined
+        email_subject: type === 'send_email' ? 'Confirmación de Pedido' : undefined,
+        resource_id: ['reservation_check', 'reservation_create'].includes(type) ? '' : undefined,
+        start_time: ['reservation_check', 'reservation_create'].includes(type) ? '{{fecha}} {{hora}}' : undefined,
+        pax: ['reservation_check', 'reservation_create'].includes(type) ? 1 : undefined,
+        external_ical_url: type === 'calendar_sync' ? '' : undefined
       }
     };
     this.botFlow.flow_data.nodes.push(newNode);
@@ -936,7 +1206,10 @@ REGLAS IMPORTANTES:
       wa_template: '#15803d',
       catalog_search: '#7c3aed',
       cart_summary: '#db2777',
-      order_checkout: '#059669'
+      order_checkout: '#059669',
+      reservation_check: '#2563eb',
+      reservation_create: '#4f46e5',
+      calendar_sync: '#0ea5e9'
     };
     return colors[type] || '#1e293b';
   }
@@ -990,6 +1263,12 @@ REGLAS IMPORTANTES:
         return `🛍️ Resumen del Carrito`;
       case 'order_checkout':
         return `🏁 Checkout de Pedido`;
+      case 'reservation_check':
+        return `📅 Disponibilidad: ${node.data.resource_id ? 'RECURSO_OK' : 'Sin Recurso'}`;
+      case 'reservation_create':
+        return `📝 Crear Reserva: ${node.data.resource_id ? 'RECURSO_OK' : 'Sin Recurso'}`;
+      case 'calendar_sync':
+        return `🔄 Sync Calendario Externo`;
     }
     const msg = node.data.message || '';
     return msg ? msg.substring(0, 28) + (msg.length > 28 ? '…' : '') : '(sin mensaje)';
@@ -1396,21 +1675,11 @@ REGLAS IMPORTANTES:
       const varName = currentNode.data.variable || 'temp';
       this.simulationState.variables[varName] = input;
 
-      if (varName === 'cantidad_actual' && this.simulationState.variables['last_product']) {
-        const prod = this.simulationState.variables['last_product'];
-        const qty = parseInt(input) || 1;
-        if (!this.simulationState.variables['cart']) this.simulationState.variables['cart'] = [];
-        const existing = this.simulationState.variables['cart'].find((i: any) => i.id === prod.id);
-        if (existing) { existing.qty += qty; }
-        else { this.simulationState.variables['cart'].push({ ...prod, qty }); }
-        delete this.simulationState.variables['last_product'];
-        this.cdr.detectChanges();
-      }
-
       const nextId = this.findNextNodeId(currentNode.id, 'output');
       await this.moveToNextNode(nextId);
     }
     else if (currentNode.type === 'ai_agent') {
+      // (IA Agent logic remains)
       this.isBotTyping = true;
       setTimeout(() => this.scrollChatToBottom(), 50);
 
@@ -1449,16 +1718,73 @@ REGLAS IMPORTANTES:
             const pMatch = match.text.match(/\$?\s*([\d.]+)/);
             price = pMatch ? parseFloat(pMatch[1].replace(/\./g, '')) : 0;
           }
-          this.simulationState.variables['last_product'] = {
+          const prodInfo = {
             id: valId || match.value,
             name: match.text.split(' ($')[0],
             price
           };
+          this.simulationState.variables['last_product'] = prodInfo;
+          // Unificar con variables globales de flujo
+          this.simulationState.variables['selected_product_id'] = prodInfo.id;
+          this.simulationState.variables['selected_product_name'] = prodInfo.name;
+          this.simulationState.variables['selected_product_price'] = prodInfo.price;
         }
+        
+        // Guardar nombre y resource_id si aplica
+        this.simulationState.variables['__resource_name'] = match.text || match.id;
+        this.simulationState.variables['resource_id'] = match.value || match.id;
+
         const nextId = this.findNextNodeId(currentNode.id, match.id);
         await this.moveToNextNode(nextId);
       } else {
         this.chatMessages.push({ text: '❌ No reconocí esa opción. Escribe el número o el nombre.', sender: 'bot' });
+      }
+    }
+    else if (currentNode.type === 'reservation_check') {
+      const stage = this.simulationState.variables['__reservation_stage'] || 'day_selection';
+
+      if (stage === 'day_selection') {
+        const days = this.getNextDays(7);
+        const idx = parseInt(input) - 1;
+        const selectedDay = (idx >= 0 && idx < days.length) ? days[idx] : days.find((d: string) => d.toLowerCase().includes(input.toLowerCase()));
+        
+        if (!selectedDay) {
+          this.chatMessages.push({ text: `❌ Elige un número válido de la lista:\n\n${days.map((d: string, i: number)=>`${i+1}. ${d}`).join('\n')}`, sender: 'bot' });
+          return;
+        }
+
+        this.simulationState.variables['__selected_day'] = selectedDay;
+        this.simulationState.variables['__reservation_stage'] = 'hour_selection';
+        const slots = this.getTimeSlots();
+        this.chatMessages.push({ text: `✅ ${selectedDay} anotado.\n\n🕐 ¿A qué hora te viene mejor?\n\n${slots.map((s: string, i: number)=>`${i+1}. ${s}`).join('\n')}`, sender: 'bot' });
+      }
+      else if (stage === 'hour_selection') {
+        const slots = this.getTimeSlots();
+        const idx = parseInt(input) - 1;
+        const selectedTime = (idx >= 0 && idx < slots.length) ? slots[idx] : slots.find((s: string) => s.includes(input));
+
+        if (!selectedTime) {
+          this.chatMessages.push({ text: `❌ Elige una hora válida:\n\n${slots.map((s: string, i: number)=>`${i+1}. ${s}`).join('\n')}`, sender: 'bot' });
+          return;
+        }
+
+        this.simulationState.variables['__selected_time'] = selectedTime;
+        this.simulationState.variables['__reservation_stage'] = 'confirm';
+        const day = this.simulationState.variables['__selected_day'];
+        const resName = this.simulationState.variables['__resource_name'] || 'el servicio';
+        this.chatMessages.push({ text: `📋 Resumen:\nEspecialista: ${resName}\nDía: ${day}\nHora: ${selectedTime}\n\n¿Confirmas? (sí/no)`, sender: 'bot' });
+      }
+      else if (stage === 'confirm') {
+        const answer = input.toLowerCase();
+        if (['sí', 'si', 'yes', '1', 'ok'].includes(answer)) {
+          this.simulationState.variables['__reservation_stage'] = null;
+          const nextId = this.findNextNodeId(currentNode.id, 'available');
+          await this.moveToNextNode(nextId);
+        } else {
+          this.simulationState.variables['__reservation_stage'] = 'day_selection';
+          const days = this.getNextDays(7);
+          this.chatMessages.push({ text: `🔄 Cancelado. Empecemos de nuevo.\n\n📅 ¿Para qué día te gustaría agendar?\n\n${days.map((d: string, i: number)=>`${i+1}. ${d}`).join('\n')}`, sender: 'bot' });
+        }
       }
     }
   }
@@ -1502,7 +1828,9 @@ REGLAS:
 3. Mantén la consistencia de los IDs de nodos existentes si solo estás añadiendo cosas.
 4. Si necesitas usar una Skill, añade un nodo de tipo "ai_skill" y asegúrate de conectarlo al puerto "tools" de un nodo "ai_agent".
 5. Los tipos de nodos válidos son: start, message, menu, question, ai_agent, ai_skill.
-6. Ajusta las posiciones (x, y) para que el diseño se vea ordenado.`;
+6. Ajusta las posiciones (x, y) para que el diseño se vea ordenado.
+7. CRITICAL: Para flujos de RESERVAS, incluye siempre nodos de tipo "question" para pedir el NOMBRE ('customer_name') y el TELÉFONO ('customer_phone') antes del nodo de creación de reserva.`;
+
 
     const body = {
       contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nSolicitud del Usuario: ${userRequest}` }] }],
@@ -1547,7 +1875,19 @@ REGLAS:
     const skills = this.botFlow.flow_data.nodes.filter(n => n.type === 'ai_skill');
     const TOOL_DEFS: any = {
       catalog_search: { name: 'catalog_search', description: 'Busca productos', parameters: { type: 'object', properties: { query: { type: 'string' } } } },
-      add_to_cart: { name: 'add_to_cart', description: 'Añade al carrito. Usa el nombre exacto que devolvió el catálogo.', parameters: { type: 'object', properties: { product_name: { type: 'string' }, quantity: { type: 'number' } }, required: ['product_name'] } },
+      add_to_cart: { 
+        name: 'add_to_cart', 
+        description: 'Añade al carrito. Captura instrucciones especiales si el usuario las menciona (ej: sin cebolla).', 
+        parameters: { 
+          type: 'object', 
+          properties: { 
+            product_name: { type: 'string' }, 
+            quantity: { type: 'number' },
+            notes: { type: 'string', description: 'Instrucciones especiales para el producto.' }
+          }, 
+          required: ['product_name'] 
+        } 
+      },
       get_cart: { name: 'get_cart', description: 'Ver carrito y total', parameters: { type: 'object', properties: {} } },
       register_order: { 
         name: 'register_order', 
@@ -1710,11 +2050,17 @@ REGLAS:
                    products.find(p => normalize(p.name).startsWith(normSearch)) ||
                    products.find(p => normalize(p.name).includes(normSearch));
 
+        const notes = args?.notes || '';
         if (!prod) return `ERROR: El producto "${productName}" no existe en el catálogo. Por favor, verifica el nombre con 'catalog_search'.`;
         const cart = this.simulationState.variables['cart'] || [];
         const existing = cart.find((i: any) => i.id === prod.id);
-        if (existing) { existing.qty += quantity; }
-        else { cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: quantity }); }
+        if (existing) { 
+          existing.qty += quantity;
+          if (notes) existing.notes = (existing.notes ? existing.notes + ', ' : '') + notes;
+        }
+        else { 
+          cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: quantity, notes: notes }); 
+        }
         this.simulationState.variables['cart'] = [...cart];
         const total = cart.reduce((acc: number, it: any) => acc + (it.price * it.qty), 0);
         return `✅ ${prod.name} x${quantity} añadido. Total carrito: $${total.toFixed(2)}`;
@@ -1837,6 +2183,55 @@ REGLAS:
       
       this.simulationState.currentNodeId = node.id;
       return; // PAUSAR AQUÍ para que el usuario escriba a la IA
+    }
+
+    if (node.type === 'reservation_check') {
+      const dayList = this.getNextDays(7);
+      const dayOpts = dayList.map((d: string, i: number) => `${i + 1}. ${d}`).join('\n');
+      this.chatMessages.push({ text: `📅 ¿Para qué día te gustaría agendar?\n\n${dayOpts}`, sender: 'bot' });
+      this.simulationState.variables['__reservation_stage'] = 'day_selection';
+      this.simulationState.currentNodeId = node.id;
+      return; // Pausar para esperar selección del usuario
+    }
+
+    if (node.type === 'reservation_create') {
+      const vars = this.simulationState.variables;
+      const resourceId = vars['resource_id'];
+      const day = vars['__selected_day'] || '';
+      const time = vars['__selected_time'] || '08:00';
+      const name = vars['customer_name'] || 'Cliente Anón (Sim)';
+      const phone = vars['customer_phone'] || '0000000000';
+
+      this.isBotTyping = true;
+      try {
+        if (this.merchantId && resourceId && this.supabase) {
+          // Intentar persistir de verdad para que el usuario pueda verlo en la agenda
+          // Mapeamos el "Jue 19 Mar" a un año actual para que el Date sea válido
+          const currentYear = new Date().getFullYear();
+          const cleanDate = `${day} ${currentYear} ${time}`;
+          
+          await this.supabase.createReservation({
+            merchant_id: this.merchantId,
+            resource_id: resourceId,
+            start_time: cleanDate,
+            customer_name: name,
+            customer_phone: phone,
+            pax: node.data?.pax || 1,
+            status: 'confirmed'
+          });
+          this.chatMessages.push({ text: '✅ ¡Cita guardada en la agenda del comercio!', sender: 'bot' });
+        } else {
+          this.chatMessages.push({ text: '💾 (Simulando guardado local: no hay merchantId configurado)', sender: 'bot' });
+        }
+      } catch (err) {
+        console.error('Error al guardar reserva:', err);
+        this.chatMessages.push({ text: '⚠️ Error intentando guardar en la agenda real.', sender: 'bot' });
+      }
+      this.isBotTyping = false;
+
+      const nextId = this.findNextNodeId(node.id, 'success');
+      if (nextId) await this.moveToNextNode(nextId, depth + 1);
+      return;
     }
 
     const messages = this.collectSimulationMessages(node);
@@ -1976,23 +2371,30 @@ REGLAS:
       return;
     }
     if (data.actionType === 'add_to_cart') {
-      const productId = data.params?.product_id;
+      const vars = this.simulationState.variables;
+      const productId = vars['selected_product_id'] || data.params?.product_id;
+      const productName = vars['selected_product_name'] || data.params?.product_name || 'Producto';
+      const price = Number(vars['selected_product_price'] || data.params?.price || 0);
+      const qty = Number(vars['cantidad_actual'] || 1);
+      const notes = vars['last_product_notes'] || '';
+
       if (productId) {
-        // Intentar obtener info del producto de la lista cargada (si existe)
-        this.supabase.getProducts(this.merchantId).then(({data: products}) => {
-          const product = (products || []).find(p => p.id === productId);
-          if (product) {
-            const qty = 1;
-            if (!this.simulationState.variables['cart']) this.simulationState.variables['cart'] = [];
-            const existing = this.simulationState.variables['cart'].find((i: any) => i.id === product.id);
-            if (existing) { existing.qty += qty; }
-            else { this.simulationState.variables['cart'].push({ id: product.id, name: product.name, price: product.price, qty }); }
-            this.chatMessages.push({ text: `🛒 Aadido al carrito: ${product.name}`, sender: 'bot' });
-          } else {
-            this.chatMessages.push({ text: `⚠️ No se encontró el producto para añadir.`, sender: 'bot' });
-          }
+        if (!this.simulationState.variables['cart']) this.simulationState.variables['cart'] = [];
+        this.simulationState.variables['cart'].push({
+          id: productId,
+          name: productName,
+          price: price,
+          qty: qty,
+          notes: notes
         });
+        this.chatMessages.push({ text: `🛒 Añadido al carrito: ${qty}x ${productName}`, sender: 'bot' });
+      } else {
+        this.chatMessages.push({ text: `⚠️ No se pudo identificar el producto para añadir.`, sender: 'bot' });
       }
+
+      // IMPORTANTE: Avanzar al siguiente nodo
+      const nextId = this.findNextNodeId(this.simulationState.currentNodeId!, 'output');
+      if (nextId) await this.moveToNextNode(nextId, 0);
       return;
     }
 
@@ -2025,10 +2427,12 @@ REGLAS:
         const orderDataFull = {
           merchant_id: this.merchantId,
           customer_id: customerId || null,
+          customer_name: vars['customer_name'],
           total: total,
           delivery_address: vars['direccion_entrega'] || 'No proporcionada',
           status: 'pending',
           source: 'bot_builder_test',
+          notes: vars['notas_pedido'] || vars['customer_notes'] || '',
           internal_note: `Pedido de prueba desde Bot Builder. Variables: ${JSON.stringify(vars)}`,
           closing_agent_type: 'bot'
         };
@@ -2041,8 +2445,10 @@ REGLAS:
            const orderDataBasic = {
              merchant_id: this.merchantId,
              customer_id: customerId || null,
+             customer_name: vars['customer_name'],
              total: total,
              delivery_address: vars['direccion_entrega'] || 'No proporcionada',
+             notes: vars['notas_pedido'] || vars['customer_notes'] || '',
              status: 'pending'
            };
            orderRes = await this.supabase.createOrder(orderDataBasic);
@@ -2062,7 +2468,8 @@ REGLAS:
               product_name: it.name,
               quantity: it.qty,
               unit_price: it.price,
-              subtotal: it.price * it.qty
+              subtotal: it.price * it.qty,
+              notes: it.notes || ''
             }));
             await this.supabase.createOrderItems(items);
           }
@@ -2072,6 +2479,11 @@ REGLAS:
           this.chatMessages.push({ text: `❌ No se pudo guardar el pedido real: ${errorMsg}`, sender: 'bot' });
           this.simulationState.variables['orderNumber'] = `[FALLO_REGISTRO]`;
         }
+
+        // --- AVANZAR AL SIGUIENTE NODO (DESPEDIDA) ---
+        const nextId = this.findNextNodeId(this.simulationState.currentNodeId!, 'output');
+        if (nextId) await this.moveToNextNode(nextId, 0);
+
       } catch (err: any) {
         console.error('Error en simulación de registro:', err);
         this.chatMessages.push({ text: `❌ Excepción: ${err.message || 'Error desconocido'}`, sender: 'bot' });
@@ -2107,44 +2519,17 @@ REGLAS:
 
   private collectSimulationMessages(node: FlowNode): string[] {
     const msgs: string[] = [];
-    let current: FlowNode | undefined = node;
-
-    let iterations = 0;
-    const maxIterations = 50;
-
-    while (current && iterations < maxIterations) {
-      iterations++;
-      if (current.data.message) {
-        let msg = this.resolveSimVariables(current.data.message);
-        
-        // Si es un menú, añadir las opciones al mensaje
-        if (current.type === 'menu' && current.data.options) {
-          const optionsText = current.data.options.map((o: any, i: number) => `${i + 1}. ${o.text}`).join('\n');
-          msg += `\n\n${optionsText}`;
-        }
-        
-        msgs.push(msg);
+    if (node.data.message) {
+      let msg = this.resolveSimVariables(node.data.message);
+      
+      // Si es un menú, añadir las opciones al mensaje
+      if (node.type === 'menu' && node.data.options) {
+        const optionsText = node.data.options.map((o: any, i: number) => `${i + 1}. ${o.text}`).join('\n');
+        msg += `\n\n${optionsText}`;
       }
-
-      if (current.type === 'question' || current.type === 'menu' || current.type === 'ai_agent') {
-        this.simulationState.currentNodeId = current.id;
-        break;
-      }
-
-      if (current.type === 'end') {
-        this.simulationState.currentNodeId = null; 
-        break;
-      }
-
-      const nextId = this.findNextNodeId(current.id, 'output');
-      current = this.botFlow.flow_data.nodes.find(n => n.id === nextId);
-      if (!current) this.simulationState.currentNodeId = null;
+      
+      msgs.push(msg);
     }
-
-    if (iterations >= maxIterations) {
-      msgs.push('⚠️ Se detectó un bucle infinito en el flujo. La simulación se detuvo.');
-    }
-
     return msgs;
   }
 
@@ -2152,6 +2537,38 @@ REGLAS:
     const conn = this.botFlow.flow_data.connections.find(c => c.from === fromId && c.fromPort === fromPort);
     return conn ? conn.to : null;
   }
+
+  /** Genera los próximos N días hábiles como strings */
+  private getNextDays(count: number): string[] {
+      const days = [];
+      const names = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      const today = new Date();
+      let added = 0;
+      let offset = 0;
+      while (added < count) {
+          offset++;
+          const d = new Date(today);
+          d.setDate(today.getDate() + offset);
+          const dow = d.getDay();
+          if (dow !== 0 && dow !== 6) { // excluir sábado y domingo
+              days.push(`${names[dow]} ${d.getDate()} ${months[d.getMonth()]}`);
+              added++;
+          }
+      }
+      return days;
+  }
+
+  /** Genera slots de tiempo de 8am a 6pm cada 30 min */
+  private getTimeSlots(): string[] {
+      const slots = [];
+      for (let h = 8; h < 18; h++) {
+          slots.push(`${String(h).padStart(2,'0')}:00`);
+          slots.push(`${String(h).padStart(2,'0')}:30`);
+      }
+      return slots; // 20 slots
+  }
+
 
   private resolveSimVariables(text: string): string {
     if (!text) return '';
@@ -2169,9 +2586,12 @@ REGLAS:
       }
     }
 
-    // 2. Reemplazar variables dinámicas {{variable}}
+    // 2. Reemplazar variables dinámicas {{variable}} o {{vars.variable}}
     result = result.replace(/{{(.*?)}}/g, (match, key) => {
-      const k = key.trim();
+      let k = key.trim();
+      
+      // Limpiar prefijos comunes como vars., variables., state.
+      k = k.replace(/^(vars\.|variables\.|state\.)/i, '');
       
       // Intentar obtener de variables
       const vars = this.simulationState.variables || {};
@@ -2194,5 +2614,12 @@ REGLAS:
 
   async testFlow() {
       this.toggleChat();
+  }
+
+  onSimNodeExecuted(nodeId: string) {
+    this.activeSimNodeId = nodeId;
+    this.nodeExecutionCounts.set(nodeId, (this.nodeExecutionCounts.get(nodeId) || 0) + 1);
+    this.totalSessionExecutions++;
+    this.cdr.detectChanges();
   }
 }

@@ -1,5 +1,5 @@
 <div class="reservation-page">
-    <div class="sidebar">
+    <div class="sidebar" *ngIf="!isMobile()">
         <div class="brand">{{ merchantName }}</div>
         <nav>
             <a routerLink="/crm">← Volver al CRM</a>
@@ -14,21 +14,34 @@
         </nav>
     </div>
 
+    <!-- Mobile Header -->
+    <!-- Mobile Header Removed as per user request (wants list with bottom bar only) -->
+
     <div class="main-content">
         <!-- Pestaña: Calendario -->
         <div *ngIf="activeTab === 'calendar'">
-            <header class="topbar">
-                <h2>{{ merchantName }} - Agenda</h2>
+            <header class="topbar" [class.mobile-compact]="isMobile()">
+                <h2 *ngIf="!isMobile()">{{ merchantName }} - Agenda</h2>
                 <div class="actions">
-                    <button class="btn btn-primary" (click)="openManualBooking()">+ Agendar Cita</button>
-                    <button class="btn btn-outline" (click)="changeView('month')"
-                        [class.active]="currentView === 'month'">Mes</button>
-                    <button class="btn btn-outline" (click)="changeView('week')"
-                        [class.active]="currentView === 'week'">Semana</button>
-                    <button class="btn btn-outline" (click)="changeView('day')"
-                        [class.active]="currentView === 'day'">Día</button>
-                    <button class="btn btn-primary" (click)="changeView('list')"
-                        [class.active]="currentView === 'list'">Lista</button>
+                    <!-- Filtro de Recursos como Combo Box -->
+                    <div class="combo-selector">
+                        <span class="label">📅 Agenda para:</span>
+                        <select [(ngModel)]="selectedResourceId" class="form-control select-combo">
+                            <option value="all">🌍 Todos los Recursos</option>
+                            <option *ngFor="let res of resources" [value]="res.id">
+                                👤 {{ res.name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="view-toggles" [style.margin-left]="isMobile() ? '0' : '20px'">
+                        <button class="btn btn-outline" (click)="changeView('month')" [class.active]="currentView === 'month'">Mes</button>
+                        <button class="btn btn-outline" (click)="changeView('week')" [class.active]="currentView === 'week'">Semana</button>
+                        <button class="btn btn-outline" (click)="changeView('day')" [class.active]="currentView === 'day'">Día</button>
+                        <button class="btn btn-primary" (click)="changeView('list')" [class.active]="currentView === 'list'">Lista</button>
+                    </div>
+
+                    <button *ngIf="!isMobile()" class="btn btn-primary" style="margin-left: 15px; background: #000;" (click)="openManualBooking()">+ Agendar Cita</button>
                 </div>
             </header>
 
@@ -58,12 +71,12 @@
             <!-- Navegación de Fecha -->
             <div class="calendar-container">
                 <div class="calendar-header-nav">
+                    <button class="btn btn-outline" (click)="currentDate = today; updateCalendarData()" style="padding: 4px 12px; font-size: 12px; margin-right: 15px;">Hoy</button>
                     <button class="btn btn-icon" (click)="navigateDate(-1)">←</button>
-                    <h3>
+                    <h3 class="current-date-display">
                         <ng-container [ngSwitch]="currentView">
                             <span *ngSwitchCase="'day'">{{ currentDate | date:'fullDate' }}</span>
-                            <span *ngSwitchCase="'week'">{{ weekDays[0] | date:'MMM d' }} - {{ weekDays[6] | date:'MMM
-                                d, y' }}</span>
+                            <span *ngSwitchCase="'week'">{{ weekDays[0] | date:'MMM d' }} - {{ weekDays[6] | date:'MMM d, y' }}</span>
                             <span *ngSwitchCase="'month'">{{ currentDate | date:'MMMM y' }}</span>
                         </ng-container>
                     </h3>
@@ -82,20 +95,23 @@
                             </div>
                         </div>
 
-                        <!-- Columnas por Recurso (Ej: Doctores) -->
-                        <div class="resource-column" *ngFor="let res of resources">
+                        <!-- Columnas por Recurso (Filtradas) -->
+                        <div class="resource-column" *ngFor="let res of displayResources">
                             <div class="header-cell">{{ res.name }}</div>
 
                             <div class="slot-cell" *ngFor="let time of timeSlots" (dblclick)="openBookingDetails(null)">
-                                <ng-container *ngFor="let booking of getBookingsForSlow(res.id, time)">
-                                    <div class="booking-card" [ngClass]="getStatusClass(booking.status)"
+                                <ng-container *ngFor="let booking of getBookingsForSlot(res.id, time)">
+                                    <div class="booking-card" [style.border-left-color]="getServiceColor(booking.service)"
                                         (click)="openBookingDetails(booking)">
-                                        <strong>{{ booking.customerName }}</strong>
-                                        <span>{{ booking.service }}</span>
+                                        <div class="booking-status-dot" [ngClass]="getStatusClass(booking.status)"></div>
+                                        <strong>{{ booking.customerName || 'Cliente' }}</strong>
+                                        <span class="service-pill" [style.background]="getServiceColor(booking.service)">{{ booking.service }}</span>
                                     </div>
                                 </ng-container>
                             </div>
                         </div>
+
+                        <!-- Indicador de Tiempo Real removed -->
                     </div>
                 </div>
 
@@ -108,12 +124,18 @@
                                 {{ day | date:'EEE d' }}
                             </div>
                         </div>
-                        <div class="resource-column" *ngFor="let res of resources">
+                        <div class="resource-column" *ngFor="let res of displayResources">
                             <div class="header-cell">{{ res.name }}</div>
-                            <div class="slot-cell" *ngFor="let day of weekDays" style="height: 100px;">
-                                <!-- Aquí se mostrarían las citas de la semana resumidas -->
-                                <div style="font-size: 11px; color: #888; text-align: center; margin-top: 30px;">
-                                    Ver citas diarias
+                            <div class="slot-cell" *ngFor="let day of weekDays" style="height: auto; min-height: 100px;">
+                                <div class="day-events-week">
+                                    <div *ngFor="let b of getBookingsForDayAndResource(day, res.id)" 
+                                         class="booking-card-mini" (click)="openBookingDetails(b)">
+                                        <span class="time">{{ b.time }}</span>
+                                        <strong>{{ b.customerName || 'Cliente' }}</strong>
+                                    </div>
+                                    <div *ngIf="getBookingsForDayAndResource(day, res.id).length === 0" class="empty-week-slot">
+                                        Libre
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -130,7 +152,10 @@
                             [class.today]="(m.date | date:'shortDate') === (today | date:'shortDate')">
                             <span class="day-number">{{ m.date | date:'d' }}</span>
                             <div class="day-events">
-                                <!-- Placeholders de eventos -->
+                                <div *ngFor="let b of getBookingsForDay(m.date)" 
+                                     class="month-event" [style.background]="getServiceColor(b.service)" (click)="openBookingDetails(b)">
+                                    {{ b.time }} {{ b.customerName }}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -141,49 +166,77 @@
                     <div
                         style="background:white; padding:15px; border-radius:12px; margin-bottom:15px; display:flex; gap:10px; align-items:center;">
                         <span style="font-size:20px;">🔍</span>
-                        <input type="text" [(ngModel)]="bookingSearchTerm"
+                        <input type="text" [(ngModel)]="bookingSearchTerm" (input)="currentPage = 1"
                             placeholder="Buscar por cliente o servicio..."
                             style="border:none; outline:none; font-size:16px; width:100%;">
                     </div>
 
-                    <div
-                        style="background:white; border-radius:12px; overflow:hidden; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
-                        <table style="width:100%; border-collapse: collapse;">
-                            <thead>
-                                <tr style="background:#F8F9FA; text-align:left; border-bottom:1px solid #DFE3E8;">
-                                    <th style="padding:15px; font-size:13px;">Hora</th>
-                                    <th style="padding:15px; font-size:13px;">Cliente</th>
-                                    <th style="padding:15px; font-size:13px;">Servicio</th>
-                                    <th style="padding:15px; font-size:13px;">Estado</th>
-                                    <th style="padding:15px; font-size:13px; text-align:right;">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr *ngFor="let b of filteredBookings" style="border-bottom:1px solid #F1F3F4;">
-                                    <td style="padding:15px;"><strong>{{ b.time }}</strong></td>
-                                    <td style="padding:15px;">{{ b.customerName }}</td>
-                                    <td style="padding:15px;">{{ b.service }}</td>
-                                    <td style="padding:15px;">
-                                        <span class="status-badge" [ngClass]="getStatusClass(b.status)"
-                                            style="font-size:11px; padding:4px 8px;">
-                                            {{ getStatusText(b.status) }}
-                                        </span>
-                                    </td>
-                                    <td style="padding:15px; text-align:right;">
-                                        <button class="btn btn-outline btn-small" (click)="openBookingDetails(b)">Ver
-                                            Detalles</button>
-                                    </td>
-                                </tr>
-                                <tr *ngIf="filteredBookings.length === 0">
-                                    <td colspan="5" style="padding:40px; text-align:center; color:#888;">No se
-                                        encontraron citas para este día o búsqueda.</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                <div class="list-container">
+                    <!-- Desktop Table View -->
+                    <table class="list-table-v2" *ngIf="!isMobile()">
+                        <thead>
+                            <tr style="background:#F8F9FA; text-align:left; border-bottom:2px solid #DFE3E8;">
+                                <th style="padding:15px; font-size:13px; font-weight:700;">Día / Fecha</th>
+                                <th style="padding:15px; font-size:13px; font-weight:700;">Hora</th>
+                                <th style="padding:15px; font-size:13px; font-weight:700;">Cliente</th>
+                                <th style="padding:15px; font-size:13px; font-weight:700;">Recurso</th>
+                                <th style="padding:15px; font-size:13px; font-weight:700;">Servicio</th>
+                                <th style="padding:15px; font-size:13px; font-weight:700; text-align:center;">Estado</th>
+                                <th style="padding:15px; font-size:13px; font-weight:700; text-align:right;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr *ngFor="let b of paginatedBookings" style="border-bottom:1px solid #F1F3F4; cursor:pointer;" (click)="openBookingDetails(b)">
+                                <td style="padding:15px;">
+                                    <div style="font-weight:600;">{{ b.date | date:'EEEE' | titlecase }}</div>
+                                    <div style="font-size:12px; color:#666;">{{ b.date | date:'MMM d, y' }}</div>
+                                </td>
+                                <td style="padding:15px;"><strong>{{ b.time }}</strong></td>
+                                <td style="padding:15px;">
+                                    <strong>{{ b.customerName }}</strong>
+                                    <div style="font-size:11px; color:#888;">{{ b.customerPhone }}</div>
+                                </td>
+                                <td style="padding:15px;"><span class="resource-badge">{{ getResourceName(b.resourceId) }}</span></td>
+                                <td style="padding:15px;">
+                                    <span class="service-tag" [style.border-color]="getServiceColor(b.service)">{{ b.service }}</span>
+                                </td>
+                                <td style="padding:15px; text-align:center;">
+                                    <span class="status-indicator" [ngClass]="getStatusClass(b.status)">
+                                        {{ getStatusText(b.status) }}
+                                    </span>
+                                </td>
+                                <td style="padding:15px; text-align:right;">
+                                    <i class="fa-solid fa-chevron-right" style="color:#CBD5E0;"></i>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Mobile Chat-List View (Refactored to separate component) -->
+                    <app-booking-mobile-list *ngIf="isMobile()"
+                        [bookings]="paginatedBookings"
+                        [resources]="resources"
+                        (onOpenDetails)="openBookingDetails($event)">
+                    </app-booking-mobile-list>
+
+                    <div *ngIf="filteredBookings.length === 0" style="padding:60px; text-align:center; color:#888;">
+                        <div style="font-size:40px; margin-bottom:10px;">📅</div>
+                        Parece que no hay citas que coincidan con tu búsqueda.
                     </div>
                 </div>
-            </div>
-        </div>
+
+                    <!-- Controles de Paginación -->
+                    <div *ngIf="totalPages > 1" 
+                        style="padding:15px; background:#F8F9FA; border-top:1px solid #DFE3E8; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:13px; color:#666;">Página {{ currentPage }} de {{ totalPages }}</span>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-outline btn-small" [disabled]="currentPage === 1" (click)="setPage(currentPage - 1)">Anterior</button>
+                            <button class="btn btn-outline btn-small" [disabled]="currentPage === totalPages" (click)="setPage(currentPage + 1)">Siguiente</button>
+                        </div>
+                    </div>
+                </div> <!-- End of list-container and currentView === 'list' -->
+            </div> <!-- End of calendar-container -->
+        </div> <!-- End of calendar Tab -->
 
         <div class="resources-container" *ngIf="activeTab === 'resources'">
             <div class="resources-header">
@@ -435,9 +488,12 @@
         <!-- Modal Crear Bloqueo -->
         <div class="backdrop" *ngIf="showBlockModal" (click)="closeBlockCreator()"></div>
         <div class="modal offcanvas" [class.open]="showBlockModal">
-            <div class="offcanvas-header">
-                <h3>{{ isEditingBlock ? 'Editar' : 'Nuevo' }} Bloqueo</h3>
-                <button class="close-btn" (click)="closeBlockCreator()">x</button>
+            <div class="offcanvas-header" [class.mobile-premium-header]="isMobile()">
+                <button *ngIf="isMobile()" class="back-btn-premium" (click)="closeBlockCreator()">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <h3>{{ isMobile() ? 'Bloqueo' : (isEditingBlock ? 'Editar' : 'Nuevo') + ' Bloqueo' }}</h3>
+                <button *ngIf="!isMobile()" class="close-btn" (click)="closeBlockCreator()">x</button>
             </div>
             <div class="offcanvas-body">
                 <div class="form-group">
@@ -480,9 +536,12 @@
         <!-- Modal Crear/Editar Recurso -->
         <div class="backdrop" *ngIf="showResourceModal" (click)="closeResourceCreator()"></div>
         <div class="modal offcanvas" [class.open]="showResourceModal">
-            <div class="offcanvas-header">
-                <h3>{{ isEditingResource ? 'Editar' : 'Nuevo' }} Recurso</h3>
-                <button class="close-btn" (click)="closeResourceCreator()">x</button>
+            <div class="offcanvas-header" [class.mobile-premium-header]="isMobile()">
+                <button *ngIf="isMobile()" class="back-btn-premium" (click)="closeResourceCreator()">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <h3>{{ isMobile() ? 'Recurso' : (isEditingResource ? 'Editar' : 'Nuevo') + ' Recurso' }}</h3>
+                <button *ngIf="!isMobile()" class="close-btn" (click)="closeResourceCreator()">x</button>
             </div>
             <div class="offcanvas-body">
                 <div class="form-group">
@@ -568,7 +627,30 @@
                     </div>
                 </div>
 
-                <div class="form-group mt-auto">
+                <!-- CONFIGURACIÓN AVANZADA (iCal & Alojamiento) -->
+                <div class="advanced-config-section" style="margin-top: 24px; padding: 15px; background: #EEF2FF; border-radius: 12px; border: 1px solid #C7D2FE;">
+                    <h5 style="margin:0 0 15px 0; font-size:14px; color:#3730A3;">🌐 Sincronización y Alojamiento</h5>
+                    
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label style="font-size:12px;">URL de Sincronización iCal (Airbnb/Booking/Google)</label>
+                        <input type="text" [(ngModel)]="activeResource.external_sync_url" class="form-control" 
+                            placeholder="https://abc.com/calendar.ics" style="font-size:12px;">
+                        <small style="color: #667085; font-size: 11px;">Woox importará bloqueos automáticamente de este enlace.</small>
+                    </div>
+
+                    <div class="form-row" *ngIf="activeResource.type === 'room_type' || activeResource.type === 'property'">
+                        <div class="form-group half">
+                            <label style="font-size:12px;">Estadía Mínima (Noches)</label>
+                            <input type="number" [(ngModel)]="activeResource.min_stay_nights" class="form-control" style="font-size:12px;">
+                        </div>
+                        <div class="form-group half">
+                            <label style="font-size:12px;">Capacidad Máxima (Pax)</label>
+                            <input type="number" [(ngModel)]="activeResource.max_pax" class="form-control" style="font-size:12px;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group mt-auto" style="margin-top:20px;">
                     <button class="btn btn-primary w-100" style="padding: 12px; font-size:16px;"
                         (click)="saveResource()">
                         Guardar Recurso
@@ -580,9 +662,12 @@
         <!-- Modal / Offcanvas Details -->
         <div class="backdrop" *ngIf="selectedBooking" (click)="closeDetails()"></div>
         <div class="offcanvas" [class.open]="selectedBooking !== null">
-            <div class="offcanvas-header">
-                <h3>Detalles de la Cita</h3>
-                <button class="close-btn" (click)="closeDetails()">x</button>
+            <div class="offcanvas-header" [class.mobile-premium-header]="isMobile()">
+                <button *ngIf="isMobile()" class="back-btn-premium" (click)="closeDetails()">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <h3>{{ isMobile() ? 'Detalle' : 'Detalles de la Cita' }}</h3>
+                <button *ngIf="!isMobile()" class="close-btn" (click)="closeDetails()">x</button>
             </div>
 
             <div class="offcanvas-body" *ngIf="selectedBooking">
@@ -614,6 +699,7 @@
                 </div>
 
                 <div class="action-buttons">
+                    <button class="btn btn-primary" (click)="closeDetails()">Cerrar Detalles</button>
                     <button class="btn btn-outline">Reprogramar</button>
                     <button class="btn btn-danger">Cancelar (Liberar)</button>
                     <button class="btn btn-warning">No Asistió</button>
@@ -624,9 +710,12 @@
         <!-- Modal Agendar Cita Manual -->
         <div class="backdrop" *ngIf="showManualBookingModal" (click)="closeManualBooking()"></div>
         <div class="modal offcanvas" [class.open]="showManualBookingModal">
-            <div class="offcanvas-header">
-                <h3>Agendar Nueva Cita</h3>
-                <button class="close-btn" (click)="closeManualBooking()">x</button>
+            <div class="offcanvas-header" [class.mobile-premium-header]="isMobile()">
+                <button *ngIf="isMobile()" class="back-btn-premium" (click)="closeManualBooking()">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <h3>{{ isMobile() ? 'Agendar' : 'Agendar Nueva Cita' }}</h3>
+                <button *ngIf="!isMobile()" class="close-btn" (click)="closeManualBooking()">x</button>
             </div>
             <div class="offcanvas-body">
                 <div class="form-group">
@@ -679,5 +768,9 @@
                 </div>
             </div>
         </div>
-    </div>
-</div>
+    <!-- Floating Action Button (FAB) para Mobile -->
+    <button *ngIf="isMobile()" class="mobile-fab" (click)="openManualBooking()">
+        <i class="fa-solid fa-plus"></i>
+    </button>
+</div> <!-- main-content -->
+</div> <!-- reservation-page -->

@@ -4,6 +4,7 @@ import { SupabaseService } from '../../supabase.service';
 export interface BotResponse {
     messages: string[];
     session: any;
+    executionPath?: any[]; // Array de nodos ejecutados en este paso
 }
 
 @Injectable({
@@ -56,7 +57,8 @@ export class BotRuntimeService {
         const currentNode = nodes.find((n: any) => n.id === session.current_node_id);
         if (!currentNode) return { messages: ['⚠️ Error: Nodo no encontrado.'], session };
 
-        return await this.handleUserInput(flowData, currentNode, userMessage, session, flow);
+        const response = await this.handleUserInput(flowData, currentNode, userMessage, session, flow);
+        return response;
     }
 
     private async handleUserInput(
@@ -102,6 +104,21 @@ export class BotRuntimeService {
 
             const nextNodeId = this.getNextNodeId(flowData, currentNode.id, selectedOption.id);
             const nextNode = nodes.find((n: any) => n.id === nextNodeId);
+
+            const val = selectedOption.value || selectedOption.id;
+            const parts = String(val).split('|');
+
+            // Guardar variables del producto o recurso seleccionado
+            session.variables = {
+                ...(session.variables || {}),
+                resource_id: parts[0],
+                selected_product_id: parts[0],
+                selected_product_price: parts[1] || 0,
+                selected_product_name: selectedOption.text,
+                __resource_name: selectedOption.text,
+                __reservation_stage: 'day_selection'  // iniciar etapas de reserva si aplica
+            };
+
             return await this.advanceAndCollect(flowData, nextNode, session, flow);
         }
 
@@ -120,8 +137,121 @@ export class BotRuntimeService {
             };
         }
 
+        if (currentNode.type === 'reservation_check') {
+            const stage = session.variables?.__reservation_stage || 'day_selection';
+            const variables = { ...(session.variables || {}) };
+
+            // ── ETAPA 1: El usuario eligió el DÍA ──────────────────────────────────
+            if (stage === 'day_selection') {
+                const dayOptions = this.getNextDays(7);
+                const idx = parseInt(userInput.trim(), 10);
+                const selectedDay = (idx >= 1 && idx <= dayOptions.length)
+                    ? dayOptions[idx - 1]
+                    : dayOptions.find((d: string) => d.toLowerCase().includes(userInput.toLowerCase().trim()));
+
+                if (!selectedDay) {
+                    const list = dayOptions.map((d: string, i: number) => `${i + 1}. ${d}`).join('\n');
+                    return { messages: [`Por favor elige un número de la lista:\n\n${list}`], session };
+                }
+
+                variables.__selected_day = selectedDay;
+                variables.__reservation_stage = 'hour_selection';
+                session.variables = variables;
+                await this.updateSession(session, currentNode.id, 'input');
+
+                // Generar slots de hora (cada 30 min entre 8am y 6pm)
+                const slots = this.getTimeSlots();
+                const slotsText = slots.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n');
+                return { messages: [`✅ ${selectedDay} anotado.\n\n🕐 ¿A qué hora te viene mejor?\n\n${slotsText}`], session };
+            }
+
+            // ── ETAPA 2: El usuario eligió la HORA ────────────────────────────────
+            if (stage === 'hour_selection') {
+                const slots = this.getTimeSlots();
+                const idx = parseInt(userInput.trim(), 10);
+                const selectedTime = (idx >= 1 && idx <= slots.length)
+                    ? slots[idx - 1]
+                    : slots.find((s: string) => s.includes(userInput.trim()));
+
+                if (!selectedTime) {
+                    const slotsText = slots.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n');
+                    return { messages: [`Por favor elige un número de la lista:\n\n${slotsText}`], session };
+                }
+
+                variables.__selected_time = selectedTime;
+                variables.__reservation_stage = 'confirm';
+                session.variables = variables;
+                await this.updateSession(session, currentNode.id, 'input');
+
+                const day = variables.__selected_day;
+                const resourceName = variables.__resource_name || 'el servicio';
+                return { messages: [`📋 Resumen de tu cita:\n\n👨‍⚕️ Especialista: ${resourceName}\n📅 Día: ${day}\n🕐 Hora: ${selectedTime}\n\n¿Confirmas? Escribe *sí* para confirmar o *no* para volver.`], session };
+            }
+
+            // ── ETAPA 3: El usuario CONFIRMA o CANCELA ─────────────────────────────
+            if (stage === 'confirm') {
+                const answer = userInput.toLowerCase().trim();
+
+                if (answer === 'no' || answer === 'cancelar') {
+                    variables.__reservation_stage = 'day_selection';
+                    session.variables = variables;
+                    await this.updateSession(session, currentNode.id, 'input');
+                    const dayOptions = this.getNextDays(7);
+                    const list = dayOptions.map((d: string, i: number) => `${i + 1}. ${d}`).join('\n');
+                    return { messages: [`🔄 De acuerdo, volvemos a empezar.\n\n📅 ¿Para qué día te gustaría agendar?\n\n${list}`], session };
+                }
+
+                if (['sí', 'si', 'yes', '1', 'confirmar', 'ok'].includes(answer)) {
+                    // Avanzar al nodo reservation_create (puerto 'available')
+                    variables.__reservation_stage = null;
+                    variables.booking_start = `${variables.__selected_day} ${variables.__selected_time}`;
+                    session.variables = variables;
+
+                    const nextAvailId = this.getNextNodeId(flowData, currentNode.id, 'available');
+                    const nextNode = nodes.find((n: any) => n.id === nextAvailId);
+                    return await this.advanceAndCollect(flowData, nextNode, session, flow);
+                }
+
+                // No entendió
+                return { messages: ['Por favor escribe *sí* para confirmar o *no* para cancelar.'], session };
+            }
+        }
+
         return { messages: ['Lo siento, hubo un error en el flujo.'], session };
     }
+
+    /** Genera los próximos N días hábiles como strings */
+    private getNextDays(count: number): string[] {
+        const days = [];
+        const names = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        const today = new Date();
+        let added = 0;
+        let offset = 0;
+        while (added < count) {
+            offset++;
+            const d = new Date(today);
+            d.setDate(today.getDate() + offset);
+            const dow = d.getDay();
+            if (dow !== 0 && dow !== 6) { // excluir sábado y domingo
+                days.push(`${names[dow]} ${d.getDate()} ${months[d.getMonth()]}`);
+                added++;
+            }
+        }
+        return days;
+    }
+
+    /** Genera slots de tiempo de 8am a 6pm cada 30 min */
+    private getTimeSlots(): string[] {
+        const slots = [];
+        for (let h = 8; h < 18; h++) {
+            slots.push(`${String(h).padStart(2,'0')}:00`);
+            slots.push(`${String(h).padStart(2,'0')}:30`);
+        }
+        return slots; // 20 slots
+    }
+
+
 
     private async advanceAndCollect(
         flowData: any,
@@ -130,6 +260,7 @@ export class BotRuntimeService {
         flow: any
     ): Promise<BotResponse> {
         const messages: string[] = [];
+        const executionPath: any[] = []; 
         const nodes = flowData.nodes || [];
 
         let iterations = 0;
@@ -137,24 +268,42 @@ export class BotRuntimeService {
 
         while (node && iterations < maxIterations) {
             iterations++;
+            executionPath.push({ id: node.id, type: node.type, label: node.data?.label || node.type });
             switch (node.type) {
                 case 'message':
-                    messages.push(this.resolveVariables(node.data?.message || '', session.variables, flow));
+                    const msg = node.data?.message;
+                    if (msg) messages.push(this.resolveVariables(msg, session.variables, flow));
                     const nextMsgNodeId = this.getNextNodeId(flowData, node.id, 'output');
                     node = nodes.find((n: any) => n.id === nextMsgNodeId);
                     break;
 
                 case 'question':
-                    messages.push(this.resolveVariables(node.data?.message || '', session.variables, flow));
+                    const qMsg = node.data?.message || node.data?.question;
+                    if (qMsg) messages.push(this.resolveVariables(qMsg, session.variables, flow));
                     await this.updateSession(session, node.id, 'input');
-                    return { messages, session };
+                    return { messages, session, executionPath };
 
                 case 'menu':
-                    const menuMsg = this.resolveVariables(node.data?.message || '', session.variables, flow);
+                    const mMsg = node.data?.message || node.data?.label || 'Por favor elige una opción:';
+                    const menuMsg = this.resolveVariables(mMsg, session.variables, flow);
                     const optionsText = (node.data?.options || []).map((o: any, i: number) => `${i + 1}. ${o.text}`).join('\n');
                     messages.push(`${menuMsg}\n\n${optionsText}`);
                     await this.updateSession(session, node.id, 'menu_selection');
-                    return { messages, session };
+                    return { messages, session, executionPath };
+
+                case 'reservation_check':
+                    // Iniciar etapas de reserva: pedir día primero
+                    const dayList = this.getNextDays(7);
+                    const dayOpts = dayList.map((d: string, i: number) => `${i + 1}. ${d}`).join('\n');
+                    messages.push(`📅 ¿Para qué día te gustaría agendar?\n\n${dayOpts}`);
+                    // CRUCIAL: guardar el nodo reservation_check como nodo actual + stage inicial
+                    session.variables = {
+                        ...(session.variables || {}),
+                        __reservation_stage: 'day_selection'
+                    };
+                    await this.updateSession(session, node.id, 'input');
+                    return { messages, session, executionPath };
+
 
                 case 'condition':
                     const result = this.evaluateCondition(node.data, session.variables);
@@ -173,14 +322,43 @@ export class BotRuntimeService {
                     const aiMsg = node.data?.message || '🧠 [Agente Inteligente]: Hola, ¿cómo puedo ayudarte hoy?';
                     messages.push(this.resolveVariables(aiMsg, session.variables, flow));
                     await this.updateSession(session, node.id, 'ai_input');
-                    return { messages, session };
+                    return { messages, session, executionPath };
 
                 case 'end':
                     if (node.data?.message) {
                         messages.push(this.resolveVariables(node.data.message, session.variables, flow));
                     }
                     await this.updateSession(session, node.id, null, 'completed');
-                    return { messages, session };
+                    return { messages, session, executionPath };
+
+                case 'reservation_create':
+                    // Registrar la reserva en el CRM y la Agenda real
+                    try {
+                        const vars = session.variables || {};
+                        const resourceId = vars.resource_id;
+                        const bookingDay  = vars.__selected_day || vars.booking_start || 'Hoy';
+                        const bookingTime = vars.__selected_time || '09:00';
+                        const currentYear = new Date().getFullYear();
+                        const fullDateTime = `${bookingDay} ${currentYear} ${bookingTime}`;
+
+                        if (resourceId && this.supabase) {
+                            await this.supabase.createReservation({
+                                merchant_id: session.merchant_id,
+                                resource_id: resourceId,
+                                start_time: fullDateTime,
+                                customer_name: vars.customer_name || 'Cliente de Chat',
+                                customer_phone: vars.customer_phone || session.phone || '',
+                                pax: node.data?.pax || 1,
+                                status: 'confirmed'
+                            });
+                        }
+                    } catch (err) {
+                        console.error('Bot Error Booking:', err);
+                    }
+
+                    const nextCreateNodeId = this.getNextNodeId(flowData, node.id, 'success');
+                    node = nodes.find((n: any) => n.id === nextCreateNodeId);
+                    break;
 
                 default:
                     node = null;
@@ -193,7 +371,7 @@ export class BotRuntimeService {
 
         // Si el bucle termina, actualizar estado final
         await this.updateSession(session, session.current_node_id, null, 'completed');
-        return { messages, session };
+        return { messages, session, executionPath };
     }
 
     private resolveVariables(template: string, variables: any = {}, flow: any): string {
@@ -207,6 +385,29 @@ export class BotRuntimeService {
         
         // Variables del sistema
         result = result.replace(/{{merchantName}}/g, flow.name || 'Comercio');
+        
+        // Generar Resumen del Carrito dinámicamente
+        if (result.includes('{{cartSummary}}')) {
+            const cart = variables['cart'] || [];
+            if (cart.length === 0) {
+                result = result.replace(/{{cartSummary}}/g, '🛒 Tu carrito está vacío.');
+            } else {
+                let summary = '';
+                let total = 0;
+                cart.forEach((it: any) => {
+                    const rowTotal = Number(it.price) * Number(it.qty);
+                    total += rowTotal;
+                    summary += `• ${it.qty}x ${it.name} ($${rowTotal.toFixed(2)})`;
+                    if (it.notes && it.notes.toLowerCase() !== 'no') {
+                        summary += `\n  ↳ [${it.notes}]`;
+                    }
+                    summary += '\n';
+                });
+                summary += `\n💰 *Total: $${total.toFixed(2)}*`;
+                result = result.replace(/{{cartSummary}}/g, summary);
+            }
+        }
+
         result = result.replace(/{{fecha}}/g, new Date().toLocaleDateString());
         result = result.replace(/{{hora}}/g, new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
         
@@ -273,6 +474,35 @@ export class BotRuntimeService {
         }
 
         try {
+            if (actionType === 'add_to_cart') {
+                const vars = session.variables || {};
+                const cart = vars['cart'] || [];
+                
+                // Extraer datos (priorizando params del nodo, luego variables de sesión)
+                const productId = resolvedParams['product_id'] || vars['selected_product_id'];
+                const productName = resolvedParams['product_name'] || vars['selected_product_name'];
+                const price = Number(resolvedParams['price'] || vars['selected_product_price'] || 0);
+                const qty = Number(resolvedParams['qty'] || vars['cantidad_actual'] || 1);
+                const itemNotes = resolvedParams['notes'] || vars['last_product_notes'] || '';
+
+                if (productId) {
+                    cart.push({
+                        id: productId,
+                        name: productName,
+                        price: price,
+                        qty: qty,
+                        notes: itemNotes
+                    });
+                    session.variables['cart'] = cart;
+                    
+                    // Limpieza opcional de variables temporales
+                    session.variables['last_product_notes'] = ''; 
+                    
+                    return `✅ Añadido: ${qty}x ${productName}`;
+                }
+                return '⚠️ Error: No se pudo identificar el producto.';
+            }
+
             if (actionType === 'empty_cart') {
                 session.variables['cart'] = [];
                 return '🗑️ He vaciado tu carrito. ¿Qué te gustaría pedir ahora?';
@@ -296,11 +526,13 @@ export class BotRuntimeService {
                 const { data: order, error } = await this.supabase.createOrder({
                     merchant_id: session.merchant_id,
                     customer_id: session.customer_id,
+                    customer_name: vars['customer_name'],
                     total: total,
                     status: 'pending',
                     source: 'bot_flow',
                     closing_agent_type: 'bot',
                     delivery_address: vars['direccion_entrega'] || 'No proporcionada',
+                    notes: vars['notas_pedido'] || vars['customer_notes'] || '',
                     internal_note: `Pedido vía Bot Flow. Datos: ${JSON.stringify(vars)}`
                 });
 
@@ -314,7 +546,8 @@ export class BotRuntimeService {
                         product_name: it.name,
                         quantity: Number(it.qty),
                         unit_price: Number(it.price),
-                        subtotal: Number(it.price) * Number(it.qty)
+                        subtotal: Number(it.price) * Number(it.qty),
+                        notes: it.notes || ''
                     }));
                     await this.supabase.createOrderItems(items);
                 }

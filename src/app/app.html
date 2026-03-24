@@ -1,6 +1,6 @@
-<div class="app-container" *ngIf="!isLoginPage && !isBioLinkPage">
-    <!-- Top Bar -->
-    <header class="top-bar">
+<div class="app-container" [class.is-mobile]="isMobile()" *ngIf="!isLoginPage && !isBioLinkPage">
+    <!-- Top Bar (Hidden on Mobile Immersive Pages) -->
+    <header class="top-bar" *ngIf="!isMobile() || !isImmersivePage">
         <!-- Hamburger Menu Button -->
         <div style="display: flex; align-items: center; gap: 12px;">
             <button class="hamburger-btn" (click)="toggleSidebar()" [class.open]="sidebarOpen">
@@ -35,7 +35,7 @@
                 style="display: flex; align-items: center; gap: 16px; margin-right: 16px;">
 
                 <!-- Control de Sonido -->
-                <button (click)="toggleSound()" class="icon-btn"
+                <button *ngIf="!isMobile()" (click)="toggleSound()" class="icon-btn"
                     [style.background]="isSoundEnabled() ? '#e0e7ff' : '#f1f5f9'"
                     [style.color]="isSoundEnabled() ? '#4338ca' : '#64748b'"
                     style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.05); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
@@ -54,14 +54,14 @@
                 </select>
 
                 <!-- Botón Simulador (Barra Superior) -->
-                <button class="icon-btn primary" (click)="openGlobalSimulator()"
+                <button *ngIf="!isMobile()" class="icon-btn primary" (click)="openGlobalSimulator()"
                     style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
                     title="Abrir Simulador">
                     🚀
                 </button>
 
                 <!-- Notificaciones (Burbuja) -->
-                <div class="notification-bell-wrapper" style="position: relative; cursor: pointer;" routerLink="/chats">
+                <div *ngIf="!isMobile()" class="notification-bell-wrapper" style="position: relative; cursor: pointer;" routerLink="/chats">
                     <span style="font-size: 1.4rem;">💬</span>
                     <span *ngIf="unreadCount() > 0" class="header-badge">{{ unreadCount() }}</span>
                 </div>
@@ -70,8 +70,8 @@
             <button class="profile-btn" (click)="toggleProfileMenu()">
                 <img src="https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=100&h=100&fit=crop" alt="User"
                     class="profile-logo">
-                <span class="profile-name">{{ userData.full_name }}</span>
-                <span class="profile-arrow">▼</span>
+                <span class="profile-name" *ngIf="!isMobile()">{{ userData.full_name }}</span>
+                <span class="profile-arrow" *ngIf="!isMobile()">▼</span>
             </button>
 
             <!-- Dropdown Menu -->
@@ -231,10 +231,49 @@
             </button>
         </div>
     </nav>
+
+    <!-- Barra de Navegación Móvil (Bottom Bar) -->
+    <!-- Barra de Navegación Móvil (Bottom Bar) -->
+    <nav class="mobile-bottom-nav" *ngIf="isMobile() && (!isImmersivePage || ((router.url.includes('/reservations') || router.url.includes('/chats') || router.url.includes('/orders') || router.url.includes('/crm')) && !mobileService.isImmersiveOpen()))">
+        <a routerLink="/super-admin" routerLinkActive="active" *ngIf="isSuperAdmin && !activeMerchantId" class="nav-item" (click)="showProfileModal = false">
+            <span class="icon">🏢</span>
+            <span class="label">Empresas</span>
+        </a>
+        <a routerLink="/chats" routerLinkActive="active" *ngIf="!isSuperAdmin || activeMerchantId" class="nav-item" (click)="showProfileModal = false">
+            <span class="icon">💬</span>
+            <span class="label">Chats</span>
+            <span *ngIf="unreadCount() > 0" class="badge-dot">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
+        </a>
+        <a routerLink="/orders" routerLinkActive="active" *ngIf="(!isSuperAdmin || activeMerchantId) && merchantIndustryType !== 'reservations'" class="nav-item" (click)="showProfileModal = false">
+            <span class="icon">🛵</span>
+            <span class="label">Pedidos</span>
+        </a>
+        <a routerLink="/reservations" routerLinkActive="active" *ngIf="(!isSuperAdmin || activeMerchantId) && merchantIndustryType === 'reservations'" class="nav-item" (click)="showProfileModal = false">
+            <span class="icon">📅</span>
+            <span class="label">Agenda</span>
+        </a>
+        <a routerLink="/crm" routerLinkActive="active" *ngIf="!isSuperAdmin || activeMerchantId" class="nav-item" (click)="showProfileModal = false">
+            <span class="icon">👥</span>
+            <span class="label">Clientes</span>
+        </a>
+        <a routerLink="/metrics" routerLinkActive="active" *ngIf="!isSuperAdmin || activeMerchantId" class="nav-item" (click)="showProfileModal = false">
+            <span class="icon">📊</span>
+            <span class="label">Stats</span>
+        </a>
+        <a (click)="showProfileModal = true" class="nav-item">
+            <span class="icon">👤</span>
+            <span class="label">Perfil</span>
+        </a>
+        <a (click)="toggleSidebar(); showProfileModal = false" class="nav-item">
+            <span class="icon">≡</span>
+            <span class="label">Menú</span>
+        </a>
+    </nav>
 </div>
 
 <main class="content-area" [class.no-nav]="isLoginPage || isBioLinkPage"
-    [class.sidebar-mode]="!isLoginPage && !isBioLinkPage">
+    [class.sidebar-mode]="!isLoginPage && !isBioLinkPage"
+    [class.immersive-mode]="isMobile() && isImmersivePage">
     <router-outlet></router-outlet>
 </main>
 
@@ -260,31 +299,27 @@
         <p>Actualiza tus datos personales y de acceso.</p>
 
         <div class="profile-form">
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Nombre Completo</label>
-                <input type="text" [(ngModel)]="userData.full_name" placeholder="Tu nombre"
-                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);">
+            <div class="form-group">
+                <label>Nombre Completo</label>
+                <input type="text" [(ngModel)]="userData.full_name" placeholder="Tu nombre" class="profile-input">
             </div>
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Email / Usuario</label>
-                <input type="email" [(ngModel)]="userData.email" placeholder="tu@email.com"
-                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);">
+            <div class="form-group">
+                <label>Email / Usuario</label>
+                <input type="email" [(ngModel)]="userData.email" placeholder="tu@email.com" class="profile-input">
             </div>
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Nueva Contraseña</label>
-                <input type="password" [(ngModel)]="userData.password" placeholder="********"
-                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);">
+            <div class="form-group">
+                <label>Nueva Contraseña</label>
+                <input type="password" [(ngModel)]="userData.password" placeholder="********" class="profile-input">
             </div>
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Repetir Contraseña</label>
-                <input type="password" [(ngModel)]="userData.confirm_password" placeholder="********"
-                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);">
-                <small style="display: block; margin-top: 6px; font-size: 0.75rem; color: #6b7280;">Deja en blanco para
+            <div class="form-group">
+                <label>Repetir Contraseña</label>
+                <input type="password" [(ngModel)]="userData.confirm_password" placeholder="********" class="profile-input">
+                <small class="help-text">Deja en blanco para
                     no cambiar.</small>
             </div>
         </div>
 
-        <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+        <div class="modal-actions">
             <button class="cancel-btn" (click)="showProfileModal = false">Cancelar</button>
             <button class="save-btn" (click)="saveProfile()">Guardar Cambios</button>
         </div>

@@ -4,23 +4,30 @@ import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../supabase.service';
 import { NotificationService } from '../notification.service';
+import { MobileService } from '../mobile.service';
 import { supabase } from '../supabase-config';
+import { BookingMobileList } from './booking-mobile-list/booking-mobile-list.component';
+import { getStatusClass, getStatusText, getServiceColor } from './reservation.utils';
 
 @Component({
   selector: 'app-reservation-management',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule],
+  imports: [CommonModule, RouterModule, FormsModule, BookingMobileList],
   templateUrl: './reservation-management.html',
   styleUrls: ['./reservation-management.css'],
 })
 export class ReservationManagement implements OnInit {
   private supabase = inject(SupabaseService);
   private ns = inject(NotificationService);
+  private mobileService = inject(MobileService);
+  isMobile = this.mobileService.isMobile;
 
   activeTab: 'calendar' | 'resources' | 'blocks' | 'reports' = 'calendar';
   currentView: 'day' | 'week' | 'month' | 'list' = 'day';
   currentDate: Date = new Date();
   today: Date = new Date();
+  now: Date = new Date();
+  private nowTimer: any;
 
   // Mock KPIs
   kpis = {
@@ -33,16 +40,19 @@ export class ReservationManagement implements OnInit {
 
   resources: any[] = [];
   timeSlots: string[] = [
-    '08:00', '09:00', '10:00', '11:00', '12:00',
-    '13:00', '14:00', '15:00', '16:00', '17:00'
+    '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
+    '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
   ];
   bookings: any[] = [];
   searchTerm: string = '';
   bookingSearchTerm: string = '';
   weekDays: Date[] = [];
   monthDays: any[] = []; // { date: Date, isCurrentMonth: boolean }[]
-
   selectedBooking: any = null;
+
+  selectedResourceId: string = 'all';
+  currentPage: number = 1;
+  pageSize: number = 10;
   merchantId: string = '';
   merchantName: string = '';
 
@@ -56,7 +66,10 @@ export class ReservationManagement implements OnInit {
     buffer_time_minutes: 15,
     capacity: 1,
     base_price: 0,
-    services: [] // Nueva lista de sub-servicios
+    services: [], // Nueva lista de sub-servicios
+    external_sync_url: '',
+    min_stay_nights: 1,
+    max_pax: 2
   };
 
   // Blocks (Exceptions) State
@@ -94,9 +107,45 @@ export class ReservationManagement implements OnInit {
     this.merchantName = localStorage.getItem('merchant_name') || 'Mi Negocio';
 
     if (this.merchantId) {
-      this.fetchMerchantInfo(); // Cargar en background para refrescar
+      this.fetchMerchantInfo();
       this.loadRealData();
     }
+
+    if (this.isMobile()) {
+      this.currentView = 'list';
+    }
+    
+    // Timer para la linea de tiempo
+    this.nowTimer = setInterval(() => {
+      this.now = new Date();
+    }, 60000); // Actualizar cada minuto
+  }
+
+  ngOnDestroy() {
+    if (this.nowTimer) clearInterval(this.nowTimer);
+  }
+
+  get currentTimePosition(): number {
+    const h = this.now.getHours();
+    const m = this.now.getMinutes();
+    
+    // Buscamos el inicio de nuestro timeSlots (ej: 08:00)
+    const startHour = 8;
+    const totalMinutes = (h - startHour) * 60 + m;
+    
+    // Cada slot de 30 min mide 80px (según el CSS anterior, pero voy a ajustarlo)
+    // Digamos que cada minuto son X píxeles
+    // En el CSS actual .time-cell es 80px (que son 30 min)
+    // Entonces 1 min = 80/30 = 2.66px
+    return totalMinutes * (80 / 30) + 40; // +40 por el header cell
+  }
+
+  // getServiceColor is now handled by utils assignment below
+
+
+  get displayResources() {
+    if (this.selectedResourceId === 'all') return this.resources;
+    return this.resources.filter(r => r.id === this.selectedResourceId);
   }
 
   async fetchMerchantInfo() {
@@ -244,6 +293,37 @@ export class ReservationManagement implements OnInit {
 
     // CARGAR BLOQUEOS
     this.loadExceptions();
+    
+    // Actualizar Estadísticas
+    this.updateKpis();
+  }
+
+  updateKpis() {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayBookings = this.bookings.filter(b => b.date === todayStr);
+    
+    // Contar por servicio para el top
+    const serviceCounts: any = {};
+    todayBookings.forEach(b => {
+      serviceCounts[b.service] = (serviceCounts[b.service] || 0) + 1;
+    });
+    
+    let topS = 'Ninguno';
+    let max = 0;
+    for (const s in serviceCounts) {
+      if (serviceCounts[s] > max) {
+        max = serviceCounts[s];
+        topS = s;
+      }
+    }
+
+    this.kpis = {
+      todayTotal: todayBookings.length,
+      todayPending: todayBookings.filter(b => b.status === 'pending' || b.status === 'confirmed').length,
+      attendanceRate: todayBookings.length > 0 ? 100 : 0, // Mocked for now
+      topService: topS,
+      aiBookedRate: 85 // Mocked for now
+    };
   }
 
   async loadExceptions() {
@@ -313,9 +393,30 @@ export class ReservationManagement implements OnInit {
     }
   }
 
-  getBookingsForSlow(resourceId: string, time: string) {
+  getStatusText = getStatusText;
+  getStatusClass = getStatusClass;
+  getServiceColor = getServiceColor;
+
+  getBookingsForSlot(resourceId: string, time: string) {
     const targetDate = this.currentDate.toISOString().split('T')[0];
     return this.bookings.filter(b => b.resourceId === resourceId && b.time === time && b.date === targetDate);
+  }
+
+  getResourceName(id: string): string {
+    const res = this.resources.find(r => r.id === id);
+    return res ? res.name : 'Recurso';
+  }
+
+  getBookingsForDay(date: Date) {
+    if (!date) return [];
+    const targetDate = date.toISOString().split('T')[0];
+    return this.bookings.filter(b => b.date === targetDate);
+  }
+
+  getBookingsForDayAndResource(date: Date, resourceId: string) {
+    if (!date || !resourceId) return [];
+    const targetDate = date.toISOString().split('T')[0];
+    return this.bookings.filter(b => b.date === targetDate && b.resourceId === resourceId);
   }
 
   // Getters para filtros
@@ -330,8 +431,10 @@ export class ReservationManagement implements OnInit {
   get filteredBookings() {
     let filtered = this.bookings;
 
-    // Filtro por fecha (solo si no es vista mes)
-    if (this.currentView !== 'month') {
+    // En vista Lista no filtramos por fecha actual para ver historial/futuro
+    if (this.currentView === 'list' || this.currentView === 'month') {
+        // En estas vistas mostramos todo o filtramos por término de búsqueda si existe
+    } else {
       const dateStr = this.currentDate.toISOString().split('T')[0];
       filtered = filtered.filter(b => b.date === dateStr);
     }
@@ -346,17 +449,34 @@ export class ReservationManagement implements OnInit {
     return filtered;
   }
 
+  get paginatedBookings() {
+    const start = (this.currentPage - 1) * this.pageSize;
+    return this.filteredBookings.slice(start, start + this.pageSize);
+  }
+
+  get totalPages() {
+    return Math.ceil(this.filteredBookings.length / this.pageSize);
+  }
+
+  setPage(page: number) {
+    if (page < 1 || page > this.totalPages) return;
+    this.currentPage = page;
+  }
+
   openBookingDetails(booking: any) {
     this.selectedBooking = booking;
+    if (booking) this.mobileService.setImmersive(true);
   }
 
   closeDetails() {
     this.selectedBooking = null;
+    this.mobileService.setImmersive(false);
   }
 
   // --- Resource Management ---
   async openResourceCreator(resource: any = null) {
     this.showResourceModal = true;
+    this.mobileService.setImmersive(true);
 
     if (resource) {
       this.isEditingResource = true;
@@ -383,7 +503,10 @@ export class ReservationManagement implements OnInit {
         buffer_time_minutes: 15,
         capacity: 1,
         base_price: 0,
-        services: []
+        services: [],
+        external_sync_url: '',
+        min_stay_nights: 1,
+        max_pax: 2
       };
     }
   }
@@ -406,6 +529,7 @@ export class ReservationManagement implements OnInit {
 
   closeResourceCreator() {
     this.showResourceModal = false;
+    this.mobileService.setImmersive(false);
   }
 
   async saveResource() {
@@ -422,6 +546,9 @@ export class ReservationManagement implements OnInit {
       buffer_time_minutes: this.activeResource.buffer_time_minutes,
       capacity: this.activeResource.capacity,
       base_price: this.activeResource.base_price,
+      external_sync_url: this.activeResource.external_sync_url || null,
+      min_stay_nights: this.activeResource.min_stay_nights || 1,
+      max_pax: this.activeResource.max_pax || this.activeResource.capacity,
       is_active: true
     };
 
@@ -513,10 +640,12 @@ export class ReservationManagement implements OnInit {
       };
     }
     this.showBlockModal = true;
+    this.mobileService.setImmersive(true);
   }
 
   closeBlockCreator() {
     this.showBlockModal = false;
+    this.mobileService.setImmersive(false);
   }
 
   private formatDateForInput(dateStr: string): string {
@@ -582,6 +711,7 @@ export class ReservationManagement implements OnInit {
     };
     this.onManualResourceChange();
     this.showManualBookingModal = true;
+    this.mobileService.setImmersive(true);
   }
 
   async onManualResourceChange() {
@@ -608,6 +738,7 @@ export class ReservationManagement implements OnInit {
 
   closeManualBooking() {
     this.showManualBookingModal = false;
+    this.mobileService.setImmersive(false);
   }
 
   async saveManualBooking() {
@@ -694,25 +825,8 @@ export class ReservationManagement implements OnInit {
     }
   }
 
-  getStatusClass(status: string) {
-    switch (status) {
-      case 'confirmed': return 'bg-success';
-      case 'pending': return 'bg-warning';
-      case 'completed': return 'bg-primary';
-      case 'no_show': return 'bg-danger';
-      default: return 'bg-secondary';
-    }
-  }
+  // Handled by imports and utils
 
-  getStatusText(status: string) {
-    switch (status) {
-      case 'confirmed': return 'Confirmado 🟢';
-      case 'pending': return 'Pendiente 🟡';
-      case 'completed': return 'Completado 🔵';
-      case 'no_show': return 'No asistió 🔴';
-      default: return 'Bloqueado ⚫';
-    }
-  }
 
   navigateDate(change: number) {
     if (this.currentView === 'day') {

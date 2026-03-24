@@ -4,24 +4,24 @@
             <h1>Panel de Super Administrador</h1>
             <p>Gestión global de empresas y plataforma SaaS Woox.</p>
         </div>
-        <div class="header-actions">
+        <div class="header-actions" [class.mobile-header-actions]="isMobile()">
             <button class="info-btn" (click)="openAppInfo()">
-                ℹ️ Info & Changelog
+                <span class="icon">ℹ️</span> <span class="label">Info</span>
             </button>
             <button class="users-mgr-btn" (click)="openGlobalUserManager()">
-                👥 Gestión de Usuarios
+                <span class="icon">👥</span> <span class="label">Usuarios</span>
             </button>
             <button class="ai-logic-btn" (click)="router.navigate(['/bot-builder'])">
-                🤖 Diseñar Flujos (Bot Builder)
+                <span class="icon">🤖</span> <span class="label">Bot Builder</span>
             </button>
             <button class="platform-config-btn" (click)="openPlatformConfig()">
-                ⚙️ Configurar Plataforma
+                <span class="icon">⚙️</span> <span class="label">Config</span>
             </button>
             <button class="ai-engine-monitor-btn" (click)="openAIEngineMonitor()">
-                📟 Monitor Motor IA
+                <span class="icon">📟</span> <span class="label">Monitor</span>
             </button>
             <button class="add-merchant-btn" (click)="openModal()">
-                + Registrar Nueva Empresa
+                <span class="icon">+</span> <span class="label">Nueva</span>
             </button>
         </div>
     </header>
@@ -53,7 +53,8 @@
                 </style>
             </div>
             <ng-container *ngIf="!isLoading">
-                <table class="merchants-table">
+                <!-- VISTA ESCRITORIO: TABLA -->
+                <table class="merchants-table" *ngIf="!isMobile()">
                     <thead>
                         <tr>
                             <th (click)="toggleSort('name')" class="sortable">
@@ -193,6 +194,49 @@
                         </tr>
                     </tbody>
                 </table>
+
+                <!-- VISTA MÓVIL: CARDS -->
+                <div class="merchant-cards" *ngIf="isMobile()">
+                    <div class="m-card" *ngFor="let m of viewMerchants">
+                        <div class="m-card-header">
+                            <div class="m-card-title">
+                                <img [src]="m.logo_url" alt="Logo" class="m-card-logo">
+                                <div class="m-card-info">
+                                    <h3>{{ m.name }}</h3>
+                                    <code>/{{ m.slug }}</code>
+                                </div>
+                            </div>
+                            <div class="m-card-status">
+                                <span class="status-badge" [class.active]="m.is_active">
+                                    {{ m.is_active ? 'Activa' : 'Inactiva' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="m-card-details">
+                            <div class="detail-item">
+                                <span class="label">IA:</span>
+                                <span class="value">{{ getProviderLogo(m.ai_provider) }} {{ m.ai_provider }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Plan:</span>
+                                <span class="value badge-plan" [class]="m.subscription_plan">{{ m.subscription_plan | uppercase }}</span>
+                            </div>
+                        </div>
+
+                        <div class="m-card-actions-grid">
+                            <button class="action-btn config" (click)="openModal(m)" title="Ajustes">⚙️</button>
+                            <button class="action-btn ai" (click)="openAIConfig(m)" title="Configurar IA">🤖</button>
+                            <button class="action-btn omni" (click)="openOmniConfig(m)" title="Canales">💬</button>
+                            <button class="action-btn bio" (click)="openBiolinkConfig(m)" title="BioLink">🔗</button>
+                            <button class="action-btn sim" (click)="testChatSimulator(m)" title="Simulador">🚀</button>
+                            <button class="action-btn stats" (click)="viewMerchantStats(m)" title="Estadísticas">📊</button>
+                            <button class="action-btn live" (click)="openLiveMonitor(m)" title="Pedidos">🛒</button>
+                            <button class="action-btn login" (click)="enterAsMerchant(m)" title="Entrar">🚪</button>
+                            <button class="action-btn delete" (click)="confirmDeleteMerchant(m)" title="Borrar">🗑️</button>
+                        </div>
+                    </div>
+                </div>
             </ng-container>
 
             <!-- Controles de Paginación -->
