@@ -66,11 +66,6 @@ export class App {
     this.checkMobile();
   }
 
-  openGlobalSimulator() {
-    this.router.navigate(['/chats'], {
-      queryParams: { action: 'simulator', t: Date.now() }
-    });
-  }
 
   toggleSound() {
     this.supabaseService.toggleSound();
@@ -83,6 +78,12 @@ export class App {
     if (rawMerchantId) {
       if (this.supabaseService.isValidUUID(rawMerchantId)) {
         const merchantId = rawMerchantId;
+        
+        // Limpiar suscripción previa si existe (ej. al cambiar de comercio)
+        if (this.merchantSubscription) {
+          this.supabaseService.unsubscribe(this.merchantSubscription);
+        }
+
         // Carga inicial 
         await this.supabaseService.refreshGlobalUnreadCount(merchantId);
 
@@ -100,11 +101,16 @@ export class App {
         });
       } else {
         console.warn('[App] Limpiando active_merchant_id inválido (no UUID):', rawMerchantId);
-        localStorage.removeItem('active_merchant_id');
-        localStorage.removeItem('merchant_name');
-        localStorage.removeItem('merchant_slug');
+        this.clearMerchantSession();
       }
     }
+  }
+
+  private clearMerchantSession() {
+    localStorage.removeItem('active_merchant_id');
+    localStorage.removeItem('merchant_name');
+    localStorage.removeItem('merchant_slug');
+    localStorage.removeItem('merchant_industry_type');
   }
 
   ngOnDestroy() {
@@ -138,9 +144,14 @@ export class App {
   }
 
   get merchantLogo() {
+    // Si tenemos logo de plataforma global configurado, usarlo
+    const platformLogo = localStorage.getItem('platform_logo_url');
+    if (platformLogo) return platformLogo;
+
+    // Placeholders neutrales para evitar dependencias de Unsplash en producción
     return this.isSuperAdmin
-      ? 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=100&h=100&fit=crop'
-      : 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=100&h=100&fit=crop';
+      ? '/assets/icons/platform-logo-default.png' // Debería existir o ser un SVG
+      : '/assets/icons/merchant-logo-default.png';
   }
 
   get activeMerchantId() {
@@ -188,18 +199,39 @@ export class App {
     this.closeProfileMenu();
   }
 
-  saveProfile() {
+  async saveProfile() {
     if (this.userData.password && this.userData.password !== this.userData.confirm_password) {
       this.notificationService.show('Las contraseñas no coinciden', 'error');
       return;
     }
 
-    this.notificationService.show('Perfil actualizado correctamente', 'success');
-    this.showProfileModal = false;
+    const userId = localStorage.getItem('user_id');
+    if (!userId) {
+      this.notificationService.show('Error de sesión. Por favor, vuelva a conectarse', 'error');
+      return;
+    }
 
-    // Limpiar contraseñas por seguridad después de guardar
-    this.userData.password = '';
-    this.userData.confirm_password = '';
+    const profileData: any = {
+      id: userId,
+      full_name: this.userData.full_name
+    };
+
+    if (this.userData.password) {
+      profileData.password = this.userData.password;
+    }
+
+    const { error } = await this.supabaseService.saveProfile(profileData);
+
+    if (error) {
+      console.error('Error al guardar perfil:', error);
+      this.notificationService.show('Error al guardar perfil', 'error');
+    } else {
+      this.notificationService.show('Perfil actualizado correctamente', 'success');
+      localStorage.setItem('user_name', this.userData.full_name);
+      this.showProfileModal = false;
+      this.userData.password = '';
+      this.userData.confirm_password = '';
+    }
   }
 
   exitMerchantView() {

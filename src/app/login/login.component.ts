@@ -32,6 +32,7 @@ export class LoginComponent {
 
             if (result.data) {
                 const user = result.data;
+                localStorage.setItem('user_id', user.id);
                 localStorage.setItem('user_name', user.full_name);
                 localStorage.setItem('user_avatar', user.avatar_url || '');
 

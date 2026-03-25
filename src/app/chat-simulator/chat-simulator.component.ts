@@ -151,13 +151,47 @@ interface CartItem {
     </div>
   `,
   styles: [`
+
+    .simulator-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; z-index: 10000;
+      animation: fadeInSim 0.3s ease-out;
+    }
+    @keyframes fadeInSim { from { opacity: 0; } to { opacity: 1; } }
+
+    .simulator-window {
+      width: 450px; height: 650px; background: white; border-radius: 20px;
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+      animation: slideUpSim 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes slideUpSim { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
     .simulator-overlay.inline {
-      position: relative; width: 100%; height: 100%;
+      position: relative; width: 100%; height: 100%; top: auto; left: auto;
       background: transparent; backdrop-filter: none; z-index: 1;
+      animation: none;
     }
     .simulator-overlay.inline .simulator-window {
       width: 100%; height: 100%; border-radius: 0; box-shadow: none; border: none;
+      animation: none;
     }
+
+    header {
+      padding: 16px 20px; color: white; display: flex;
+      justify-content: space-between; align-items: center;
+    }
+    .merchant-info { display: flex; align-items: center; gap: 12px; }
+    .merchant-info img { width: 40px; height: 40px; border-radius: 8px; background: white; object-fit: cover; }
+    .merchant-info h3 { margin: 0; font-size: 0.95rem; font-weight: 800; }
+    .merchant-info p { margin: 0; font-size: 0.75rem; opacity: 0.9; }
+    .close-btn { 
+      background: rgba(255,255,255,0.2); border: none; color: white; 
+      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 0.8rem;
+    }
+    .close-btn:hover { background: rgba(255,255,255,0.3); }
     
     /* Stats Bar Styles */
     .sim-stats-bar {

@@ -30,7 +30,7 @@
 
         <!-- Profile Menu -->
         <div class="profile-menu-container">
-            <!-- Global Notification Bubble & Simulator -->
+            <!-- Global Action Buttons -->
             <div class="header-actions-global"
                 style="display: flex; align-items: center; gap: 16px; margin-right: 16px;">
 
@@ -53,12 +53,6 @@
                     <option value="offline">⚪ Offline</option>
                 </select>
 
-                <!-- Botón Simulador (Barra Superior) -->
-                <button *ngIf="!isMobile()" class="icon-btn primary" (click)="openGlobalSimulator()"
-                    style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
-                    title="Abrir Simulador">
-                    🚀
-                </button>
 
                 <!-- Notificaciones (Burbuja) -->
                 <div *ngIf="!isMobile()" class="notification-bell-wrapper" style="position: relative; cursor: pointer;" routerLink="/chats">
@@ -134,10 +128,6 @@
                 <a routerLink="/platform-analytics" routerLinkActive="active" (click)="closeSidebar()">
                     <span class="icon">📈</span>
                     <span>Analytics Global</span>
-                </a>
-                <a routerLink="/agents" routerLinkActive="active" (click)="closeSidebar()">
-                    <span class="icon">🤖</span>
-                    <span>Agentes IA</span>
                 </a>
                 <a routerLink="/audit-logs" routerLinkActive="active" (click)="closeSidebar()">
                     <span class="icon">🕵️</span>

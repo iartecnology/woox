@@ -300,7 +300,7 @@ export class SuperAdminComponent implements OnInit {
     globalUserForm = {
         full_name: '',
         email: '',
-        password: 'password123',
+        password: '',
         role: 'merchant_operator',
         merchant_id: null,
         is_active: true
@@ -1036,6 +1036,11 @@ export class SuperAdminComponent implements OnInit {
         if (!this.newUser.full_name || !this.newUser.email || !this.currentManagingMerchant) return;
 
         // Limpiar objeto para enviar solo lo que la tabla 'profiles' espera
+        if (!this.newUser.password && !this.newUser.id) {
+            this.notificationService.show('La contraseña es obligatoria para nuevos usuarios', 'error');
+            return;
+        }
+
         const profileData: any = {
             full_name: this.newUser.full_name,
             email: this.newUser.email,
@@ -1050,19 +1055,17 @@ export class SuperAdminComponent implements OnInit {
             profileData.id = this.newUser.id;
         }
 
-        // Manejo de contraseña para cumplir con el NOT NULL constraint
         if (!this.newUser.id) {
             // Es nuevo usuario
-            profileData.password = this.newUser.password || 'password123';
+            profileData.password = this.newUser.password;
         } else {
             // Es edición
             if (this.newUser.password) {
                 // Si el administrador escribió una nueva contraseña
                 profileData.password = this.newUser.password;
             } else {
-                // Si no escribió nada, mantenemos la contraseña actual que ya viene en el objeto 'user'
-                // pero nos aseguramos de que no sea null ni undefined
-                profileData.password = this.newUser.password_plain || this.newUser.password || 'password123';
+                // Si no escribió nada, mantenemos el password_plain si existe en el objeto original
+                profileData.password = this.newUser.password_plain || this.newUser.password;
             }
         }
 
@@ -1395,19 +1398,13 @@ export class SuperAdminComponent implements OnInit {
         this.showCodeModal = true;
     }
 
-    async openMerchantChats(merchant: Merchant) {
+    async openMerchantChats(merchant: any) {
         localStorage.setItem('active_merchant_id', merchant.id || '');
         this.router.navigate(['/chats']);
     }
 
-    async testChatSimulator(merchant: Merchant) {
+    async testChatSimulator(merchant: any) {
         if (this.isPreparingSimulator) return;
-
-        if (!merchant.ai_api_key && !this.platformAiSettings?.local_ai_enabled) {
-            this.notificationService.show('El comercio no tiene una API Key configurada. Configúrala primero en el botón 🤖', 'warning');
-            this.openAIConfig(merchant);
-            return;
-        }
 
         // Establecer como mercante activo para que el panel de chats lo reconozca
         localStorage.setItem('active_merchant_id', merchant.id || '');
@@ -1415,40 +1412,33 @@ export class SuperAdminComponent implements OnInit {
         this.ngZone.run(() => {
             this.isPreparingSimulator = true;
             this.selectedMerchant = { ...merchant };
-            
+
             // Override with Local AI settings if enabled
             if (this.platformAiSettings?.local_ai_enabled) {
                 this.selectedMerchant.ai_provider = 'lmstudio';
                 this.selectedMerchant.ai_model = this.platformAiSettings.local_ai_model || 'qwen/qwen3.5-9b';
                 this.selectedMerchant.lmstudio_base_url = this.platformAiSettings.local_ai_url || 'http://10.20.30.152:1234';
-                this.selectedMerchant.ai_api_key = 'local-override-key'; // Evitamos error de api key vacía
+                this.selectedMerchant.ai_api_key = 'local-override-key';
             }
             this.cdr.detectChanges();
         });
 
         try {
             await this.updateConsolidatedPrompt();
-            this.ngZone.run(() => {
-                this.showSimulator = true;
-                this.cdr.detectChanges();
-            });
         } catch (error) {
-            this.notificationService.show('Error al preparar simulador', 'error');
-            this.ngZone.run(() => {
-                this.showSimulator = true;
-                this.cdr.detectChanges();
-            });
+            console.warn('[Simulator] Could not prepare consolidated prompt, continuing anyway:', error);
         } finally {
             this.ngZone.run(() => {
                 this.isPreparingSimulator = false;
+                this.showSimulator = true;
                 this.cdr.detectChanges();
             });
         }
     }
 
-    openLiveMonitor(merchant: Merchant) {
+    openLiveMonitor(merchant: any) {
         console.log('🛒 Opening Live Monitor for', merchant.name);
-        this.currentMonitoringMerchantId = merchant.id;
+        this.currentMonitoringMerchantId = merchant.id || '';
         this.showLiveMonitor = true;
         this.cdr.detectChanges();
     }
@@ -2723,7 +2713,7 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
         this.globalUserForm = {
             full_name: user.full_name,
             email: user.email,
-            password: user.password || 'password123',
+            password: user.password,
             role: user.role,
             merchant_id: user.merchant_id,
             is_active: user.is_active
@@ -2739,7 +2729,7 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
         this.globalUserForm = {
             full_name: '',
             email: '',
-            password: 'password123',
+            password: '',
             role: 'merchant_operator',
             merchant_id: null,
             is_active: true

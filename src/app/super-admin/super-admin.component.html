@@ -358,6 +358,7 @@
         </div>
     </div>
 
+
     <!-- SIMULADOR DE CHAT -->
     <app-chat-simulator *ngIf="showSimulator && selectedMerchant.name" [merchantName]="selectedMerchant.name"
         [merchantId]="selectedMerchant.id || ''" [logoUrl]="selectedMerchant.logo_url || ''"
@@ -366,7 +367,10 @@
         [aiModel]="selectedMerchant.ai_model || ''"
         [ollamaBaseUrl]="selectedMerchant.ollama_base_url || 'http://localhost:11434'"
         [lmstudioBaseUrl]="selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1'"
-        [aiWelcomeMessage]="selectedMerchant.ai_welcome_message || ''" [context]="getConsolidatedPrompt()"
+        [aiWelcomeMessage]="selectedMerchant.ai_welcome_message || ''" 
+        [context]="getConsolidatedPrompt()"
+        [botMode]="selectedMerchant.bot_mode || false"
+        [aiEnabled]="selectedMerchant.ai_enabled !== false"
         (onClose)="showSimulator = false">
     </app-chat-simulator>
 
@@ -1028,8 +1032,8 @@
 
                                 <!-- Botón de Simulación Destacado -->
                                 <div class="simulator-trigger-box">
-                                    <button class="test-chat-btn" (click)="toggleAISimulator()"
-                                        [disabled]="!selectedMerchant.ai_api_key || !selectedMerchant.ai_model || isPreparingSimulator">
+                                    <button class="test-chat-btn" (click)="testChatSimulator($any(selectedMerchant))"
+                                        [disabled]="isPreparingSimulator">
                                         <span class="icon" *ngIf="!isPreparingSimulator">💬</span>
                                         <span class="icon" *ngIf="isPreparingSimulator">⌛</span>
                                         <div class="btn-text">

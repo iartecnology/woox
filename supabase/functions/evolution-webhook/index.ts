@@ -109,13 +109,13 @@ Deno.serve(async (req: Request) => {
         }
 
         // Obtener o crear conversación
-        let { data: conversation } = await supabase.from("conversations").select("*").eq("merchant_id", m.id).eq("customer_id", customer!.id).eq("status", "active").maybeSingle();
+        let { data: conversation } = await supabase.from("conversations").select("*").eq("merchant_id", m.id).eq("customer_id", customer!.id).eq("status", "open").maybeSingle();
         if (!conversation) {
             const { data: nconv } = await supabase.from("conversations").insert({
                 merchant_id: m.id,
                 customer_id: customer!.id,
                 channel: "whatsapp_evolution",
-                status: "active"
+                status: "open"
             }).select().single();
             conversation = nconv;
         }

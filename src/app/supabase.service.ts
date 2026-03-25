@@ -100,7 +100,7 @@ export class SupabaseService {
         if (now - this.lastSoundPlayedAt < 1000) return; // Cooldown de 1 segundo
 
         this.lastSoundPlayedAt = now;
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+        const audio = new Audio('/notification.mp3');
         audio.play().catch(err => console.warn('Error playing notification sound:', err));
     }
 
