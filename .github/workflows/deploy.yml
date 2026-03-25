@@ -28,7 +28,7 @@ jobs:
           cache: 'npm'
 
       - name: 📦 Instalar dependencias
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       # Inyectar credenciales DEV en el archivo de environment
       - name: 🔑 Configurar credenciales DEV
@@ -97,7 +97,7 @@ jobs:
           cache: 'npm'
 
       - name: 📦 Instalar dependencias
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       # Inyectar credenciales PROD en el archivo de environment
       - name: 🔑 Configurar credenciales PROD
