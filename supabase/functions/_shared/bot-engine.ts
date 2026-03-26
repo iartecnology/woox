@@ -53,13 +53,14 @@ async function createOrderSafe(supabase: any, orderData: any) {
 
     if (error && (error.message.includes('column') || error.message.includes('cache'))) {
         console.log('[BOT-ENGINE] Fallback a esquema básico de orders...');
-        const basicData = {
+        const basicData: any = {
             merchant_id: orderData.merchant_id,
             customer_id: orderData.customer_id,
             total: orderData.total,
             delivery_address: orderData.delivery_address,
             status: orderData.status
         };
+        if (orderData.channel) basicData.channel = orderData.channel;
         const res = await supabase.from('orders').insert(basicData).select('*').single();
         data = res.data;
         error = res.error;
@@ -131,22 +132,45 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
     if (actionType === 'register_order') {
         const cart = variables['cart'] || [];
         const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
+        
+        // --- 1. ACTUALIZAR CLIENTE CON DATOS RECOLECTADOS DE VARIABLES ---
+        const customerUpdate: any = {};
+        if (variables['nombre_cliente'] || variables['nombre'] || variables['name']) {
+            customerUpdate.full_name = variables['nombre_cliente'] || variables['nombre'] || variables['name'];
+        }
+        if (variables['telefono_cliente'] || variables['telefono'] || variables['phone']) {
+            customerUpdate.phone = variables['telefono_cliente'] || variables['telefono'] || variables['phone'];
+        }
+        if (Object.keys(customerUpdate).length > 0 && customerId) {
+            await supabase.from('customers').update(customerUpdate).eq('id', customerId);
+        }
+
+        // --- 2. EXTRAER CANAL AUTOMÁTICAMENTE ---
+        const { data: conv } = await supabase.from('conversations').select('channel').eq('id', conversationId).single();
+        let finalChannel = conv?.channel?.includes('whatsapp') ? 'whatsapp' : (conv?.channel || 'bot');
+        if (finalChannel === 'whatsapp_evolution') finalChannel = 'whatsapp';
+
         const { data: order, error: orderErr } = await createOrderSafe(supabase, {
             merchant_id: merchantId, customer_id: customerId, total,
-            delivery_address: variables['direccion_entrega'] || 'No proporcionada',
-            status: 'pending', conversation_id: conversationId
+            delivery_address: variables['direccion_entrega'] || variables['direccion'] || 'No proporcionada',
+            status: 'pending', conversation_id: conversationId, channel: finalChannel
         });
+
         if (!orderErr && order) {
             variables['orderNumber'] = `#${order.order_number || order.id.substring(0, 8)}`;
             variables['order_number'] = variables['orderNumber'];
-            const cart = variables['cart'] || [];
-            if (cart.length > 0) {
-                const items = cart.map((it: any) => ({
+            const currentCart = variables['cart'] || [];
+            if (currentCart.length > 0) {
+                const items = currentCart.map((it: any) => ({
                     order_id: order.id, product_id: it.id, product_name: it.name,
                     quantity: it.qty, unit_price: it.price, subtotal: it.price * it.qty
                 }));
                 await supabase.from('order_items').insert(items);
             }
+            
+            // --- 3. LIMPIAR EL CARRITO DE LA SESIÓN ---
+            // Esto evita que enviar "hola" de nuevo duplique el mismo carrito
+            variables['cart'] = [];
         } else {
             console.error('[BOT-ENGINE] Error registrando pedido:', orderErr);
         }
