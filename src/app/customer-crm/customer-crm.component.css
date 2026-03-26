@@ -262,6 +262,48 @@
 
 /* RESPONSIVE MÓVIL (Woox Pattern) */
 @media (max-width: 768px) {
+    /* Mobile Header Premium Style */
+    .mobile-module-header {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 12px 16px !important;
+        background: white !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 2500 !important;
+        height: 65px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        margin-bottom: 0px !important;
+    }
+
+    .module-title-mobile {
+        margin: 0 !important;
+        font-size: 1.1rem !important;
+        font-weight: 800 !important;
+        color: #1e293b !important;
+    }
+
+    .back-btn-premium {
+        background: #eef2ff !important;
+        border: none !important;
+        padding: 8px 14px !important;
+        border-radius: 12px !important;
+        cursor: pointer !important;
+        color: #4f46e5 !important;
+        display: flex !important;
+        align-items: center !important;
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+        gap: 8px !important;
+        transition: all 0.2s !important;
+        text-decoration: none !important;
+        white-space: nowrap !important;
+    }
+
     .crm-container {
         padding: 12px;
         height: 100vh;

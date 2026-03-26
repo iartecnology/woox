@@ -1,12 +1,21 @@
 <div class="orders-container" style="position: relative;">
-    <!-- Mobile Header -->
-    <div class="mobile-module-header" *ngIf="isMobile() && !selectedOrder">
-        <h2 class="module-title-mobile" style="text-align: left !important; margin-left: 0 !important;">Pedidos</h2>
-        <div class="header-actions">
-            <button class="refresh-btn-green" (click)="loadOrders()">
-                <i class="fa-solid fa-rotate"></i>
+    <!-- Mobile Header siempre visible -->
+    <div class="mobile-module-header" *ngIf="isMobile()">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <button *ngIf="selectedOrder" class="back-btn-premium" (click)="selectedOrder = null">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:18px;height:18px;"><polyline points="15 18 9 12 15 6"></polyline></svg>
             </button>
+            <div>
+                <h2 class="module-title-mobile">{{ selectedOrder ? 'Detalle Pedido' : 'Pedidos' }}</h2>
+                <span *ngIf="!selectedOrder && pendingCount > 0"
+                    style="font-size: 0.7rem; font-weight: 700; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 20px;">
+                    {{ pendingCount }} pendientes
+                </span>
+            </div>
         </div>
+        <button class="refresh-btn-green" (click)="loadOrders()" *ngIf="!selectedOrder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:18px;height:18px;"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><polyline points="21 3 21 8 16 8"></polyline></svg>
+        </button>
     </div>
     <!-- Header with Search and Stats -->
     <div class="orders-header-styled"

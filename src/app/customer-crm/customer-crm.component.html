@@ -1,6 +1,16 @@
 <div class="crm-container">
-    <!-- HEADER CON KPIs -->
-    <header class="crm-header" *ngIf="!isMobile() || (!selectedCustomer && !showCampaignModal)">
+    <!-- Mobile Header -->
+    <div class="mobile-module-header" *ngIf="isMobile()">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <button *ngIf="selectedCustomer || showCampaignModal" class="back-btn-premium" (click)="selectedCustomer ? goBackToList() : closeCampaignModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:18px;height:18px;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <h2 class="module-title-mobile">{{ selectedCustomer ? 'Detalle Cliente' : (showCampaignModal ? 'Nueva Campaña' : 'Clientes') }}</h2>
+        </div>
+    </div>
+
+    <!-- HEADER CON KPIs (Desktop) -->
+    <header class="crm-header" *ngIf="!isMobile()">
         <div>
             <h1>👥 CRM de Clientes</h1>
             <p>Gestiona y fideliza tu base de clientes con IA</p>
@@ -12,14 +22,28 @@
             </div>
             <div class="kpi-chip gold">
                 <span class="kpi-val">{{ vipCount }}</span>
-                <span class="tab-count" *ngIf="isMobile()">⭐</span>
                 <span class="kpi-lbl" *ngIf="!isMobile()">VIPs ⭐</span>
             </div>
             <button class="campaign-btn" (click)="openCampaignModal()">
-                🚀 {{ isMobile() ? 'Campaña' : 'Campaña de Remarketing' }}
+                🚀 Campaña de Remarketing
             </button>
         </div>
     </header>
+
+    <!-- HEADER CON KPIs (Mobile - Secondary under module header) -->
+    <div *ngIf="isMobile() && !selectedCustomer && !showCampaignModal" style="display: flex; gap: 12px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px;">
+        <div class="kpi-chip" style="flex: 1; padding: 10px;">
+            <span class="kpi-val">{{ customers.length }}</span>
+            <span class="kpi-lbl">Total</span>
+        </div>
+        <div class="kpi-chip gold" style="flex: 1; padding: 10px;">
+            <span class="kpi-val">{{ vipCount }}</span>
+            <span class="kpi-lbl">VIPs ⭐</span>
+        </div>
+        <button class="campaign-btn" (click)="openCampaignModal()" style="padding: 10px 15px;">
+            🚀
+        </button>
+    </div>
 
     <div class="crm-content" [class.mobile-active]="isMobile()">
         <!-- LISTA DE CLIENTES -->
@@ -85,10 +109,7 @@
 
         <!-- DETALLE DEL CLIENTE -->
         <div class="customer-detail" *ngIf="selectedCustomer && (!isMobile() || selectedCustomer)">
-            <!-- Mobile Header con botón Volver -->
-            <div class="mobile-detail-nav" *ngIf="isMobile()" (click)="goBackToList()">
-                <button class="back-btn">← Volver al Listado</button>
-            </div>
+
             <div class="detail-header">
                 <div class="detail-main">
                     <h2>{{ selectedCustomer.full_name }}</h2>

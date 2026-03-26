@@ -67,6 +67,7 @@ input {
     background: #F9FAFB;
     font-size: 1rem;
     transition: all 0.2s;
+    box-sizing: border-box;
 }
 
 input:focus {

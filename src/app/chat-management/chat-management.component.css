@@ -162,6 +162,42 @@
   color: #854d0e;
 }
 
+/* ── Channel Icons (SVG) ── */
+.channel-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.channel-icon.wa-meta {
+  color: #25D366; /* WhatsApp oficial verde */
+}
+
+.channel-icon.wa-evolution {
+  color: #0ea5e9; /* Azul celeste para Evolution API */
+}
+
+.channel-icon.telegram {
+  color: #2AABEE; /* Azul Telegram */
+}
+
+.channel-icon.instagram {
+  color: #E1306C; /* Rosa Instagram */
+}
+
+.channel-icon.messenger {
+  color: #0866FF; /* Azul Messenger */
+}
+
+.channel-icon.simulator-icon,
+.channel-icon.default-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
 /* Panel 2: Chat */
 .panel-chat {
   flex: 1;

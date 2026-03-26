@@ -301,9 +301,22 @@
 
 <!-- Modal Mi Perfil -->
 <div class="modal-overlay" *ngIf="showProfileModal" (click)="showProfileModal = false">
-    <div class="modal-content" (click)="$event.stopPropagation()">
-        <h2>👤 Mi Perfil</h2>
-        <p>Actualiza tus datos personales y de acceso.</p>
+    <div class="modal-content profile-modal" (click)="$event.stopPropagation()">
+        <!-- Mobile Header (Solo visible en móvil por CSS) -->
+        <div class="mobile-module-header" *ngIf="isMobile()">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="back-btn-premium" (click)="showProfileModal = false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:18px;height:18px;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <h2 class="module-title-mobile">Mi Perfil</h2>
+            </div>
+            <button class="save-btn-small" (click)="saveProfile()">Guardar</button>
+        </div>
+
+        <div class="profile-header-desktop" *ngIf="!isMobile()">
+            <h2>👤 Mi Perfil</h2>
+            <p>Actualiza tus datos personales y de acceso.</p>
+        </div>
 
         <div class="profile-form">
             <div class="form-group">
@@ -326,7 +339,7 @@
             </div>
         </div>
 
-        <div class="modal-actions">
+        <div class="modal-actions" *ngIf="!isMobile()">
             <button class="cancel-btn" (click)="showProfileModal = false">Cancelar</button>
             <button class="save-btn" (click)="saveProfile()">Guardar Cambios</button>
         </div>

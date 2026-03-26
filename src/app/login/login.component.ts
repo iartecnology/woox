@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -11,7 +11,7 @@ import { SupabaseService } from '../supabase.service';
     templateUrl: './login.component.html',
     styleUrl: './login.component.css'
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
     loginData = {
         email: '',
         password: ''
@@ -22,6 +22,19 @@ export class LoginComponent {
 
     private supabaseService = inject(SupabaseService);
     private router = inject(Router);
+
+    ngOnInit() {
+        // Persistencia de Sesión Estilo WhatsApp:
+        // Si el usuario ya está autenticado localmente, entrar directo sin pedir credenciales.
+        const userRole = localStorage.getItem('user_role');
+        if (userRole) {
+            if (userRole === 'superadmin') {
+                this.router.navigate(['/super-admin']);
+            } else {
+                this.router.navigate(['/metrics']);
+            }
+        }
+    }
 
     async onLogin() {
         this.isSubmitting = true;

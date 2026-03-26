@@ -58,6 +58,10 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
     currentPage: number = 1;
     itemsPerPage: number = 10;
 
+    get pendingCount() {
+        return this.orders.filter(o => o.status === 'pending').length;
+    }
+
     get filteredOrders() {
         let filtered = this.orders;
 
