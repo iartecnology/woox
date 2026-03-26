@@ -46,29 +46,6 @@ jobs:
       - name: 🏗️ Build Angular (DEV)
         run: npm run build -- --configuration=development
 
-      - name: ⚡ Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: 🔗 Link proyecto Supabase DEV
-        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: 🗄️ Aplicar migraciones DB (DEV)
-        run: supabase db push --linked --yes
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: 🚀 Deploy Edge Functions (DEV)
-        run: |
-          supabase functions deploy whatsapp-webhook
-          supabase functions deploy telegram-webhook
-          supabase functions deploy facebook-webhook
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
       - name: ✅ Resumen DEV
         run: |
           echo "================================"
@@ -114,29 +91,6 @@ jobs:
 
       - name: 🏗️ Build Angular (PROD)
         run: npm run build -- --configuration=production
-
-      - name: ⚡ Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: 🔗 Link proyecto Supabase PROD
-        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: 🗄️ Aplicar migraciones DB (PROD)
-        run: supabase db push --linked --yes
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: 🚀 Deploy Edge Functions (PROD)
-        run: |
-          supabase functions deploy whatsapp-webhook
-          supabase functions deploy telegram-webhook
-          supabase functions deploy facebook-webhook
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - name: ✅ Resumen PROD
         run: |
