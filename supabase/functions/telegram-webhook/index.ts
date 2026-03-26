@@ -7,24 +7,29 @@ const corsHeaders = {
 };
 
 function sanitizeMarkdown(text: string): string {
+    if (!text) return "";
     let sanitized = text;
-    // Borrar bloques técnicos conocidos
+
+    // 1. Limpieza de bloques técnicos y comandos internos
     sanitized = sanitized.replace(/\(INTERNO:.*?\)/gi, "");
     sanitized = sanitized.replace(/\(DESCRIPCION REAL:.*?\)/gi, "");
     sanitized = sanitized.replace(/\[DISPONIBLE\]/gi, "");
     sanitized = sanitized.replace(/\[AGOTADO\]/gi, "");
     sanitized = sanitized.replace(/\[CHECK_AVAILABILITY:.*?\]/gi, "");
     sanitized = sanitized.replace(/\[CREATE_BOOKING:.*?\]/gi, "");
-
-    // Limpiar comandos internos de la IA
+    sanitized = sanitized.replace(/\[IMAGE_URL:.*?\]/gi, "");
     sanitized = sanitized.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*\}\s*\]/g, "");
     sanitized = sanitized.replace(/\[UPDATE[_ ]CART:\s*\{[\s\S]*?\}\s*\]/g, "");
-    sanitized = sanitized.replace(/^\s*[}\]]+\s*$/gm, "");
-
+    
+    // 2. Telegram Markdown V1 es muy estricto con los caracteres especiales sin cerrar.
+    // Aseguramos que los asteriscos esten balanceados para negrita
     const asterisks = (sanitized.match(/\*/g) || []).length;
-    const underscores = (sanitized.match(/_/g) || []).length;
     if (asterisks % 2 !== 0) sanitized = sanitized.replace(/\*/g, "");
+
+    // 3. Guiones bajos (_) causan muchos problemas en Telegram si no están balanceados (Markdown V1)
+    const underscores = (sanitized.match(/_/g) || []).length;
     if (underscores % 2 !== 0) sanitized = sanitized.replace(/_/g, " ");
+
     return sanitized.trim();
 }
 
@@ -75,14 +80,23 @@ Deno.serve(async (req: Request) => {
         }
 
         // Obtener o crear conversación
-        let { data: conversation } = await supabase.from("conversations").select("*").eq("merchant_id", merchantId).eq("customer_id", customer!.id).eq("status", "active").maybeSingle();
+        let { data: conversation } = await supabase.from("conversations")
+            .select("*")
+            .eq("merchant_id", merchantId)
+            .eq("customer_id", customer!.id)
+            .eq("platform", "telegram")
+            .maybeSingle();
+
         if (!conversation) {
-            const { data: nconv } = await supabase.from("conversations").insert({
+            const { data: nconv, error: convErr } = await supabase.from("conversations").insert({
                 merchant_id: merchantId,
                 customer_id: customer!.id,
+                platform: "telegram",
                 channel: "telegram",
-                status: "active"
+                status: "open",
+                ai_active: true
             }).select().single();
+            if (convErr) throw convErr;
             conversation = nconv;
         }
 

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../supabase.service';
@@ -35,7 +35,7 @@ interface CartItem {
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="simulator-overlay" [class.inline]="inline" (click)="close()">
+    <div class="simulator-overlay" [class.inline]="inline">
       <div class="simulator-window" (click)="$event.stopPropagation()">
         <header *ngIf="!inline" [style.background-color]="primaryColor">
           <div class="merchant-info">
@@ -68,7 +68,7 @@ interface CartItem {
           <button class="reset-pill-btn" (click)="clearSimulatorSession()" title="Limpiar trazabilidad">🗑️</button>
         </div>
 
-        <div class="chat-body" #scrollMe [scrollTop]="scrollMe.scrollHeight">
+        <div class="chat-body" #scrollMe>
           <div *ngFor="let msg of messages" class="message" [class.user]="msg.sender === 'user'">
             <div class="message-wrapper">
               <div class="bubble" *ngIf="msg.text" [innerHTML]="formatMessage(msg.text)">
@@ -161,8 +161,15 @@ interface CartItem {
     @keyframes fadeInSim { from { opacity: 0; } to { opacity: 1; } }
 
     .simulator-window {
-      width: 450px; height: 650px; background: white; border-radius: 20px;
-      display: flex; flex-direction: column; overflow: hidden;
+      width: 450px; 
+      height: 650px; 
+      max-height: 90vh;
+      max-width: 95vw;
+      background: white; 
+      border-radius: 20px;
+      display: flex; 
+      flex-direction: column; 
+      overflow: hidden;
       box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
       animation: slideUpSim 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
@@ -174,7 +181,7 @@ interface CartItem {
       animation: none;
     }
     .simulator-overlay.inline .simulator-window {
-      width: 100%; height: 100%; border-radius: 0; box-shadow: none; border: none;
+      width: 100%; height: 100%; max-height: 100%; border-radius: 0; box-shadow: none; border: none;
       animation: none;
     }
 
@@ -239,12 +246,13 @@ interface CartItem {
 
     .chat-body {
       flex: 1;
-      padding: 20px;
+      padding: 16px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 12px;
       background: #f7f9fc;
+      scroll-behavior: smooth;
     }
     .message {
       max-width: 85%;
@@ -383,36 +391,37 @@ interface CartItem {
     }
 
     .chat-footer {
-      padding: 20px;
+      padding: 12px 16px;
       background: white;
       display: flex;
       gap: 10px;
+      border-top: 1px solid #e5e7eb;
+      flex-shrink: 0;
+      position: relative;
     }
     input {
       flex: 1;
-      padding: 12px 18px;
+      padding: 10px 14px;
       border-radius: 12px;
       border: 1px solid #e5e7eb;
       outline: none;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
+      background: #f9fafb;
+      transition: border-color 0.2s;
     }
-    button {
-      border: none;
-      color: white;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      font-family: inherit;
-    }
-    
+    input:focus { border-color: #7c3aed; background: white; }
+
     .send-btn {
-      width: 44px;
-      height: 44px;
-      min-width: 44px;
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
       border-radius: 12px;
-      font-size: 1.2rem;
+      font-size: 1.1rem;
+      background: #7c3aed;
+      color: white;
+      border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
     }
 
     button:hover:not(:disabled) {
@@ -425,7 +434,11 @@ interface CartItem {
     }
   `]
 })
-export class ChatSimulatorComponent implements OnInit, OnDestroy {
+export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewChecked {
+  @ViewChild('scrollMe') private myScrollContainer!: ElementRef;
+  @ViewChild('messageInput') private messageInput!: ElementRef;
+
+  private shouldScrollToBottom = false;
   @Input() merchantName: string = '';
   @Input() merchantId: string = '';
   @Input() logoUrl: string = '';
@@ -616,6 +629,10 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
         }
       }
     });
+  }
+
+  ngAfterViewChecked() {
+    // El scroll se maneja manualmente en los puntos de inserción para evitar saltos molestos
   }
 
   ngOnDestroy() {
@@ -1302,12 +1319,13 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy {
   }
 
   scrollToBottom() {
+    if (!this.myScrollContainer) return;
     setTimeout(() => {
-      const chatBody = document.querySelector('.chat-body');
-      if (chatBody) {
-        chatBody.scrollTop = chatBody.scrollHeight;
-      }
-    }, 100);
+      try {
+        const el = this.myScrollContainer.nativeElement;
+        el.scrollTop = el.scrollHeight;
+      } catch(e) {}
+    }, 50);
   }
 
   formatMessage(text: string): SafeHtml {
