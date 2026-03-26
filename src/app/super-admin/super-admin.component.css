@@ -74,6 +74,39 @@ body {
     color: white;
 }
 
+.pwa-install-btn, .users-mgr-btn, .info-btn, .ai-logic-btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pwa-install-btn {
+    background: #4F46E5;
+    color: white;
+    border: none;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+}
+
+.pwa-install-btn:hover {
+    background: #4338CA;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3);
+}
+
+.users-mgr-btn:hover, .info-btn:hover, .ai-logic-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
 .admin-header h1 {
     font-size: 2rem;
     font-weight: 800;

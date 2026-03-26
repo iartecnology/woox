@@ -1,0 +1,59 @@
+name: Build Mobile (Android)
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: 🤖 Android Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 🔧 Setup Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: 📦 Instalar dependencias
+        run: npm install --legacy-peer-deps
+
+      - name: 🏗️ Build Angular
+        run: npm run build -- --configuration=production
+
+      - name: 🔑 Restaurar Google Services JSON
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" ]; then
+            echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > android/app/google-services.json
+          else
+            echo "⚠️ Advertencia: No se encontró GOOGLE_SERVICES_JSON_BASE64 en secretos. Usando archivo local si existe."
+          fi
+
+      - name: ⚡ Capacitor Sync
+        run: npx cap sync android
+
+      - name: 🏗️ Compilar APK (Debug)
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: 📤 Subir APK como Artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: woox-app-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7

@@ -11,15 +11,16 @@
             <button class="users-mgr-btn" (click)="openGlobalUserManager()">
                 <span class="icon">👥</span> <span class="label">Usuarios</span>
             </button>
+            <button class="pwa-install-btn" (click)="installPwa()" *ngIf="pwaService.canInstall()">
+                <span class="icon">📲</span> <span class="label">Descargar App</span>
+            </button>
             <button class="ai-logic-btn" (click)="router.navigate(['/bot-builder'])">
                 <span class="icon">🤖</span> <span class="label">Bot Builder</span>
             </button>
             <button class="platform-config-btn" (click)="openPlatformConfig()">
                 <span class="icon">⚙️</span> <span class="label">Config</span>
             </button>
-            <button class="ai-engine-monitor-btn" (click)="openAIEngineMonitor()">
-                <span class="icon">📟</span> <span class="label">Monitor</span>
-            </button>
+            <!-- Monitor de IA migrado a Supabase Logs -->
             <button class="add-merchant-btn" (click)="openModal()">
                 <span class="icon">+</span> <span class="label">Nueva</span>
             </button>

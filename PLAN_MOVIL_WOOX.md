@@ -8,6 +8,7 @@ Dado que Woox ya utiliza **Angular 21**, la mejor opción es **Capacitor**.
 *   **Ventaja**: Reutiliza el 100% del código web actual.
 *   **Rendimiento**: Acceso directo a APIs nativas (Cámara, Notificaciones, Biometría).
 *   **Mantenimiento**: Una sola base de código para Web, Android e iOS.
+*   **Notificaciones**: Estrategia **Híbrida** utilizando Firebase (FCM) solo para la entrega delegada, manteniendo toda la lógica en Supabase.
 
 ---
 
@@ -18,13 +19,18 @@ Dado que Woox ya utiliza **Angular 21**, la mejor opción es **Capacitor**.
 2.  **Configuración de Identidad**: Definir el `App ID` (ej: `com.woox.app`) y nombres.
 3.  **Generación de Assets**: Crear iconos y Splash Screens con una sola imagen base.
 
-### Fase 2: Automatización con GitHub Actions (CI/CD) (Semana 2)
+### Fase 2: Lógica de Notificaciones Híbrida (Semana 2)
+1.  **Registro de Tokens**: Crear tabla `fcm_tokens` en Supabase vinculada a los perfiles de usuario.
+2.  **Integración FCM**: Configurar el proyecto de Firebase habilitando únicamente Cloud Messaging.
+3.  **Edge Function Trigger**: Implementar una función en Supabase que llame a la API de FCM ante eventos críticos (nuevos pedidos/mensajes).
+4.  **Capacitor Plugin**: Instalar `@capacitor/push-notifications` para gestionar la recepción y visualización de banners.
+
+### Fase 3: Automatización con GitHub Actions (Semana 3)
 1.  **Workflow `mobile-builds.yml`**: Crear un flujo que se active al hacer push a `main`.
 2.  **Android Build (Ubuntu)**: GitHub compilará el `.apk` automáticamente usando Gradle.
-3.  **iOS Build (macOS)**: (Opcional) GitHub compilará el `.ipa` usando runners de Apple.
-4.  **Gestión de Secretos**: Almacenar la **KeyStore** de Android y certificados de Apple en `GitHub Secrets` para firmar la app sin exponer llaves.
+3.  **Gestión de Secretos**: Almacenar la **KeyStore** de Android y certificados de Apple en `GitHub Secrets`.
 
-### Fase 3: Distribución y Pruebas (Semana 3)
+### Fase 4: Distribución y Pruebas (Semana 4)
 1.  **Descarga de Artifactos**: Cada build exitoso generará un enlace de descarga del APK en la pestaña "Actions" de GitHub.
 2.  **Distribución Beta**: Usar *Firebase App Distribution* o *TestFlight* para enviar la app a probadores seleccionados.
 

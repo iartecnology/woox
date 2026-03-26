@@ -6,6 +6,7 @@ import { Title } from '@angular/platform-browser';
 import { NotificationService } from './notification.service';
 import { SupabaseService } from './supabase.service';
 import { MobileService } from './mobile.service';
+import { PushNotificationService } from './push-notification.service';
 
 @Component({
   selector: 'app-root',
@@ -20,6 +21,7 @@ export class App {
   private supabaseService = inject(SupabaseService);
   private titleService = inject(Title);
   public mobileService = inject(MobileService);
+  private pushNotificationService = inject(PushNotificationService);
 
   toasts = this.notificationService.toasts;
   unreadCount = this.supabaseService.unreadCount;
@@ -73,7 +75,15 @@ export class App {
 
   async ngOnInit() {
     this.userData.full_name = localStorage.getItem('user_name') || 'Usuario';
+    const userId = localStorage.getItem('user_id');
     const rawMerchantId = localStorage.getItem('active_merchant_id');
+
+    // Inicializar notificaciones push si estamos en móvil
+    if (userId) {
+      this.pushNotificationService.init(userId).catch(err => {
+        console.warn('Error inicializando notificaciones push:', err);
+      });
+    }
 
     if (rawMerchantId) {
       if (this.supabaseService.isValidUUID(rawMerchantId)) {

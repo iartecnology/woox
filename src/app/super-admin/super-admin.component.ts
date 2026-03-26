@@ -12,6 +12,7 @@ import { CatalogService } from '../catalog.service';
 import { SupabaseService } from '../supabase.service';
 import { AppInfoPanelComponent } from '../app-info-panel/app-info-panel.component';
 import { MobileService } from '../mobile.service';
+import { PwaService } from '../pwa.service';
 
 interface Team {
     id: string;
@@ -325,6 +326,7 @@ export class SuperAdminComponent implements OnInit {
     private cdr = inject(ChangeDetectorRef);
     private ngZone = inject(NgZone);
     private sanitizer = inject(DomSanitizer);
+    public pwaService = inject(PwaService);
 
     isMobile() {
         return this.mobileService.isMobile();
@@ -341,6 +343,13 @@ export class SuperAdminComponent implements OnInit {
             localStorage.removeItem('merchant_industry_type');
         }
         await this.loadInitialData();
+    }
+
+    async installPwa() {
+        const outcome = await this.pwaService.installPwa();
+        if (outcome === 'accepted') {
+            this.notificationService.show('¡Instalación iniciada!', 'success');
+        }
     }
 
     async loadInitialData() {
@@ -642,7 +651,7 @@ export class SuperAdminComponent implements OnInit {
         supabase_key: localStorage.getItem('supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoZ2VndWtqcnR5am1vbmhhdmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTQ4MTAsImV4cCI6MjA4NTM3MDgxMH0.V-dc1zSkU5R5hj45ihWsHR-9FWFTP4qxWyVUnTC8qdc',
         evolution_api_url: localStorage.getItem('evolution_api_url') || '',
         evolution_api_key: localStorage.getItem('evolution_api_key') || '',
-        ai_engine_url: localStorage.getItem('ai_engine_url') || 'http://167.86.73.89:8000/'
+        ai_engine_url: '' // Migrado a Supabase Edge Functions
     };
 
     isValidatingSupabase = false;
@@ -663,7 +672,7 @@ export class SuperAdminComponent implements OnInit {
     showOmniConfig = false;
     showBiolinkConfig = false;
     showAIEngineMonitor = false;
-    aiEngineMonitorUrl = 'http://167.86.73.89:8000/';
+    aiEngineMonitorUrl = '';
     safeMonitorUrl: SafeResourceUrl | null = null;
     isEditing = false;
     showDebugPrompt = false;

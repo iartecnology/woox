@@ -545,6 +545,79 @@ const TOOL_DEFINITIONS: Record<string, any> = {
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PURE AI AGENT (FALLBACK)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function processPureAI(supabase: any, merchantId: string, conversationId: string, messageText: string, customerId: string): Promise<string | null> {
+    console.log(`[BOT-ENGINE] Modo IA Agente para conv: ${conversationId}`);
+    try {
+        const { data: merchant } = await supabase.from("merchants").select("*").eq("id", merchantId).single();
+        const { data: ps } = await supabase.from("platform_settings").select("*").eq("id", "global").maybeSingle();
+        const { data: systemPrompt } = await supabase.rpc("get_compiled_prompt", { p_merchant_id: merchantId });
+
+        const { data: history } = await supabase
+            .from("messages")
+            .select("sender_type, content")
+            .eq("conversation_id", conversationId)
+            .order("created_at", { ascending: false })
+            .limit(3);
+        
+        const historyContext = history 
+            ? history.reverse().map((m: any) => `${m.sender_type === 'customer' ? 'Cliente' : 'Asistente'}: ${m.content}`).join('\n')
+            : "";
+
+        const apiKey = merchant.ai_api_key || ps?.ai_api_key || Deno.env.get("GEMINI_API_KEY");
+        const model = merchant.ai_model || ps?.ai_model || "gemini-1.5-flash";
+
+        if (!apiKey) return "Mmm, mi cerebro de IA no tiene una llave de acceso configurada todavía. 🤖🗝️";
+
+        const multitaskInstruction = `Responde cordial y usa emojis. Al final de tu respuesta, DEBES incluir este bloque JSON oculto:
+[DATA]
+{
+    "crm": {"preferences": [], "tags": [], "sentiment": "neutral"}
+}
+[/DATA]`;
+
+        const fullPrompt = `${systemPrompt}\n\n${multitaskInstruction}`;
+        
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                system_instruction: { parts: [{ text: fullPrompt }] },
+                contents: [{ role: "user", parts: [{ text: `HISTORIAL:\n${historyContext}\n\nMENSAJE: ${messageText}` }] }]
+            }),
+        });
+
+        const aiData = await res.json();
+        const rawText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+        let response = rawText;
+        const dataMatch = rawText.match(/\[DATA\]([\s\S]*?)\[\/DATA\]/);
+        
+        if (dataMatch) {
+            try {
+                const parsed = JSON.parse(dataMatch[1].trim());
+                response = rawText.replace(dataMatch[0], "").trim();
+                
+                if (parsed.crm && (parsed.crm.preferences?.length > 0 || (parsed.crm.sentiment && parsed.crm.sentiment !== 'neutral'))) {
+                    await supabase.from("customers").update({
+                        preferences: parsed.crm.preferences,
+                        sentiment: parsed.crm.sentiment,
+                        updated_at: new Date().toISOString()
+                    }).eq("id", customerId);
+                }
+            } catch (e) { console.error("[BOT-ENGINE] Error parseando CRM en modo PureAI", e); }
+        }
+
+        return response || "Lo siento, tuve un problema procesando eso. 🤖⚙️";
+    } catch (err) {
+        console.error("[BOT-ENGINE] Exception in processPureAI", err);
+        return null;
+    }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // FUNCIÓN PRINCIPAL
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function processBotFlow(supabase: any, merchantId: string, conversationId: string, messageText: string, customerId: string) {
@@ -553,8 +626,8 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
     // 1. Obtener flujo activo
     const { data: flow, error: flowErr } = await supabase.rpc('get_active_bot_flow', { p_merchant_id: merchantId });
     if (flowErr || !flow) {
-        console.log("[BOT-ENGINE] No hay flujo activo para merchant:", merchantId);
-        return null;
+        console.log("[BOT-ENGINE] No hay flujo activo. Cayendo en modo IA Agente...");
+        return await processPureAI(supabase, merchantId, conversationId, messageText, customerId);
     }
 
     const nodes = flow.flow_data?.nodes || [];

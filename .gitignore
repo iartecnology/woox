@@ -58,3 +58,6 @@ supabase/.temp/
 
 # Supabase secrets
 supabase/secrets.env
+
+# Firebase credentials (Service Accounts)
+android/app/*firebase-adminsdk*.json

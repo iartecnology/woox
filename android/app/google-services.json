@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "983968784805",
+    "project_id": "woox-91a3a",
+    "storage_bucket": "woox-91a3a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:983968784805:android:c129d5a97b10278ed9884c",
+        "android_client_info": {
+          "package_name": "com.woox.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCiz2p3FZ0vh-vlSO3qzMzRFb9x8ibENFY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
