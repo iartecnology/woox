@@ -24,7 +24,7 @@ function resolveVariables(text: string, variables: any, flowName?: string): stri
 
     return text.replace(/{{(.*?)}}/g, (match: string, key: string) => {
         const k = key.trim();
-        if (k.toLowerCase() === 'merchantname') return flowName || 'Comercio';
+        if (k.toLowerCase() === 'merchantname') return variables['merchantName'] || flowName || 'Comercio';
         const varKey = Object.keys(variables).find(v => v.toLowerCase() === k.toLowerCase());
         if (varKey && variables[varKey] !== undefined && variables[varKey] !== null) {
             return String(variables[varKey]);
@@ -648,6 +648,10 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
     let currentNodeId: string | null = session.current_node_id;
     let variables: any = session.variables || {};
     let waitingFor: string | null = session.waiting_for;
+
+    // Cargar nombre del comercio en variables para resolver {{merchantName}}
+    const { data: merchantData } = await supabase.from('merchants').select('name').eq('id', merchantId).single();
+    if (merchantData) variables['merchantName'] = merchantData.name;
 
     // 3. Procesar la respuesta del usuario según el estado anterior
     if (waitingFor === 'menu_selection') {
@@ -1314,7 +1318,8 @@ ${customNodeInstructions}
         if (node.data.message) {
             let msg = resolveVariables(node.data.message, variables, flow.name);
             if (node.type === 'menu' && node.data.options) {
-                msg += `\n\n` + node.data.options.map((o: any, i: number) => `${i + 1}. ${o.text}`).join('\n');
+                const optionsList = node.data.options.map((o: any, i: number) => `${i + 1}️⃣  ${o.text}`).join('\n');
+                msg += `\n\n${optionsList}`;
             }
             messagesToReturn.push(msg);
         }

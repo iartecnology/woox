@@ -7,13 +7,21 @@ const corsHeaders = {
 };
 
 function sanitizeMarkdown(text: string): string {
+    if (!text) return "";
     let sanitized = text;
+
+    // 1. Limpieza de bloques técnicos y comandos internos
     sanitized = sanitized.replace(/\(INTERNO:.*?\)/gi, "");
     sanitized = sanitized.replace(/\(DESCRIPCIÓN REAL:.*?\)/gi, "");
     sanitized = sanitized.replace(/\[DISPONIBLE\]/gi, "");
     sanitized = sanitized.replace(/\[AGOTADO\]/gi, "");
     sanitized = sanitized.replace(/\[UPDATE_CART:.*?\]/gi, "");
+    sanitized = sanitized.replace(/\[IMAGE_URL:.*?\]/gi, "");
     sanitized = sanitized.replace(/^\s*[}\]]+\s*$/gm, "");
+
+    // 2. WhatsApp: Convertir **negrita** a *negrita*
+    sanitized = sanitized.replace(/\*\*(.*?)\*\*/g, "*$1*");
+
     return sanitized.trim();
 }
 
