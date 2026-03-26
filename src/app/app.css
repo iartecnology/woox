@@ -440,6 +440,11 @@ body {
     height: 100vh !important;
 }
 
+.content-area.immersive-mode.chat-visible {
+    margin-top: 60px !important;
+    height: calc(100vh - 60px) !important;
+}
+
 /* MOBILE RESPONSIVE */
 @media (max-width: 768px) {
     .top-bar {
@@ -801,17 +806,34 @@ body {
 
     .top-bar {
         padding: 0 15px;
-        height: 60px;
+        padding-top: env(safe-area-inset-top, 0);
+        height: calc(60px + env(safe-area-inset-top, 0));
+        align-items: center;
     }
 
     .platform-name {
         font-size: 1.1rem !important;
         width: auto;
+        position: static !important;
+        transform: none !important;
+        margin: 0 auto !important;
     }
 
     .header-actions-global {
         gap: 8px !important;
-        margin-right: 8px !important;
+        margin-right: 2px !important;
+    }
+
+    .status-select-mobile-fix {
+        padding: 4px 6px !important;
+        border-radius: 6px !important;
+        font-size: 0.65rem !important;
+        font-weight: 700 !important;
+        border: 1px solid #ddd6fe !important;
+        outline: none !important;
+        cursor: pointer !important;
+        background: white !important;
+        max-width: 85px !important;
     }
 
     .merchant-badge {
@@ -824,6 +846,7 @@ body {
         max-width: 25vw;
         display: -webkit-box;
         -webkit-line-clamp: 1;
+        line-clamp: 1;
         -webkit-box-orient: vertical;
     }
 
@@ -943,3 +966,91 @@ body {
 }
 
 /* Global styles removed to styles.css */
+
+/* --- UPDATE BANNER --- */
+.update-banner {
+    background: #4f46e5;
+    color: white;
+    padding: 12px 20px;
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1500;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+    animation: slideDownUpdate 0.4s ease-out;
+}
+
+@keyframes slideDownUpdate {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+.update-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.update-icon {
+    font-size: 1.5rem;
+}
+
+.update-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.update-text strong {
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.update-text span {
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+
+.update-action-btn {
+    background: white;
+    color: #4f46e5;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.update-action-btn:hover {
+    background: #f8fafc;
+    transform: scale(1.05);
+}
+
+@media (max-width: 767px) {
+    .update-banner {
+        padding: 10px 12px;
+    }
+    
+    .update-content {
+        gap: 10px;
+    }
+    
+    .update-text strong {
+        font-size: 0.8rem;
+    }
+    
+    .update-text span {
+        display: none;
+    }
+    
+    .update-action-btn {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+    }
+}

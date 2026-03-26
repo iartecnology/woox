@@ -1,6 +1,6 @@
 <div class="app-container" [class.is-mobile]="isMobile()" *ngIf="!isLoginPage && !isBioLinkPage">
-    <!-- Top Bar (Hidden on Mobile Immersive Pages) -->
-    <header class="top-bar" *ngIf="!isMobile() || !isImmersivePage">
+    <!-- Top Bar (Show on desktop, or mobile if not in certain immersive pages except chats) -->
+    <header class="top-bar" *ngIf="!isMobile() || !isImmersivePage || router.url.includes('/chats')">
         <!-- Hamburger Menu Button -->
         <div style="display: flex; align-items: center; gap: 12px;">
             <button class="hamburger-btn" (click)="toggleSidebar()" [class.open]="sidebarOpen">
@@ -20,8 +20,9 @@
         <div class="platform-name" style="display: flex; flex-direction: column; align-items: center; line-height: 1;">
             <img *ngIf="usePlatformLogoImage && platformLogoUrl" [src]="platformLogoUrl" alt="Platform Logo"
                 class="platform-logo-img">
-            <span *ngIf="!usePlatformLogoImage || !platformLogoUrl" style="font-weight: 800; font-size: 1.2rem;">{{
-                platformName }}</span>
+            <span *ngIf="!usePlatformLogoImage || !platformLogoUrl" style="font-weight: 800; font-size: 1.2rem;">
+                <span style="color: #6366f1;">W</span>{{ platformName.substring(1) }}
+            </span>
             <small class="app-version-tag"
                 style="font-size: 0.6rem; opacity: 0.5; font-weight: 500; font-family: monospace; margin-top: 2px;">v{{
                 appVersion }}</small>
@@ -45,7 +46,7 @@
 
                 <!-- Presencia (Chatwoot style) -->
                 <select *ngIf="!isSuperAdmin" [ngModel]="agentStatus()" (ngModelChange)="updateStatus($event)"
-                    style="padding: 4px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; border: 1px solid #ddd6fe; outline: none; cursor: pointer; background: white;"
+                    class="status-select-mobile-fix"
                     [style.border-color]="agentStatus() === 'online' ? '#22c55e' : (agentStatus() === 'busy' ? '#eab308' : '#94a3b8')"
                     [style.color]="agentStatus() === 'online' ? '#15803d' : (agentStatus() === 'busy' ? '#854d0e' : '#475569')">
                     <option value="online">🟢 Online</option>
@@ -263,7 +264,20 @@
 
 <main class="content-area" [class.no-nav]="isLoginPage || isBioLinkPage"
     [class.sidebar-mode]="!isLoginPage && !isBioLinkPage"
-    [class.immersive-mode]="isMobile() && isImmersivePage">
+    [class.immersive-mode]="isMobile() && isImmersivePage"
+    [class.chat-visible]="isMobile() && router.url.includes('/chats')">
+    <div class="update-banner" *ngIf="updateService.updateAvailable()">
+        <div class="update-content">
+            <span class="update-icon">✨</span>
+            <div class="update-text">
+                <strong>Nueva versión disponible</strong>
+                <span>Hay mejoras listas para ti.</span>
+            </div>
+            <button class="update-action-btn" (click)="updateService.updateApp()">
+                Actualizar ahora
+            </button>
+        </div>
+    </div>
     <router-outlet></router-outlet>
 </main>
 

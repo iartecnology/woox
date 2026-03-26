@@ -7,6 +7,7 @@ import { NotificationService } from './notification.service';
 import { SupabaseService } from './supabase.service';
 import { MobileService } from './mobile.service';
 import { PushNotificationService } from './push-notification.service';
+import { UpdateService } from './update.service';
 
 @Component({
   selector: 'app-root',
@@ -22,6 +23,7 @@ export class App {
   private titleService = inject(Title);
   public mobileService = inject(MobileService);
   private pushNotificationService = inject(PushNotificationService);
+  public updateService = inject(UpdateService);
 
   toasts = this.notificationService.toasts;
   unreadCount = this.supabaseService.unreadCount;

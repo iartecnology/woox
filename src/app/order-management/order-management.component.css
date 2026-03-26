@@ -491,13 +491,15 @@
         bottom: 0 !important;
         z-index: 2000 !important;
         background: white !important;
-        width: 100% !important;
+        width: 100vw !important;
         margin: 0 !important;
-        padding: 24px !important;
+        padding: 16px !important;
+        padding-top: env(safe-area-inset-top) !important;
         overflow-y: auto !important;
         max-height: none !important;
         display: flex !important;
         flex-direction: column !important;
+        box-sizing: border-box !important;
     }
 
     .pagination-footer-styled {
