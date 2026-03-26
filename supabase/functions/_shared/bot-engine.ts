@@ -724,7 +724,11 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
     while (currentNodeId && loopCount < MAX_LOOPS) {
         loopCount++;
         const node = nodes.find((n: any) => n.id === currentNodeId);
-        if (!node) break;
+        if (!node) {
+            console.error(`[BOT-ENGINE] ERROR: No se encontró el nodo con ID: ${currentNodeId}`);
+            break;
+        }
+        console.log(`[BOT-ENGINE] LOOP ${loopCount} | Nodo: ${node.data?.label || node.type} (${node.id})`);
 
         // ── ACCIÓN ──────────────────────────────────
         if (node.type === 'action') {
@@ -1317,9 +1321,11 @@ ${customNodeInstructions}
         // ── MENSAJE ──────────────────────────────────
         if (node.data.message) {
             let msg = resolveVariables(node.data.message, variables, flow.name);
+            console.log(`[BOT-ENGINE] Mensaje antes de opciones: "${msg}" (Node: ${node.id}, Type: ${node.type})`);
             if (node.type === 'menu' && node.data.options) {
                 const optionsList = node.data.options.map((o: any, i: number) => `${i + 1}️⃣  ${o.text}`).join('\n');
                 msg += `\n\n${optionsList}`;
+                console.log(`[BOT-ENGINE] Opciones añadidas: ${node.data.options.length} opciones.`);
             }
             messagesToReturn.push(msg);
         }
