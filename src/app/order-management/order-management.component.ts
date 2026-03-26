@@ -16,6 +16,7 @@ interface OrderItem {
     quantity: number;
     unit_price: number;
     notes?: string;
+    extras?: string;
 }
 
 interface Order {
@@ -249,7 +250,8 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
                                 product_name: pName,
                                 quantity: Number(item.quantity || 1),
                                 unit_price: Number(item.unit_price || item.price || 0),
-                                notes: item.notes || ''
+                                notes: item.notes || '',
+                                extras: item.extras || ''
                             };
                         })
                     };
@@ -307,7 +309,10 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
             }
 
             this.notificationService.show(`Pedido actualizado a: ${this.getStatusLabel(newStatus)}`, 'success');
-            this.notifyCustomer(order);
+            
+            // Notificar al cliente via Chat (Supabase -> WhatsApp/etc)
+            await this.notifyCustomer(order);
+            
             await this.loadOrders();
         } catch (err: any) {
             console.error('Excepción en updateStatus:', err);
@@ -382,14 +387,26 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
         return statuses[current] || null;
     }
 
-    notifyCustomer(order: Order) {
+    async notifyCustomer(order: Order) {
         const statusMessages: { [key: string]: string } = {
-            cooking: '👨‍🍳 ¡Tu pedido ya está en la cocina!',
-            ready: '✅ ¡Tu pedido está listo y en camino!',
-            delivered: '📦 ¡Pedido entregado! ¡Que lo disfrutes!',
-            cancelled: '❌ Tu pedido ha sido cancelado.'
+            cooking: '👨‍🍳 ¡Tu pedido con ID ' + order.id + ' ya está en la cocina!',
+            ready: '✅ ¡Tu pedido ' + order.id + ' está listo y en camino!',
+            delivered: '📦 ¡Pedido ' + order.id + ' entregado! ¡Que lo disfrutes!',
+            cancelled: '❌ Tu pedido ' + order.id + ' ha sido cancelado.'
         };
-        console.log(`Mensaje enviado a ${order.customer_name} via ${order.channel}: ${statusMessages[order.status]}`);
+        
+        const message = statusMessages[order.status];
+        if (!message) return;
+
+        console.log(`[OrderManagement] Notificando cambio de estado: ${order.status}`);
+        
+        // Buscar la conversación asociada al pedido para enviarle el mensaje
+        const { data: convData } = await this.supabaseService.getConversationByOrderId(order.uuid);
+        if (convData && convData.id) {
+            await this.supabaseService.saveMessage(convData.id, 'ai', message);
+        } else {
+            console.warn(`[OrderManagement] No se encontró conversación para el pedido ${order.uuid}`);
+        }
     }
 
     getStatusLabel(status: string): string {

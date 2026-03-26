@@ -513,6 +513,29 @@ export class SupabaseService {
         return { data, error };
     }
 
+    async getSessionVariables(conversationId: string) {
+        const { data, error } = await supabase
+            .from('bot_flow_sessions')
+            .select('variables')
+            .eq('conversation_id', conversationId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        return { data, error };
+    }
+
+    subscribeToBotSession(conversationId: string, callback: (payload: any) => void) {
+        return supabase
+            .channel(`session:${conversationId}`)
+            .on('postgres_changes', { 
+                event: 'UPDATE', 
+                schema: 'public', 
+                table: 'bot_flow_sessions', 
+                filter: `conversation_id=eq.${conversationId}` 
+            }, callback)
+            .subscribe();
+    }
+
     subscribeToMessages(conversationId: string, callback: (payload: any) => void) {
         return supabase
             .channel(`chat:${conversationId}`)
@@ -680,6 +703,13 @@ export class SupabaseService {
                 tags:conversation_tags(tags(*))
             `)
             .eq('id', conversationId)
+            .single();
+    }
+    async getConversationByOrderId(orderId: string) {
+        return await supabase
+            .from('conversations')
+            .select('id')
+            .eq('order_id', orderId)
             .single();
     }
 

@@ -293,6 +293,8 @@
       </div>
     </div>
 
+    <!-- El carrito ya no es una sección estática aquí -->
+
     <div class="crm-section">
       <div class="crm-section-title">Notas Internas</div>
       <div class="notes-list">
@@ -428,6 +430,53 @@
         </div>
       </aside>
     </div>
+  </div>
+</div>
+
+<!-- BOTÓN FLOTANTE DE CARRITO (IA SESSION) -->
+<button class="floating-cart-btn" *ngIf="sessionCart && sessionCart.length > 0" (click)="showSessionCartPanel = !showSessionCartPanel">
+  <span class="cart-badge">{{ sessionCart.length }}</span>
+  <i class="fa-solid fa-cart-shopping cart-icon"></i>
+</button>
+
+<!-- PANEL LATERAL DESPLEGABLE DEL CARRITO -->
+<div class="session-cart-panel" [class.active]="showSessionCartPanel" *ngIf="sessionCart && sessionCart.length > 0">
+  <div class="cart-panel-header">
+    <h3>🛒 Carrito IA</h3>
+    <button class="close-panel" (click)="showSessionCartPanel = false">×</button>
+  </div>
+  
+  <div class="cart-panel-content">
+    <div *ngFor="let item of sessionCart" class="cart-panel-item">
+      <div class="item-main">
+        <span class="item-name">{{ item.name }}</span>
+        <span class="item-qty">x{{ item.qty }}</span>
+      </div>
+      
+      <!-- Detalle de Adicionales e Instrucciones -->
+      <div class="item-details-expanded" style="margin: 4px 0; padding-left: 8px; border-left: 2px solid #e9d5ff;">
+        <div class="item-extra" *ngIf="item.extras" style="font-size: 0.75rem; color: #6366f1; margin-bottom: 2px;">
+          <span style="font-weight: 600;">➕ Adicionales:</span> {{ item.extras }}
+        </div>
+        <div class="item-instructions" *ngIf="item.notes" style="font-size: 0.75rem; color: #d97706; font-style: italic;">
+          <span style="font-weight: 600;">📝 Notas:</span> "{{ item.notes }}"
+        </div>
+      </div>
+
+      <div class="item-price-footer" style="text-align: right;">
+        <span class="item-subtotal" style="font-weight: 700; color: #64748b; font-size: 0.85rem;">
+          {{ (item.price * item.qty) | currency:'COP':'symbol-narrow':'1.0-0' }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cart-panel-footer">
+    <div class="total-row">
+      <span>Total Estimado</span>
+      <span class="total-price">{{ cartTotal | currency:'COP':'symbol-narrow':'1.0-0' }}</span>
+    </div>
+    <p class="cart-disclaimer">Este es el carrito actual que el bot tiene en memoria para este cliente.</p>
   </div>
 </div>
 

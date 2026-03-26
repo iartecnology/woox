@@ -513,71 +513,68 @@
     }
 }
 
+/* ESTILOS BASE DE BOTONES (Consolidados) */
 .primary-btn,
 .success-btn,
 .cancel-btn,
 .secondary-btn {
-    padding: 16px 24px !important;
-    border-radius: 14px !important;
+    padding: 18px 24px !important;
+    border-radius: 16px !important;
     font-weight: 800 !important;
     font-size: 1rem !important;
     border: none !important;
     cursor: pointer !important;
-    transition: all 0.25s ease !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 10px !important;
     width: 100% !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
 }
 
-.primary-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(79, 70, 229, 0.3) !important;
-}
-
-.success-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3) !important;
-}
-
 .primary-btn {
-    background: #4F46E5 !important;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
     color: white !important;
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4) !important;
 }
 
 .success-btn {
-    background: #10B981 !important;
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
     color: white !important;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4) !important;
 }
 
 .secondary-btn {
     background: #f1f5f9 !important;
     color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
 }
 
 .cancel-btn {
-    background: #fef2f2 !important;
-    color: #991b1b !important;
+    background: #fff1f2 !important;
+    color: #e11d48 !important;
+    border: 1px solid #ffe4e6 !important;
+}
+
+.primary-btn:hover:not(:disabled),
+.success-btn:hover:not(:disabled) {
+    transform: translateY(-2px) !important;
+    filter: brightness(1.1) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2) !important;
 }
 
 .pulse {
-    animation: pulse-animation 2s infinite;
+    animation: button-pulse-premium 2s infinite !important;
 }
 
-@keyframes pulse-animation {
-    0% {
-        box-shadow: 0 0 0 0px rgba(79, 70, 229, 0.4);
-    }
-
-    70% {
-        box-shadow: 0 0 0 15px rgba(79, 70, 229, 0);
-    }
-
-    100% {
-        box-shadow: 0 0 0 0px rgba(79, 70, 229, 0);
-    }
+@keyframes button-pulse-premium {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+    70% { box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
 /* Spinner Premium */
@@ -902,55 +899,7 @@
     gap: 10px;
 }
 
-.action-buttons button {
-    width: 100%;
-    padding: 12px;
-    border-radius: 8px;
-    font-weight: 700;
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.action-buttons .primary-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-.action-buttons .primary-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.action-buttons .secondary-btn {
-    background: #e2e8f0;
-    color: #475569;
-    padding: 10px;
-    border-radius: 10px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.action-buttons .secondary-btn:hover:not(:disabled) {
-    background: #cbd5e1;
-}
-
-.action-buttons .cancel-btn {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-.action-buttons .cancel-btn:hover:not(:disabled) {
-    background: #fecaca;
-}
-
-.action-buttons button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
+/* ELIMINADOS BOTONES DUPLICADOS ANTIGUOS */
 
 .quick-action-btn:hover:not(:disabled) {
     background: #10b981 !important;
@@ -1161,3 +1110,46 @@
     opacity: 0.7;
     cursor: not-allowed;
 }
+/* Estilos Premium para Botones de Acción de Pedidos */
+.action-buttons button {
+    width: 100%;
+    padding: 16px;
+    border-radius: 16px;
+    font-weight: 800;
+    font-size: 1rem;
+    cursor: pointer;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.action-buttons .primary-btn {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+}
+
+.action-buttons .success-btn {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    color: white;
+}
+
+.action-buttons .secondary-btn {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.action-buttons .cancel-btn {
+    background: #fef2f2;
+    color: #ef4444;
+    border: 1px solid #fee2e2;
+    margin-top: 10px;
+}
+
+
+
+

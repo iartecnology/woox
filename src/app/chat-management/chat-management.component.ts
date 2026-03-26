@@ -60,6 +60,9 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
     // CRM & Details
     customerCRM: any = {};
+    sessionCart: any[] = [];
+    cartTotal: number = 0;
+    showSessionCartPanel: boolean = false;
     internalNotes: any[] = [];
     newNote: string = '';
     currentTags: any[] = [];
@@ -119,6 +122,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     agentStatus = this.supabaseService.agentStatus;
 
     private activeSubscription: any = null;
+    private sessionSubscription: any = null;
     private merchantSubscription: any = null;
     private shouldScrollToBottom: boolean = false;
 
@@ -591,6 +595,9 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
         if (this.activeSubscription) {
             this.supabaseService.unsubscribe(this.activeSubscription);
         }
+        if (this.sessionSubscription) {
+            this.supabaseService.unsubscribe(this.sessionSubscription);
+        }
 
         this.selectedConversation = conv;
         this.mobileService.setImmersive(true);
@@ -646,6 +653,17 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
                         this.shouldScrollToBottom = true;
                         this.cdr.detectChanges();
                     }
+                }
+            });
+        });
+
+        // Suscribirse a cambios en la sesión del bot (CARRITO EN TIEMPO REAL)
+        console.log('Subscribing to bot session updates...');
+        this.sessionSubscription = this.supabaseService.subscribeToBotSession(conv.id, (payload) => {
+            this.ngZone.run(() => {
+                console.log('Bot session update detected via Realtime');
+                if (payload.new && payload.new.variables) {
+                    this.updateCartFromSessionData(payload.new.variables);
                 }
             });
         });
@@ -711,11 +729,28 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             }
         }
 
+        const { data: sessionData } = await this.supabaseService.getSessionVariables(convId);
+        if (sessionData && sessionData.variables) {
+            this.updateCartFromSessionData(sessionData.variables);
+        }
+
         console.log('Fetching internal notes...');
         const { data: notes, error: notesErr } = await this.supabaseService.getInternalNotes(convId);
         if (notesErr) console.error('Error fetching notes:', notesErr);
         this.internalNotes = notes || [];
         console.log(`Internal notes loaded: ${this.internalNotes.length}`);
+    }
+
+    private updateCartFromSessionData(variables: any) {
+        if (variables && variables.cart && Array.isArray(variables.cart)) {
+            this.sessionCart = variables.cart;
+            this.cartTotal = this.sessionCart.reduce((acc, it) => acc + (it.price * it.qty), 0);
+            console.log(`Cart updated: ${this.sessionCart.length} items. Total: ${this.cartTotal}`);
+        } else {
+            this.sessionCart = [];
+            this.cartTotal = 0;
+        }
+        this.cdr.detectChanges();
     }
 
     async saveCRM() {
