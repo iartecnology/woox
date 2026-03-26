@@ -1,5 +1,5 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { notifyMerchantAgents } from "./notifications.ts";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // HELPERS
@@ -150,6 +150,9 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
         } else {
             console.error('[BOT-ENGINE] Error registrando pedido:', orderErr);
         }
+
+        // NOTIFICAR A LOS AGENTES SOBRE EL NUEVO PEDIDO
+        await notifyMerchantAgents(supabase, merchantId, "¡Nuevo Pedido! 🛵", `Se ha registrado el pedido #${variables['order_number'] || 'N/A'}\nTotal: $${variables['order_total'] || '0'}`);
     } else if (actionType === 'empty_cart') {
         variables['cart'] = [];
         variables['orderNumber'] = '';
@@ -311,6 +314,12 @@ async function executeAgentTool(
                 }));
                 await supabase.from('order_items').insert(items);
                 variables['cart'] = []; // Limpiar carrito tras registrar
+                
+                // NOTIFICAR SI EL PEDIDO SE CREÓ CORRECTAMENTE
+                if (order) {
+                   await notifyMerchantAgents(supabase, merchantId, "¡Nuevo Pedido (IA)! 🛵", `Se ha registrado el pedido #${orderNum}\nTotal: $${total.toFixed(2)}`);
+                }
+
                 return `🎉 ¡Pedido registrado exitosamente!\n📋 Número de pedido: ${orderNum}\n💰 Total: $${total.toFixed(2)}\n📍 Dirección: ${address}\n\nEn breve te contactaremos para confirmar la entrega.`;
             }
             return `Error al registrar el pedido. Por favor intenta de nuevo.`;
@@ -1307,6 +1316,9 @@ ${customNodeInstructions}
                 if (booking) {
                     variables['booking_id'] = booking.id;
                     variables['booking_status'] = 'success';
+                    
+                    // NOTIFICAR AGENTES
+                    await notifyMerchantAgents(supabase, merchantId, "¡Nueva Reserva! 📅", `Cliente: ${variables['customer_name'] || 'Cliente'}\nFecha: ${startStr}\nPax: ${pax}`);
                 } else {
                     variables['booking_status'] = 'error';
                     variables['booking_error'] = bErr?.message;

@@ -27,11 +27,13 @@ export class App {
 
   toasts = this.notificationService.toasts;
   unreadCount = this.supabaseService.unreadCount;
+  unreadOrdersCount = this.supabaseService.unreadOrdersCount;
   isSoundEnabled = this.supabaseService.isSoundEnabled;
   agentStatus = this.supabaseService.agentStatus;
   isLoading = signal(true);
   isMobile = this.mobileService.isMobile;
   private merchantSubscription: any = null;
+  private ordersSubscription: any = null;
 
   private checkMobile() {
     if (this.isMobile()) {
@@ -98,9 +100,11 @@ export class App {
 
         // Carga inicial 
         await this.supabaseService.refreshGlobalUnreadCount(merchantId);
+        await this.supabaseService.refreshGlobalUnreadOrdersCount(merchantId);
 
-        // Suscripción a cambios
+        // Suscripción a cambios en conversaciones
         this.merchantSubscription = this.supabaseService.subscribeToMerchantConversations(merchantId, async (payload) => {
+          console.log('[App] Merchant conversation changed, refreshing count...', payload.eventType);
           await this.supabaseService.refreshGlobalUnreadCount(merchantId);
 
           const isNewCustomerMessage =
@@ -108,8 +112,16 @@ export class App {
             (payload.eventType === 'INSERT' && payload.new.unread_count > 0);
 
           if (isNewCustomerMessage) {
+            console.log('[App] New message detected! Playing sound...');
             this.supabaseService.playSound();
           }
+        });
+
+        // Suscripción a cambios en pedidos (INSERT)
+        this.ordersSubscription = this.supabaseService.subscribeToMerchantOrders(merchantId, async (payload) => {
+           console.log('[App] New order detected! Refreshing count and playing sound...');
+           await this.supabaseService.refreshGlobalUnreadOrdersCount(merchantId);
+           this.supabaseService.playSound();
         });
       } else {
         console.warn('[App] Limpiando active_merchant_id inválido (no UUID):', rawMerchantId);
@@ -128,6 +140,9 @@ export class App {
   ngOnDestroy() {
     if (this.merchantSubscription) {
       this.supabaseService.unsubscribe(this.merchantSubscription);
+    }
+    if (this.ordersSubscription) {
+      this.supabaseService.unsubscribe(this.ordersSubscription);
     }
   }
 

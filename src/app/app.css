@@ -966,6 +966,35 @@ body {
 }
 
 /* Global styles removed to styles.css */
+/* --- NOTIFICATION BADGES --- */
+.badge-sidebar {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #ef4444; /* Rojo alerta */
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 800;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+.badge-sidebar.badge-orders {
+    background: #f59e0b; /* Ambar para pedidos */
+}
+
+.mobile-bottom-nav .badge-dot.badge-orders {
+    background: #f59e0b;
+    right: 50%;
+    transform: translateX(100%);
+}
 
 /* --- UPDATE BANNER --- */
 .update-banner {

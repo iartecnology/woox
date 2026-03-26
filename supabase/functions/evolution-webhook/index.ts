@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { processBotFlow } from "../_shared/bot-engine.ts";
+import { notifyMerchantAgents } from "../_shared/notifications.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -157,6 +158,8 @@ Deno.serve(async (req: Request) => {
             
             if (!aiResponse) {
                 // Si la IA no está activa o no hay respuesta del flujo, no respondemos automáticamente
+                // NOTIFICAR A LOS AGENTES
+                await notifyMerchantAgents(supabase, m.id, "Nuevo mensaje (WA)", `De: ${customer!.full_name || 'Cliente'}\nMensaje: ${messageText.slice(0, 50)}...`);
                 return new Response("ok", { headers: corsHeaders });
             }
         } catch (e: any) {

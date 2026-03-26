@@ -150,14 +150,16 @@
                     <span class="icon">📅</span>
                     <span>Reservas</span>
                 </a>
-                <a routerLink="/chats" routerLinkActive="active" (click)="closeSidebar()">
+                <a routerLink="/chats" routerLinkActive="active" (click)="closeSidebar()" style="position: relative;">
                     <span class="icon">💬</span>
                     <span>Chats</span>
+                    <span *ngIf="unreadCount() > 0" class="badge-sidebar">{{ unreadCount() }}</span>
                 </a>
                 <a *ngIf="merchantIndustryType !== 'reservations'" routerLink="/orders" routerLinkActive="active"
-                    (click)="closeSidebar()">
+                    (click)="closeSidebar()" style="position: relative;">
                     <span class="icon">🛵</span>
                     <span>Pedidos</span>
+                    <span *ngIf="unreadOrdersCount() > 0" class="badge-sidebar badge-orders">{{ unreadOrdersCount() }}</span>
                 </a>
                 <a routerLink="/metrics" routerLinkActive="active" (click)="closeSidebar()">
                     <span class="icon">📊</span>
@@ -238,6 +240,7 @@
         <a routerLink="/orders" routerLinkActive="active" *ngIf="(!isSuperAdmin || activeMerchantId) && merchantIndustryType !== 'reservations'" class="nav-item" (click)="showProfileModal = false">
             <span class="icon">🛵</span>
             <span class="label">Pedidos</span>
+            <span *ngIf="unreadOrdersCount() > 0" class="badge-dot badge-orders">{{ unreadOrdersCount() > 99 ? '99+' : unreadOrdersCount() }}</span>
         </a>
         <a routerLink="/reservations" routerLinkActive="active" *ngIf="(!isSuperAdmin || activeMerchantId) && merchantIndustryType === 'reservations'" class="nav-item" (click)="showProfileModal = false">
             <span class="icon">📅</span>

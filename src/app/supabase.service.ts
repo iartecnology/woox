@@ -7,6 +7,7 @@ import { supabase } from './supabase-config';
 export class SupabaseService {
 
     unreadCount = signal(0);
+    unreadOrdersCount = signal(0);
     isSoundEnabled = signal(localStorage.getItem('notification_sound') !== 'false');
     agentStatus = signal<'online' | 'busy' | 'offline'>('online');
 
@@ -115,8 +116,20 @@ export class SupabaseService {
         const { data } = await this.getConversations(merchantId);
         if (data) {
             const total = data.reduce((acc: number, curr: any) => acc + (curr.unread_count || 0), 0);
-            console.log('Validando Global Unread Count (fetched):', total);
             this.unreadCount.set(total);
+        }
+    }
+
+    async refreshGlobalUnreadOrdersCount(merchantId: string) {
+        if (!merchantId || !this.isValidUUID(merchantId)) return;
+        const { count, error } = await supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('merchant_id', merchantId)
+            .eq('status', 'pending');
+        
+        if (!error && count !== null) {
+            this.unreadOrdersCount.set(count);
         }
     }
 
@@ -504,6 +517,14 @@ export class SupabaseService {
         return supabase
             .channel(`chat:${conversationId}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, callback)
+            .subscribe();
+    }
+
+    subscribeToMerchantOrders(merchantId: string, callback: (payload: any) => void) {
+        if (!merchantId || !this.isValidUUID(merchantId)) return null;
+        return supabase
+            .channel(`merchant_orders:${merchantId}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `merchant_id=eq.${merchantId}` }, callback)
             .subscribe();
     }
 
