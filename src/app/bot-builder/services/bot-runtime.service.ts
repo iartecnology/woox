@@ -5,6 +5,9 @@ export interface BotResponse {
     messages: string[];
     session: any;
     executionPath?: any[]; // Array de nodos ejecutados en este paso
+    totalNodes?: number;
+    allNodes?: { id: string, label: string, type: string }[];
+    options?: any[]; // Opciones de menú si aplica
 }
 
 @Injectable({
@@ -49,7 +52,10 @@ export class BotRuntimeService {
             const response = await this.advanceAndCollect(flowData, nextNode, session, flow);
             return { 
                 messages: startMessage ? [startMessage, ...response.messages] : response.messages, 
-                session: response.session 
+                session: response.session,
+                totalNodes: nodes.length,
+                allNodes: nodes.map((n: any) => ({ id: n.id, label: n.data?.label || n.type, type: n.type })),
+                executionPath: response.executionPath
             };
         }
 
@@ -58,6 +64,10 @@ export class BotRuntimeService {
         if (!currentNode) return { messages: ['⚠️ Error: Nodo no encontrado.'], session };
 
         const response = await this.handleUserInput(flowData, currentNode, userMessage, session, flow);
+        if (response) {
+            response.totalNodes = nodes.length;
+            response.allNodes = nodes.map((n: any) => ({ id: n.id, label: n.data?.label || n.type, type: n.type }));
+        }
         return response;
     }
 
@@ -286,10 +296,11 @@ export class BotRuntimeService {
                 case 'menu':
                     const mMsg = node.data?.message || node.data?.label || 'Por favor elige una opción:';
                     const menuMsg = this.resolveVariables(mMsg, session.variables, flow);
-                    const optionsText = (node.data?.options || []).map((o: any, i: number) => `${i + 1}. ${o.text}`).join('\n');
+                    const mOptions = node.data?.options || [];
+                    const optionsText = mOptions.map((o: any, i: number) => `${i + 1}. ${o.text}`).join('\n');
                     messages.push(`${menuMsg}\n\n${optionsText}`);
                     await this.updateSession(session, node.id, 'menu_selection');
-                    return { messages, session, executionPath };
+                    return { messages, session, executionPath, options: mOptions };
 
                 case 'reservation_check':
                     // Iniciar etapas de reserva: pedir día primero
@@ -395,17 +406,24 @@ export class BotRuntimeService {
                 let summary = '';
                 let total = 0;
                 cart.forEach((it: any) => {
-                    const rowTotal = Number(it.price) * Number(it.qty);
+                    const price = parseFloat(it.price) || 0;
+                    const qty = parseInt(it.qty) || parseInt(it.quantity) || 1;
+                    const rowTotal = price * qty;
                     total += rowTotal;
-                    summary += `• ${it.qty}x ${it.name} ($${rowTotal.toFixed(2)})`;
+                    summary += `• ${qty}x ${it.name} ($${rowTotal.toLocaleString('es-CO')})`;
                     if (it.notes && it.notes.toLowerCase() !== 'no') {
-                        summary += `\n  ↳ [${it.notes}]`;
+                        summary += `\n  ↳ _${it.notes}_`;
                     }
                     summary += '\n';
                 });
-                summary += `\n💰 *Total: $${total.toFixed(2)}*`;
+                summary += `\n💰 *Total: $${total.toLocaleString('es-CO')}*`;
                 result = result.replace(/{{cartSummary}}/g, summary);
             }
+        }
+
+        // Reemplazo de orderNumber si existe
+        if (variables['orderNumber']) {
+            result = result.replace(/{{orderNumber}}/g, String(variables['orderNumber']));
         }
 
         result = result.replace(/{{fecha}}/g, new Date().toLocaleDateString());
@@ -498,7 +516,7 @@ export class BotRuntimeService {
                     // Limpieza opcional de variables temporales
                     session.variables['last_product_notes'] = ''; 
                     
-                    return `✅ Añadido: ${qty}x ${productName}`;
+                    return this.resolveVariables(`✅ ¡Producto añadido con éxito!\n\n{{cartSummary}}`, session.variables, {}); 
                 }
                 return '⚠️ Error: No se pudo identificar el producto.';
             }
@@ -513,12 +531,17 @@ export class BotRuntimeService {
                 const cart = vars['cart'] || [];
                 const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
 
-                // 1. Actualizar datos del cliente en CRM
+                // 1. Resolver datos del cliente (Mapeo flexible de nombres de variables)
+                const customerName = vars['customer_name'] || vars['nombre'] || vars['full_name'] || 'Cliente de Bot';
+                const customerPhone = vars['phone'] || vars['telefono'] || vars['customer_phone'] || session.phone || '';
+                const deliveryAddress = vars['direccion_entrega'] || vars['direccion'] || vars['address'] || 'No proporcionada';
+                const orderNotes = vars['notas_pedido'] || vars['customer_notes'] || vars['notas'] || '';
+
                 if (session.customer_id) {
                     await this.supabase.updateCustomerCRM(session.customer_id, {
-                        full_name: vars['customer_name'],
-                        phone: vars['phone'],
-                        address: vars['direccion_entrega']
+                        full_name: customerName,
+                        phone: customerPhone,
+                        address: deliveryAddress
                     });
                 }
 
@@ -526,14 +549,14 @@ export class BotRuntimeService {
                 const { data: order, error } = await this.supabase.createOrder({
                     merchant_id: session.merchant_id,
                     customer_id: session.customer_id,
-                    customer_name: vars['customer_name'],
+                    customer_name: customerName,
                     total: total,
                     status: 'pending',
                     source: 'bot_flow',
                     closing_agent_type: 'bot',
-                    delivery_address: vars['direccion_entrega'] || 'No proporcionada',
-                    notes: vars['notas_pedido'] || vars['customer_notes'] || '',
-                    internal_note: `Pedido vía Bot Flow. Datos: ${JSON.stringify(vars)}`
+                    delivery_address: deliveryAddress,
+                    notes: orderNotes,
+                    internal_note: `Pedido vía Bot Flow. Variables: ${JSON.stringify(vars)}`
                 });
 
                 if (error || !order) return '⚠️ Error al registrar el pedido principal.';

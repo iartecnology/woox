@@ -1,5 +1,5 @@
 <div class="marketing-container">
-    <header class="page-header">
+    <header class="page-header" *ngIf="!mobileService.isMobile()">
         <div class="header-text">
             <h1>📢 Campañas de Marketing</h1>
             <p>Envía promociones y mensajes masivos a tus clientes a través de múltiples canales.</p>

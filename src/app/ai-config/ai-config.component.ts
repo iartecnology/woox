@@ -5,6 +5,7 @@ import { ChatSimulatorComponent } from '../chat-simulator/chat-simulator.compone
 import { CatalogService } from '../catalog.service';
 import { SupabaseService } from '../supabase.service';
 import { NotificationService } from '../notification.service';
+import { MobileService } from '../mobile.service';
 
 @Component({
     selector: 'app-ai-config',
@@ -176,10 +177,12 @@ export class AiConfigComponent implements OnInit {
     private catalogService = inject(CatalogService);
     private supabaseService = inject(SupabaseService);
     private notificationService = inject(NotificationService);
+    public mobileService = inject(MobileService);
 
     constructor() { }
 
     async ngOnInit() {
+        this.mobileService.setHeader('IA Config', false);
         this.merchantId = localStorage.getItem('active_merchant_id') || localStorage.getItem('merchant_id') || '';
 
         if (this.merchantId) {

@@ -20,7 +20,7 @@
     <div class="main-content">
         <!-- Pestaña: Calendario -->
         <div *ngIf="activeTab === 'calendar'">
-            <header class="topbar" [class.mobile-compact]="isMobile()">
+            <header class="topbar" *ngIf="!isMobile()">
                 <h2 *ngIf="!isMobile()">{{ merchantName }} - Agenda</h2>
                 <div class="actions">
                     <!-- Filtro de Recursos como Combo Box -->

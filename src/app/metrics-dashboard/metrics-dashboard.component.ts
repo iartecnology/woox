@@ -13,6 +13,7 @@ interface MetricCard {
     icon: string;
 }
 
+import { MobileService } from '../mobile.service';
 import { FormsModule } from '@angular/forms';
 
 @Component({
@@ -135,10 +136,12 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
     customStartDate: string = '';
     customEndDate: string = '';
 
+    public mobileService = inject(MobileService);
     private supabaseService = inject(SupabaseService);
     private cdr = inject(ChangeDetectorRef);
 
     async ngOnInit() {
+        this.mobileService.setHeader('Métricas', false);
         this.merchantId = localStorage.getItem('active_merchant_id') || '';
         this.merchantName = localStorage.getItem('merchant_name') || 'Mi Comercio';
 

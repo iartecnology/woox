@@ -1,5 +1,5 @@
 <div class="config-container">
-    <header class="config-header">
+    <header class="config-header" *ngIf="!mobileService.isMobile()">
         <div class="header-text">
             <h1>Centro de Control IA</h1>
             <p>Configura el cerebro de tu empresa y automatiza tu crecimiento.</p>

@@ -5,11 +5,12 @@ import { SupabaseService } from '../supabase.service';
 import { NotificationService } from '../notification.service';
 import { FlowNode, FlowConnection, FlowData, BotFlow } from './models/bot-flow.model';
 import { BotRuntimeService } from './services/bot-runtime.service';
+import { ChatSimulatorComponent } from '../chat-simulator/chat-simulator.component';
 
 @Component({
   selector: 'app-bot-builder',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ChatSimulatorComponent],
   templateUrl: './bot-builder.component.html',
   styleUrl: './bot-builder.component.css'
 })
@@ -160,6 +161,8 @@ export class BotBuilderComponent implements OnInit {
   activeSimNodeId: string | null = null; // Nodo resaltado en el canvas durante simulación
   activeToolNodeId: string | null = null; // Skill resaltada en verde cuando se usa
   isBotTyping: boolean = false; // Estado para animación de escribiendo
+  sidebarWidth: number = 320; // Ancho predeterminado
+  isResizing: boolean = false;
 
   // --- EXECUTION TRACKING (n8n-style) ---
   nodeExecutionCounts: Map<string, number> = new Map();   // Contador de ejecuciones por nodo en la sesión
@@ -1393,37 +1396,22 @@ REGLAS IMPORTANTES:
   toggleChat() {
     this.zone.run(() => {
       this.showTestChat = !this.showTestChat;
-      if (this.showTestChat && this.chatMessages.length === 0) {
-        this.resetChat();
-      }
       this.cdr.detectChanges();
     });
   }
 
-  resetChat() {
-    this.chatMessages = [];
-    this.userChatInput = '';
-    this.simulationState = {
-      currentNodeId: null,
-      variables: {
-        cart: [],
-        merchantName: this.merchantName
-      }
-    };
-    this.activeSimNodeId = null;
-    this.nodeExecutionCounts.clear();
-    this.totalSessionExecutions = 0;
-    this.lastExecutedNodeId = null;
-    this.activeConnectionSourceId = null;
-
-    const startNode = this.botFlow.flow_data.nodes.find(n => n.type === 'start');
-    if (startNode) {
-      this.simulationState.currentNodeId = startNode.id;
-      this.advanceSimulation(startNode);
-      this.cdr.detectChanges(); // Forzar actualización visual al inicio
-    } else {
-      this.chatMessages.push({ text: '🚫 No hay nodo de inicio configurado.', sender: 'bot', meta: { tokens: 0, time: 0 } });
-    }
+  onSimNodeExecuted(nodeId: string) {
+    this.activeSimNodeId = nodeId;
+    const existing = this.nodeExecutionCounts.get(nodeId) || 0;
+    this.nodeExecutionCounts.set(nodeId, existing + 1);
+    this.justExecutedNodeId = nodeId;
+    
+    // Auto-limpiar el icono check después de 1s
+    setTimeout(() => {
+        if (this.justExecutedNodeId === nodeId) this.justExecutedNodeId = null;
+    }, 1000);
+    
+    this.cdr.detectChanges();
   }
 
 
@@ -2280,5 +2268,32 @@ REGLAS:
 
   async testFlow() {
       this.toggleChat();
+  }
+
+  // --- RESIZE SIDEBAR ---
+  startResizing(event: MouseEvent) {
+    this.isResizing = true;
+    document.body.style.cursor = 'col-resize';
+    event.preventDefault();
+    
+    const startX = event.clientX;
+    const startWidth = this.sidebarWidth;
+    
+    const mouseMoveHandler = (e: MouseEvent) => {
+      const deltaX = startX - e.clientX; 
+      const newWidth = Math.max(250, Math.min(window.innerWidth * 0.85, startWidth + deltaX));
+      
+      this.sidebarWidth = newWidth;
+    };
+    
+    const mouseUpHandler = () => {
+      this.isResizing = false;
+      document.body.style.cursor = 'default';
+      window.removeEventListener('mousemove', mouseMoveHandler);
+      window.removeEventListener('mouseup', mouseUpHandler);
+    };
+    
+    window.addEventListener('mousemove', mouseMoveHandler);
+    window.addEventListener('mouseup', mouseUpHandler);
   }
 }

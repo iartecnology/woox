@@ -528,6 +528,16 @@ export class SupabaseService {
         return { data, error };
     }
 
+    async getBotSessionByConversation(conversationId: string) {
+        return await supabase
+            .from('bot_flow_sessions')
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+    }
+
     subscribeToBotSession(conversationId: string, callback: (payload: any) => void) {
         return supabase
             .channel(`session:${conversationId}`)
@@ -661,6 +671,14 @@ export class SupabaseService {
     }
 
     // --- USUARIOS Y PERFILES ---
+    async getProfile(id: string) {
+        return await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', id)
+            .single();
+    }
+
     async getProfiles() {
         const { data, error } = await supabase
             .from('profiles')

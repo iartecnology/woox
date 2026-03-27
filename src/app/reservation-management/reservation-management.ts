@@ -113,6 +113,7 @@ export class ReservationManagement implements OnInit {
 
     if (this.isMobile()) {
       this.currentView = 'list';
+      this.mobileService.setHeader('Agenda', false);
     }
     
     // Timer para la linea de tiempo
@@ -465,12 +466,16 @@ export class ReservationManagement implements OnInit {
 
   openBookingDetails(booking: any) {
     this.selectedBooking = booking;
-    if (booking) this.mobileService.setImmersive(true);
+    if (booking) {
+      this.mobileService.setImmersive(true);
+      this.mobileService.setHeader('Detalle Cita', true, () => this.closeDetails());
+    }
   }
 
   closeDetails() {
     this.selectedBooking = null;
     this.mobileService.setImmersive(false);
+    this.mobileService.setHeader('Agenda', false);
   }
 
   // --- Resource Management ---

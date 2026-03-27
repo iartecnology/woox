@@ -49,7 +49,7 @@ interface CartItem {
               <p>Probando con {{ aiProvider | uppercase }}</p>
             </div>
           </div>
-          <button class="close-btn" (click)="close()">✕</button>
+          <button class="close-btn" (click)="close()" *ngIf="!inline">✕</button>
         </header>
 
         <!-- Barra de Estadísticas Unificada -->
@@ -59,6 +59,13 @@ interface CartItem {
             <span class="stat-pill-val">{{ totalSessionExecutions }}</span>
             <span class="stat-pill-label">runs</span>
           </div>
+          <button class="copilot-btn" 
+                  [class.active]="isCopilotActive" 
+                  (click)="toggleCopilot()" 
+                  [title]="isCopilotActive ? 'Desactivar Copiloto' : 'Activar Copiloto'">
+            <span class="bot-icon">🤖</span>
+            <span class="bot-label">{{ isCopilotActive ? 'Copiloto ON' : 'Copiloto OFF' }}</span>
+          </button>
           <div class="stat-pill" *ngIf="activeSimNodeId">
             <span class="stat-pill-icon">📍</span>
             <span class="stat-pill-val stat-pill-val--sm">{{ getActiveNodeLabel() }}</span>
@@ -73,14 +80,33 @@ interface CartItem {
             <span class="stat-pill-val">{{ getVariableCount() }}</span>
             <span class="stat-pill-label">vars</span>
           </div>
+          <div class="stat-pill" *ngIf="totalFlowNodes > 0" [title]="'Cobertura del flujo: ' + getCoveragePercentage() + '%'">
+            <span class="stat-pill-icon">🛣️</span>
+            <span class="stat-pill-val">{{ getCoveragePercentage() }}%</span>
+            <span class="stat-pill-label">cov</span>
+          </div>
           <button class="reset-pill-btn" (click)="restartSession()" title="Reiniciar sesión">🔄</button>
           <button class="reset-pill-btn" (click)="clearSimulatorSession()" title="Limpiar trazabilidad">🗑️</button>
+          <button class="reset-pill-btn" (click)="downloadTestReport()" title="Descargar Reporte JSON" *ngIf="sessionExecutionLog.length > 0">📥</button>
+          
+          <!-- Selector de Modo y Velocidad -->
+          <div class="copilot-controls" *ngIf="isCopilotActive">
+             <div class="speed-selector">
+                <button (click)="setCopilotSpeed(3000)" [class.active]="copilotSpeed === 3000" title="Tortuga (3s)">🐢</button>
+                <button (click)="setCopilotSpeed(1500)" [class.active]="copilotSpeed === 1500" title="Normal (1.5s)">😊</button>
+                <button (click)="setCopilotSpeed(500)" [class.active]="copilotSpeed === 500" title="Liebre (0.5s)">🐇</button>
+             </div>
+             <select class="mode-select" [(ngModel)]="copilotMode" (change)="onCopilotModeChange()">
+                <option value="reactive">Explorador</option>
+                <option value="purchase">🛒 Compra</option>
+             </select>
+          </div>
         </div>
 
         <div class="chat-body" #scrollMe>
           <div *ngFor="let msg of messages" class="message" [class.user]="msg.sender === 'user'">
             <div class="message-wrapper">
-              <div class="bubble" *ngIf="msg.text" [innerHTML]="formatMessage(msg.text)">
+              <div class="bubble" *ngIf="msg.text" [class.system]="msg.type === 'system'" [innerHTML]="formatMessage(msg.text)">
               </div>
               
               <!-- Meta-data de ejecución (Solo para IA) -->
@@ -138,7 +164,7 @@ interface CartItem {
             <span class="collapse-icon">{{ logCollapsed ? '▲' : '▼' }}</span>
           </div>
           <div class="exec-log-scroll" *ngIf="!logCollapsed">
-            <div class="exec-log-entry" *ngFor="let entry of sessionExecutionLog">
+            <div class="exec-log-entry" *ngFor="let entry of sessionExecutionLog" [class.warning]="entry.count > 3">
               <span class="entry-icon">{{ getNodeIcon(entry.type) }}</span>
               <span class="entry-label">{{ entry.label }}</span>
               <span class="entry-count" *ngIf="entry.count > 1">×{{ entry.count }}</span>
@@ -168,6 +194,7 @@ interface CartItem {
     </div>
   `,
   styles: [`
+    :host { display: block; width: 100%; height: 100%; }
 
     .simulator-overlay {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -237,6 +264,37 @@ interface CartItem {
     }
     .reset-pill-btn:hover { background: rgba(255,255,255,0.1); color: #ef4444; }
 
+    .speed-selector {
+      display: flex; gap: 2px; background: rgba(0,0,0,0.2); border-radius: 4px; padding: 2px;
+      margin-left: 10px;
+    }
+    .speed-selector button {
+      background: transparent; border: none; cursor: pointer; padding: 2px 4px;
+      border-radius: 3px; font-size: 0.8rem; filter: grayscale(1); opacity: 0.6;
+    }
+    .speed-selector button.active { filter: grayscale(0); opacity: 1; background: rgba(255,255,255,0.1); }
+
+    .copilot-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: #334155; border: 1px solid #475569;
+      border-radius: 20px; padding: 2px 10px; font-size: 0.7rem; color: #94a3b8;
+      cursor: pointer; transition: all 0.3s ease;
+      margin-left: 8px;
+    }
+    .copilot-btn.active {
+      background: #7c3aed; border-color: #a78bfa; color: white;
+      box-shadow: 0 0 10px rgba(124, 58, 237, 0.4);
+      animation: pulseCopilot 2s infinite;
+    }
+    .bot-icon { font-size: 0.9rem; }
+    .bot-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+    
+    @keyframes pulseCopilot {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
     /* Log Panel Styles */
     .exec-log-panel {
       border-top: 1px solid #e2e8f0; background: #f8fafc;
@@ -255,6 +313,8 @@ interface CartItem {
     .entry-icon { font-size: 0.8rem; }
     .entry-label { flex: 1; color: #374151; font-weight: 500; }
     .entry-count { font-size: 0.65rem; background: #e0e7ff; color: #4338ca; padding: 1px 5px; border-radius: 6px; }
+    .exec-log-entry.warning { background: #fff7ed; color: #9a3412; }
+    .exec-log-entry.warning .entry-count { background: #fed7aa; color: #c2410c; }
 
     @keyframes bounce {
       0%, 80%, 100% { transform: scale(0); }
@@ -313,6 +373,14 @@ interface CartItem {
 
     .bubble strong { font-weight: 800; color: inherit; }
     .bubble em { opacity: 0.9; font-style: italic; }
+
+    .message .bubble.system {
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fee2e2;
+      font-size: 0.8rem;
+      border-radius: 12px;
+    }
 
     .msg-meta {
       display: flex; gap: 8px; font-size: 0.65rem; color: #64748b; margin-top: -4px; margin-left: 4px; flex-wrap: wrap; align-items: center;
@@ -434,6 +502,9 @@ interface CartItem {
       border-top: 1px solid #e5e7eb;
       flex-shrink: 0;
       position: relative;
+      background: #f8fafc; /* Color de fondo más notable */
+      border-top: 2px solid #e2e8f0;
+      z-index: 10;
     }
     input {
       flex: 1;
@@ -490,6 +561,8 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
   @Input() ollamaBaseUrl: string = 'http://localhost:11434';
   @Input() lmstudioBaseUrl: string = 'http://localhost:1234/v1';
   @Input() inline: boolean = false;
+  @Input() allNodes: any[] = [];
+  @Input() allConnections: any[] = [];
   @Input() showStats: boolean = true;
   @Input() showLog: boolean = true;
   @Output() onNodeExecuted = new EventEmitter<string>();
@@ -500,6 +573,17 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
   sessionExecutionLog: any[] = [];
   activeSimNodeId: string | null = null;
   sessionVariables: any = {};
+  isCopilotActive: boolean = false;
+  private copilotTimer: any = null;
+  private nodeVisitCounts: Map<string, number> = new Map();
+  allFlowNodes: { id: string, label: string, type: string }[] = [];
+  totalFlowNodes: number = 0;
+  copilotSpeed: number = 1500; // Default: Normal
+  
+  // Scenarios (Fase 5)
+  copilotMode: 'reactive' | 'explorer' | 'purchase' = 'reactive';
+  plannedScenario: { nodeId: string, input: string }[] = [];
+  currentScenarioStep: number = 0;
 
   private liveOrderService = inject(LiveOrderService);
   private supabaseService = inject(SupabaseService);
@@ -529,6 +613,100 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
 
   constructor() { }
 
+  onCopilotModeChange() {
+    if (this.copilotMode === 'purchase') {
+      this.planPurchaseScenario();
+    } else {
+      this.plannedScenario = [];
+      this.currentScenarioStep = 0;
+    }
+  }
+
+  private planPurchaseScenario() {
+    this.notificationService.show('Analizando flujo para planificar compra...', 'info');
+    
+    // 1. Encontrar nodo de inicio
+    const startNode = this.allNodes.find(n => n.type === 'start');
+    if (!startNode) {
+      this.notificationService.show('No se encontró nodo de Inicio.', 'error');
+      this.copilotMode = 'reactive';
+      return;
+    }
+
+    // 2. Encontrar nodos de checkout
+    const checkoutNodes = this.allNodes.filter(n => 
+      (n.type === 'action' && n.data?.actionType === 'order_checkout') || 
+      n.type === 'order_checkout'
+    );
+
+    if (checkoutNodes.length === 0) {
+      this.notificationService.show('Flujo incompleto: No hay nodo de Pagar/Checkout.', 'error');
+      this.copilotMode = 'reactive';
+      return;
+    }
+
+    // 3. BFS básico para encontrar el camino más corto al checkout
+    const queue: { nodeId: string, path: any[] }[] = [{ nodeId: startNode.id, path: [] }];
+    const visited = new Set<string>();
+    let finalPath: any[] | null = null;
+
+    while (queue.length > 0) {
+      const { nodeId, path } = queue.shift()!;
+      if (visited.has(nodeId)) continue;
+      visited.add(nodeId);
+
+      const node = this.allNodes.find(n => n.id === nodeId);
+      if (!node) continue;
+
+      // ¿Es un nodo de checkout?
+      if (checkoutNodes.some(cn => cn.id === nodeId)) {
+        finalPath = path;
+        break;
+      }
+
+      // Siguientes conexiones
+      const connections = this.allConnections.filter(c => c.from === nodeId);
+      for (const conn of connections) {
+        // Determinar qué entrada satisface esta conexión
+        let input = '';
+        if (node.type === 'menu') {
+          const optIndex = node.data?.options?.findIndex((o: any) => o.id === conn.fromPort || conn.fromPort?.includes(o.id));
+          input = (optIndex !== -1) ? (optIndex + 1).toString() : '1';
+        } else if (node.type === 'condition') {
+          input = 'si'; // Asumimos 'si' para avanzar
+        } else if (node.type === 'question') {
+           // Determinar input por tipo de pregunta
+           const varName = node.data?.variable?.toLowerCase() || '';
+           if (varName.includes('cant') || varName.includes('unid')) input = '1';
+           else if (varName.includes('phone') || varName.includes('tel') || varName.includes('cel')) input = '3151234567';
+           else if (varName.includes('nom')) input = 'Daniel';
+           else if (varName.includes('dir')) input = 'Calle 123';
+           else input = 'Respuesta';
+        }
+
+        queue.push({ 
+          nodeId: conn.to, 
+          path: [...path, { nodeId, input }] 
+        });
+      }
+    }
+
+    if (finalPath) {
+      this.plannedScenario = finalPath;
+      this.currentScenarioStep = 0;
+      this.notificationService.show(`Plan generado: ${finalPath.length} pasos para completar la compra.`, 'success');
+      this.messages.push({ 
+          sender: 'ai', 
+          text: `🎯 **SISTEMA**: He trazado un plan de **${finalPath.length} pasos** para llegar al checkout con éxito.`, 
+          time: new Date(),
+          type: 'system'
+      });
+    } else {
+      this.notificationService.show('No se encontró un camino válido al checkout.', 'warning');
+      this.copilotMode = 'reactive';
+    }
+  }
+
   // --- Métodos de Trazabilidad Unificados ---
   clearSimulatorSession() {
     this.totalSessionExecutions = 0;
@@ -539,6 +717,159 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
     if (this.aiWelcomeMessage) {
       this.messages.push({ sender: 'ai', text: this.aiWelcomeMessage, time: new Date(), tokens: 0, responseTimeMs: 0 });
     }
+    if (this.copilotTimer) clearTimeout(this.copilotTimer);
+    this.nodeVisitCounts.clear();
+  }
+
+  toggleCopilot() {
+    this.isCopilotActive = !this.isCopilotActive;
+    if (this.isCopilotActive) {
+      this.notificationService.show('Copiloto activado: El bot se probará automáticamente.', 'success');
+      // Si ya hay un mensaje en espera, activarlo
+      if (!this.isTyping) {
+         this.checkAndRunCopilotAction();
+      }
+    } else {
+      if (this.copilotTimer) clearTimeout(this.copilotTimer);
+      this.notificationService.show('Copiloto desactivado.', 'info');
+    }
+  }
+
+  setCopilotSpeed(ms: number) {
+    this.copilotSpeed = ms;
+    this.notificationService.show(`Velocidad ajustada: ${ms}ms`, 'info');
+  }
+
+  downloadTestReport() {
+    const unvisited = this.allFlowNodes.filter(n => !this.nodeVisitCounts.has(n.id));
+    
+    const report = {
+      timestamp: new Date().toISOString(),
+      merchant: this.merchantName,
+      coverage: `${this.getCoveragePercentage()}%`,
+      totalExecutions: this.totalSessionExecutions,
+      executionLog: this.sessionExecutionLog,
+      unvisitedNodes: unvisited.map(n => ({ id: n.id, label: n.label, type: n.type })),
+      conversation: this.messages.map(m => ({ sender: m.sender, text: m.text, time: m.time }))
+    };
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte-pruebas-${this.merchantName.toLowerCase().replace(/\s+/g, '-')}.json`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    this.notificationService.show('Reporte descargado correctamente.', 'success');
+  }
+
+  private async checkAndRunCopilotAction(lastResponse?: any) {
+    if (!this.isCopilotActive || !this.botMode || this.isTyping) return;
+
+    // Obtener estado y nodo actual
+    let session = lastResponse?.session;
+    let waitingFor = session?.waiting_for;
+    let currentNodeId = session?.current_node_id;
+    
+    if (!waitingFor && this.dbConversationId) {
+        const { data: s } = await this.supabaseService.getBotSessionByConversation(this.dbConversationId);
+        session = s;
+        waitingFor = session?.waiting_for;
+        currentNodeId = session?.current_node_id;
+    }
+
+    if (!waitingFor) return;
+
+    // Detección de bucles (Watchdog)
+    if (currentNodeId) {
+        const visits = (this.nodeVisitCounts.get(currentNodeId) || 0) + 1;
+        this.nodeVisitCounts.set(currentNodeId, visits);
+        if (visits > 4) {
+            this.isCopilotActive = false;
+            this.notificationService.show('⚠️ Copiloto detenido: Posible bucle infinito detectado.', 'error');
+            this.messages.push({ 
+                sender: 'ai', 
+                text: `🚫 **SISTEMA**: Copiloto interrumpido. Se detectó un bucle infinito en el nodo: \`${currentNodeId}\`.`, 
+                time: new Date(),
+                type: 'system'
+            });
+            return;
+        }
+    }
+
+    this.copilotTimer = setTimeout(() => {
+        if (!this.isCopilotActive) return;
+
+        let testInput = '';
+
+        // 1. INTENTAR SEGUIR PLAN (Escenario Fase 5)
+        if (this.copilotMode === 'purchase' && this.plannedScenario.length > 0) {
+            // Buscar si el nodo actual está en nuestro plan
+            const step = this.plannedScenario.find(s => s.nodeId === currentNodeId);
+            if (step) {
+                testInput = step.input;
+                this.currentScenarioStep++;
+            }
+        }
+
+        // 2. FALLBACK A IA REACTIVA (Fase 3/4)
+        if (!testInput) {
+            if (waitingFor === 'menu_selection' || waitingFor === 'menu') {
+                const options = lastResponse?.options;
+                if (options && options.length > 0) {
+                    const choice = Math.floor(Math.random() * options.length) + 1;
+                    testInput = choice.toString();
+                } else {
+                    testInput = '1';
+                }
+            } else if (waitingFor === 'input' || waitingFor === 'variable_input') {
+                const lastBotMsg = lastResponse?.messages?.length > 0 ? lastResponse.messages[lastResponse.messages.length - 1].toLowerCase() : '';
+                const variableName = session?.waiting_for_variable?.toLowerCase() || '';
+                
+                const isPhone = variableName.includes('tel') || variableName.includes('phone') || variableName.includes('cel') ||
+                                lastBotMsg.includes('celular') || lastBotMsg.includes('teléfon') || lastBotMsg.includes('telefon') ||
+                                lastBotMsg.includes('número') || lastBotMsg.includes('numero');
+
+                const isNumeric = (variableName.includes('cant') || variableName.includes('unid') || 
+                                 lastBotMsg.includes('cuánt') || lastBotMsg.includes('cuántos') ||
+                                 lastBotMsg.includes('válido') || lastBotMsg.includes('cantidad')) && !isPhone;
+
+                if (isPhone) {
+                    testInput = '3151234567';
+                } else if (isNumeric) {
+                    testInput = '1';
+                } else if (variableName.includes('nombre') || lastBotMsg.includes('nombre')) {
+                    testInput = 'Daniel Woox';
+                } else if (variableName.includes('pax') || variableName.includes('asistentes')) {
+                    testInput = '2';
+                } else if (variableName.includes('direccion') || lastBotMsg.includes('donde') || lastBotMsg.includes('dirección')) {
+                    testInput = 'Calle Falsa 123';
+                } else if (variableName.includes('email') || lastBotMsg.includes('correo')) {
+                    testInput = 'test@woox.ai';
+                } else if (lastBotMsg.includes('instrucción') || lastBotMsg.includes('instruccion')) {
+                    testInput = 'no';
+                } else if (lastBotMsg.includes('?') || lastBotMsg.includes('desea')) {
+                    testInput = 'si';
+                } else {
+                    testInput = 'Respuesta genérica de prueba';
+                }
+            } else if (waitingFor === 'ai_input') {
+                testInput = '¿Qué productos tienes disponibles?';
+            }
+        }
+        
+        // 3. EXPLORADOR (Si no hay entrada y modo es explorador, elegir algo al azar del menú)
+        if (!testInput && this.copilotMode === 'explorer') {
+             if (waitingFor === 'menu_selection' || waitingFor === 'menu') {
+                testInput = '1'; // Ya lo hace el fallback pero aquí podríamos ser más específicos
+             }
+        }
+
+        if (testInput) {
+            this.userInput = testInput;
+            this.sendMessage();
+        }
+    }, this.copilotSpeed); 
   }
 
   async restartSession() {
@@ -556,6 +887,12 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
     return Object.keys(this.sessionVariables || {}).length;
   }
 
+  getCoveragePercentage(): number {
+    if (!this.totalFlowNodes) return 0;
+    const visitedUnique = new Set(this.sessionExecutionLog.map(l => l.id)).size;
+    return Math.round((visitedUnique / this.totalFlowNodes) * 100);
+  }
+
   getNodeIcon(type: string): string {
     switch (type) {
       case 'start': return '🚀';
@@ -570,7 +907,11 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
     }
   }
 
-  async ngOnInit() {
+  ngOnInit(): void {
+    this.initSimulator();
+  }
+
+  private async initSimulator() {
     this.clearSimulatorSession();
     // Cargar estado del comercio
     const { data: merchant } = await this.supabaseService.getMerchantById(this.merchantId);
@@ -619,10 +960,11 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
            const t1 = performance.now();
            const stepMs = Math.round(t1 - t0);
            
-           if (botRes && botRes.messages.length > 0) {
-             this.messages = []; // Limpiar el "Iniciando..."
-             
-             if (botRes.executionPath) {
+            if (botRes && botRes.messages.length > 0) {
+              this.messages = []; // Limpiar el "Iniciando..."
+              this.totalFlowNodes = botRes.totalNodes || 0;
+              
+              if (botRes.executionPath) {
                this.totalSessionExecutions += botRes.executionPath.length;
                for (const node of botRes.executionPath) {
                  this.activeSimNodeId = node.id;
@@ -642,6 +984,10 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
                  isRAGContextUsed: false
                });
                await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg, true);
+             }
+             // Trigger Copiloto si está activo
+             if (this.isCopilotActive) {
+                this.checkAndRunCopilotAction(botRes);
              }
            }
         } else {
@@ -726,6 +1072,10 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
         const t1 = performance.now();
         const stepMs = Math.round(t1 - t0);
         
+        if (botResponse) {
+          this.totalFlowNodes = botResponse.totalNodes || 0;
+        }
+        
         // PROCESAR EXECUTION PATH
         if (botResponse && botResponse.executionPath) {
           this.totalSessionExecutions += botResponse.executionPath.length;
@@ -757,6 +1107,11 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
           }
           this.cdr.detectChanges();
           this.scrollToBottom();
+
+          // RECURSIÓN DEL COPILOTO: Continuar si está activo
+          if (this.isCopilotActive && botResponse) {
+            this.checkAndRunCopilotAction(botResponse);
+          }
         }, 1000);
         return;
       }

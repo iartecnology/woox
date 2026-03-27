@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NotificationService } from '../notification.service';
+import { MobileService } from '../mobile.service';
 
 interface Campaign {
     id: string;
@@ -51,7 +52,10 @@ export class CampaignsComponent implements OnInit {
         audience: 'all'
     };
 
+    public mobileService = inject(MobileService);
+
     ngOnInit(): void {
+        this.mobileService.setHeader('Marketing', false);
         this.updateCampaigns();
     }
 

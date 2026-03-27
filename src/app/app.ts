@@ -78,12 +78,17 @@ export class App {
   }
 
   async ngOnInit() {
-    this.userData.full_name = localStorage.getItem('user_name') || 'Usuario';
     const userId = localStorage.getItem('user_id');
     const rawMerchantId = localStorage.getItem('active_merchant_id');
 
-    // Inicializar notificaciones push si estamos en móvil
     if (userId) {
+      // Cargar perfil completo desde Supabase
+      const { data: profile } = await this.supabaseService.getProfile(userId);
+      if (profile) {
+        this.userData.full_name = profile.full_name || '';
+        this.userData.email = profile.email || '';
+      }
+
       this.pushNotificationService.init(userId).catch(err => {
         console.warn('Error inicializando notificaciones push:', err);
       });

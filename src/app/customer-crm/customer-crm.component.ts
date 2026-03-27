@@ -67,6 +67,7 @@ export class CustomerCrmComponent implements OnInit {
     constructor() { }
 
     ngOnInit(): void {
+        this.mobileService.setHeader('Clientes', false);
         this.merchantId = localStorage.getItem('active_merchant_id') || '';
         this.loadCustomers();
         this.loadCampaignHistory();
@@ -159,6 +160,7 @@ export class CustomerCrmComponent implements OnInit {
         this.selectedCustomer = customer;
         if (this.isMobile()) {
             this.mobileService.setImmersive(true);
+            this.mobileService.setHeader(customer.full_name || 'Cliente', true, () => this.goBackToList());
         }
     }
 
@@ -166,6 +168,7 @@ export class CustomerCrmComponent implements OnInit {
         this.selectedCustomer = null;
         if (this.isMobile()) {
             this.mobileService.setImmersive(false);
+            this.mobileService.setHeader('Clientes', false);
         }
     }
 

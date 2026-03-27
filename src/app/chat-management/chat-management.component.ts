@@ -116,6 +116,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     backToList() {
         this.selectedConversation = null;
         this.mobileService.setImmersive(false);
+        this.mobileService.setHeader('Chats', false);
         this.cdr.detectChanges();
     }
 
@@ -224,6 +225,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             }
 
             await this.loadConversations();
+            this.mobileService.setHeader('Chats', false);
             await this.loadAvailableTags();
             await this.supabaseService.requestNotificationPermission();
 
@@ -601,6 +603,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
         this.selectedConversation = conv;
         this.mobileService.setImmersive(true);
+        this.mobileService.setHeader(conv.customer_name, true, () => this.backToList());
         this.isLoadingDetails = true;
         this.cdr.detectChanges();
 

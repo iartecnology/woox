@@ -303,7 +303,9 @@
   </div>
 
   <!-- Simulador de Chat (Panel Derecho Mejorado con Tabs) -->
-  <div class="test-chat-panel" [class.hidden]="!showTestChat">
+  <div class="test-chat-panel" [class.hidden]="!showTestChat" [style.width.px]="sidebarWidth">
+    <!-- Resizer Handle -->
+    <div class="resizer-handle" (mousedown)="startResizing($event)"></div>
     
     <!-- Tab Navigation -->
     <div class="sidebar-tabs">
@@ -316,75 +318,16 @@
     </div>
 
     <!-- Panel Content: Simulator -->
-    <div class="tab-panel-content" *ngIf="activeSidebarTab === 'simulator'">
-      <div class="chat-header">
-        <h4>🤖 Simulador de Bot</h4>
-        <div class="chat-header-actions">
-          <button class="btn-reset-session" (click)="clearSimulatorSession()" 
-                  *ngIf="totalSessionExecutions > 0" title="Limpiar contadores de sesión">🗑️</button>
-          <button class="btn btn-sm btn-outline-secondary" (click)="resetChat()">🔄</button>
-        </div>
-      </div>
-
-      <!-- Barra de Estado de Sesión (aparece cuando hay ejecuciones) -->
-      <div class="sim-stats-bar" *ngIf="totalSessionExecutions > 0">
-        <div class="stat-pill">
-          <span class="stat-pill-icon">⚡</span>
-          <span class="stat-pill-val">{{ totalSessionExecutions }}</span>
-          <span class="stat-pill-label">runs</span>
-        </div>
-        <div class="stat-pill" *ngIf="activeSimNodeId">
-          <span class="stat-pill-icon">📍</span>
-          <span class="stat-pill-val stat-pill-val--sm">{{ getActiveNodeLabel() }}</span>
-        </div>
-        <div class="stat-pill" *ngIf="getVariableCount() > 0">
-          <span class="stat-pill-icon">📦</span>
-          <span class="stat-pill-val">{{ getVariableCount() }}</span>
-          <span class="stat-pill-label">vars</span>
-        </div>
-      </div>
-
-      <div class="chat-messages" #chatScroll>
-        <div class="chat-empty" *ngIf="chatMessages.length === 0">
-          <span>🧪</span>
-          <p>Inicia una prueba para ver cómo interactúa tu bot.</p>
-        </div>
-        
-        <div *ngFor="let msg of chatMessages" class="msg" [ngClass]="msg.sender">
-          <div class="msg-text">{{ msg.text }}</div>
-          <div class="msg-meta" *ngIf="msg.meta && msg.sender === 'bot'">
-            <span>🪙 {{ msg.meta.tokens }} tokens</span>
-            <span>⏱️ {{ msg.meta.time }}ms</span>
-          </div>
-        </div>
-
-        <div class="typing" *ngIf="isBotTyping">
-          <div class="dot"></div>
-          <div class="dot"></div>
-          <div class="dot"></div>
-        </div>
-      </div>
-
-      <!-- Historial de Ejecuciones de Sesión -->
-      <div class="exec-log-panel" *ngIf="sessionExecutionLog.length > 0">
-        <div class="exec-log-header">
-          <span>📊 Historial</span>
-          <span class="exec-log-count">{{ sessionExecutionLog.length }} pasos</span>
-        </div>
-        <div class="exec-log-scroll">
-          <div class="exec-log-entry" *ngFor="let entry of sessionExecutionLog">
-            <span class="entry-icon">{{ getNodeIcon(entry.nodeType) }}</span>
-            <span class="entry-label">{{ entry.nodeLabel }}</span>
-            <span class="entry-count">×{{ entry.totalCount }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="chat-input-area">
-        <input type="text" class="chat-input" placeholder="Escribe un mensaje..." 
-               [(ngModel)]="userChatInput" (keyup.enter)="sendChatMessage()">
-        <button class="btn-send" (click)="sendChatMessage()"><i class="fa-solid fa-paper-plane"></i></button>
-      </div>
+    <div class="tab-panel-content" *ngIf="activeSidebarTab === 'simulator'" style="padding:0;">
+      <app-chat-simulator 
+          *ngIf="merchantId"
+          [merchantName]="merchantName" 
+          [merchantId]="merchantId"
+          [allNodes]="botFlow.flow_data.nodes"
+          [allConnections]="botFlow.flow_data.connections"
+          [inline]="true"
+          (onNodeExecuted)="onSimNodeExecuted($event)">
+      </app-chat-simulator>
     </div>
 
     <!-- Panel Content: Architect (IA Assist) -->

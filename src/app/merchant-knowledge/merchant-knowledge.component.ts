@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../supabase.service';
 import { NotificationService } from '../notification.service';
+import { MobileService } from '../mobile.service';
 
 declare const pdfjsLib: any;
 
@@ -12,7 +13,7 @@ declare const pdfjsLib: any;
     imports: [CommonModule, FormsModule],
     template: `
     <div class="mk-container">
-        <header class="mk-header">
+        <header class="mk-header" *ngIf="!mobileService.isMobile()">
             <div class="mk-header-text">
                 <h1>🧠 Cerebro de la Empresa</h1>
                 <p>Entrena a tu agente con información exclusiva de tu negocio: horarios, políticas locales, servicios y más. Este conocimiento tiene <strong>prioridad máxima</strong> sobre el agente global.</p>
@@ -249,6 +250,7 @@ declare const pdfjsLib: any;
 export class MerchantKnowledgeComponent implements OnInit {
     private supabaseService = inject(SupabaseService);
     private notificationService = inject(NotificationService);
+    public mobileService = inject(MobileService);
 
     merchantId = '';
     blocks: any[] = []; // Compatibilidad o legado si se requiere, pero lo ocultaremos o migraremos
@@ -271,6 +273,7 @@ export class MerchantKnowledgeComponent implements OnInit {
     platformSettings: any = null;
 
     async ngOnInit() {
+        this.mobileService.setHeader('Conocimiento', false);
         // Asegurar que tenemos el ID del comercio antes de cargar
         this.merchantId = localStorage.getItem('active_merchant_id') ||
             localStorage.getItem('merchant_id') ||

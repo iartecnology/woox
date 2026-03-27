@@ -1,13 +1,5 @@
 <div class="crm-container">
-    <!-- Mobile Header -->
-    <div class="mobile-module-header" *ngIf="isMobile()">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <button *ngIf="selectedCustomer || showCampaignModal" class="back-btn-premium" (click)="selectedCustomer ? goBackToList() : closeCampaignModal()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:18px;height:18px;"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            </button>
-            <h2 class="module-title-mobile">{{ selectedCustomer ? 'Detalle Cliente' : (showCampaignModal ? 'Nueva Campaña' : 'Clientes') }}</h2>
-        </div>
-    </div>
+    <!-- Redundant mobile header removed - handled by unified app header -->
 
     <!-- HEADER CON KPIs (Desktop) -->
     <header class="crm-header" *ngIf="!isMobile()">

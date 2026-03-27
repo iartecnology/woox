@@ -168,6 +168,7 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
 
         if (this.isMobile()) {
             this.viewMode = 'list';
+            this.mobileService.setHeader('Pedidos', false);
         }
         this.mobileService.setImmersive(false);
     }
@@ -274,12 +275,14 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
         this.selectedOrder = order;
         if (this.isMobile()) {
             this.mobileService.setImmersive(true);
+            this.mobileService.setHeader('Detalle Pedido', true, () => this.backToList());
         }
     }
 
     backToList() {
         this.selectedOrder = null;
         this.mobileService.setImmersive(false);
+        this.mobileService.setHeader('Pedidos', false);
     }
 
     async updateStatus(order: Order, newStatus: any) {
