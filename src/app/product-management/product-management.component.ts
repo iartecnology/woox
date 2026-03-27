@@ -25,7 +25,9 @@ export class ProductManagementComponent implements OnInit {
     showProductModal: boolean = false;
     showCategoryModal: boolean = false;
     showDeleteConfirm: boolean = false;
+    showDeleteCategoryConfirm: boolean = false;
     productToDeleteId: string | null = null;
+    categoryToDelete: Category | null = null;
     isLoading: boolean = true;
 
     filteredCategories: Category[] = [];
@@ -249,6 +251,38 @@ export class ProductManagementComponent implements OnInit {
         } catch (error: any) {
             console.error('Error saving category:', error);
             this.notificationService.show('Error al crear categoría', 'error');
+        }
+    }
+
+    requestDeleteCategory(cat: Category, event: Event) {
+        event.stopPropagation();
+        this.categoryToDelete = cat;
+        this.showDeleteCategoryConfirm = true;
+    }
+
+    cancelDeleteCategory() {
+        this.showDeleteCategoryConfirm = false;
+        this.categoryToDelete = null;
+    }
+
+    async confirmDeleteCategory() {
+        if (!this.categoryToDelete) return;
+        
+        try {
+            const { error } = await this.supabaseService.deleteCategory(this.categoryToDelete.id);
+            if (error) throw error;
+
+            this.notificationService.show('Categoría eliminada', 'warning');
+            if (this.selectedCategoryId === this.categoryToDelete.id) {
+                this.selectedCategoryId = '';
+            }
+            await this.loadData();
+        } catch (error: any) {
+            console.error('Error deleting category:', error);
+            this.notificationService.show('Error al eliminar categoría. Asegúrate de que no tenga productos asociados.', 'error');
+        } finally {
+            this.showDeleteCategoryConfirm = false;
+            this.categoryToDelete = null;
         }
     }
 }

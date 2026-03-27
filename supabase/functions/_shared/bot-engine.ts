@@ -735,6 +735,11 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
 
             const conn = connections.find((c: any) => c.from === currentNodeId && c.fromPort === 'output');
             if (conn) { currentNodeId = conn.to; waitingFor = null; }
+        } else if (!currentNode) {
+            console.warn(`[BOT-ENGINE] Nodo ${currentNodeId} no encontrado (waiting_for: input). Reiniciando.`);
+            const startNode = nodes.find((n: any) => n.type === 'start');
+            currentNodeId = startNode ? startNode.id : null;
+            waitingFor = null;
         }
     } else if (waitingFor === 'ai_input') {
         // El AI Agent recibe el nuevo mensaje del usuario
@@ -758,7 +763,12 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
         loopCount++;
         const node = nodes.find((n: any) => n.id === currentNodeId);
         if (!node) {
-            console.error(`[BOT-ENGINE] ERROR: No se encontró el nodo con ID: ${currentNodeId}`);
+            console.error(`[BOT-ENGINE] ERROR: No se encontró el nodo con ID: ${currentNodeId}. Reiniciando al inicio.`);
+            const startNode = nodes.find((n: any) => n.type === 'start');
+            if (startNode) {
+                currentNodeId = startNode.id;
+                continue;
+            }
             break;
         }
         console.log(`[BOT-ENGINE] LOOP ${loopCount} | Nodo: ${node.data?.label || node.type} (${node.id})`);

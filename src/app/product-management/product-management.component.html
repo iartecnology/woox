@@ -9,8 +9,9 @@
                 🌍 Todas las Categorías
             </li>
             <li *ngFor="let cat of filteredCategories" [class.active]="selectedCategoryId === cat.id"
-                (click)="selectCategory(cat.id)">
-                {{ cat.name }}
+                (click)="selectCategory(cat.id)" class="category-item-li">
+                <span class="category-name">{{ cat.name }}</span>
+                <button class="delete-cat-btn" (click)="requestDeleteCategory(cat, $event)" title="Eliminar categoría">🗑️</button>
             </li>
         </ul>
     </aside>
@@ -192,6 +193,24 @@
             <button class="cancel-btn" (click)="cancelDeleteProduct()">Cancelar</button>
             <button class="delete-btn" (click)="confirmDeleteProduct()" style="padding: 10px 20px;">Sí,
                 Eliminar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmación Eliminar Categoría -->
+<div class="modal-overlay" *ngIf="showDeleteCategoryConfirm" (click)="cancelDeleteCategory()">
+    <div class="modal-content small" (click)="$event.stopPropagation()" style="text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 8px;">📁🗑️</div>
+        <h2 style="margin: 0 0 8px;">¿Eliminar Categoría?</h2>
+        <p style="color: #64748b; margin: 0 0 16px; font-size: 0.9rem;">
+            Se eliminará <b>"{{ categoryToDelete?.name }}"</b>.
+        </p>
+        <p style="color: #ef4444; margin: 0 0 24px; font-size: 0.8rem; font-weight: 500;">
+            Asegúrate de que no tenga productos asociados, o la operación fallará.
+        </p>
+        <div class="modal-actions" style="justify-content: center; gap: 12px;">
+            <button class="cancel-btn" (click)="cancelDeleteCategory()">Cancelar</button>
+            <button class="delete-btn" (click)="confirmDeleteCategory()" style="padding: 10px 20px;">Sí, Eliminar</button>
         </div>
     </div>
 </div>

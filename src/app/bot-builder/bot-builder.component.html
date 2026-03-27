@@ -37,24 +37,24 @@
       <div class="dialog-icon">✨</div>
       <h3>Plantillas Pro</h3>
       <p>Elige una estructura base para comenzar tu flujo más rápido:</p>
-      <div class="template-sections" style="max-height: 450px; overflow-y: auto; padding-right: 5px;">
-        <div class="template-section mb-4" *ngFor="let cat of templateCategories">
-          <h4 style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #6366f1; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800; margin-bottom: 12px; padding-left: 4px;">
-            <span>{{ cat.icon }}</span> {{ cat.name }}
-          </h4>
-          <div class="template-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-            <div class="template-card" *ngFor="let t of getTemplatesByCategory(cat.id)" (click)="selectTemplate(t.id)" 
-                 style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; cursor: pointer; transition: all 0.2s; display: flex; gap: 12px; align-items: center;">
-              <div class="template-card-icon" style="flex-shrink: 0; width: 40px; height: 40px; background: #ffffff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; border: 1px solid #edf2f7;">
-                <i *ngIf="t.icon?.startsWith('fa-')" [class]="t.icon"></i>
-                <span *ngIf="!t.icon?.startsWith('fa-')">{{ t.icon || '📄' }}</span>
-              </div>
-              <div class="template-card-body" style="text-align: left;">
-                <h5 style="margin: 0; font-size: 0.85rem; color: #1e293b; font-weight: 700;">{{ t.name }}</h5>
-                <p style="margin: 4px 0 0; font-size: 0.75rem; color: #64748b; line-height: 1.3;">{{ t.description }}</p>
-              </div>
-            </div>
+      <div class="template-grid">
+        <div class="template-card" *ngFor="let t of templates" (click)="selectTemplate(t.id)">
+          <div class="template-card-icon">
+            <i *ngIf="t.icon?.startsWith('fa-')" [class]="t.icon"></i>
+            <span *ngIf="!t.icon?.startsWith('fa-')">{{ t.icon || '📄' }}</span>
           </div>
+          <div class="template-card-body">
+            <h4>{{ t.name }}</h4>
+            <p>{{ t.description }}</p>
+          </div>
+          <!-- Botón borrar: solo en plantillas guardadas (tienen created_at) -->
+          <button
+            *ngIf="t.created_at"
+            class="template-delete-btn"
+            title="Eliminar plantilla"
+            (click)="$event.stopPropagation(); deleteTemplate(t.id)">
+            🗑️
+          </button>
         </div>
       </div>
       <div class="delete-dialog-actions">
@@ -154,7 +154,7 @@
            (dblclick)="onNodeDblClick($event, node)">
           
           <!-- Fondo del Nodo -->
-          <rect width="220" [attr.height]="node.type === 'menu' ? 80 + (node.data.options?.length || 0) * 24 : (node.type === 'switch' ? 80 + (node.data.switch_cases?.length || 0) * 24 : (node.type === 'condition' ? 95 : (node.type === 'business_hours' ? 100 : (['reservation_check', 'reservation_create'].includes(node.type) ? 100 : 80))))" rx="12"
+          <rect width="220" [attr.height]="node.type === 'menu' ? 80 + (node.data.options?.length || 0) * 24 : (node.type === 'switch' ? 80 + (node.data.switch_cases?.length || 0) * 24 : (node.type === 'condition' ? 95 : (node.type === 'business_hours' ? 100 : 80)))" rx="12"
                 class="node-rect"
                 [attr.fill]="getNodeColor(node.type)"
                 [attr.stroke]="selectedNode?.id === node.id ? '#4f46e5' : 'rgba(255,255,255,0.1)'"
@@ -189,13 +189,13 @@
                   class="no-select">✓</text>
           </g>
           <!-- Anillo de progreso / Glow mientras está ACTIVO -->
-          <g *ngIf="activeSimNodeId === node.id">
+          <g *ngIf="activeSimNodeId === node.id || activeToolNodeId === node.id">
             <rect x="-4" y="-4" width="228" height="108" rx="14" fill="none" 
                   stroke="#10b981" stroke-width="3" class="pulse-glow"/>
           </g>
 
           <!-- Spinner ACTIVO (Top-Center) -->
-          <g *ngIf="activeSimNodeId === node.id" transform="translate(110, -12)">
+          <g *ngIf="activeSimNodeId === node.id || activeToolNodeId === node.id" transform="translate(110, -12)">
             <rect x="-40" y="-8" width="80" height="16" rx="8" fill="#10b981" class="pulse-ring"/>
             <text fill="white" font-size="8" font-weight="900" text-anchor="middle" dominant-baseline="central"
                   class="no-select">RUNNING...</text>
@@ -249,25 +249,6 @@
               <text x="16" y="86" fill="#ef4444" font-size="10" class="no-select">🌙 Cerrado</text>
               <circle cx="220" cy="83" r="6" fill="#0f172a" stroke="#ef4444" stroke-width="2" class="port"
                       (mousedown)="onPortMouseDown($event, node, 'closed')"></circle>
-            </g>
-
-            <!-- Reservas: puertos de control -->
-            <g *ngSwitchCase="'reservation_check'">
-              <text x="16" y="70" fill="#10b981" font-size="10" class="no-select">✅ Disponible</text>
-              <circle cx="220" cy="67" r="6" fill="#0f172a" stroke="#10b981" stroke-width="2" class="port"
-                      (mousedown)="onPortMouseDown($event, node, 'available')"></circle>
-              <text x="16" y="86" fill="#ef4444" font-size="10" class="no-select">❌ No Disponible</text>
-              <circle cx="220" cy="83" r="6" fill="#0f172a" stroke="#ef4444" stroke-width="2" class="port"
-                      (mousedown)="onPortMouseDown($event, node, 'unavailable')"></circle>
-            </g>
-
-            <g *ngSwitchCase="'reservation_create'">
-              <text x="16" y="70" fill="#10b981" font-size="10" class="no-select">🎉 Éxito</text>
-              <circle cx="220" cy="67" r="6" fill="#0f172a" stroke="#10b981" stroke-width="2" class="port"
-                      (mousedown)="onPortMouseDown($event, node, 'success')"></circle>
-              <text x="16" y="86" fill="#ef4444" font-size="10" class="no-select">⚠️ Error</text>
-              <circle cx="220" cy="83" r="6" fill="#0f172a" stroke="#ef4444" stroke-width="2" class="port"
-                      (mousedown)="onPortMouseDown($event, node, 'error')"></circle>
             </g>
 
             <!-- AI Skill Port -->
@@ -335,15 +316,75 @@
     </div>
 
     <!-- Panel Content: Simulator -->
-    <div class="tab-panel-content" *ngIf="activeSidebarTab === 'simulator'" style="padding:0; overflow:hidden;">
-      <app-chat-simulator 
-        [inline]="true" 
-        [botMode]="true"
-        [merchantId]="merchantId"
-        [merchantName]="merchantName"
-        [logoUrl]="logoUrl"
-        (onNodeExecuted)="onSimNodeExecuted($event)">
-      </app-chat-simulator>
+    <div class="tab-panel-content" *ngIf="activeSidebarTab === 'simulator'">
+      <div class="chat-header">
+        <h4>🤖 Simulador de Bot</h4>
+        <div class="chat-header-actions">
+          <button class="btn-reset-session" (click)="clearSimulatorSession()" 
+                  *ngIf="totalSessionExecutions > 0" title="Limpiar contadores de sesión">🗑️</button>
+          <button class="btn btn-sm btn-outline-secondary" (click)="resetChat()">🔄</button>
+        </div>
+      </div>
+
+      <!-- Barra de Estado de Sesión (aparece cuando hay ejecuciones) -->
+      <div class="sim-stats-bar" *ngIf="totalSessionExecutions > 0">
+        <div class="stat-pill">
+          <span class="stat-pill-icon">⚡</span>
+          <span class="stat-pill-val">{{ totalSessionExecutions }}</span>
+          <span class="stat-pill-label">runs</span>
+        </div>
+        <div class="stat-pill" *ngIf="activeSimNodeId">
+          <span class="stat-pill-icon">📍</span>
+          <span class="stat-pill-val stat-pill-val--sm">{{ getActiveNodeLabel() }}</span>
+        </div>
+        <div class="stat-pill" *ngIf="getVariableCount() > 0">
+          <span class="stat-pill-icon">📦</span>
+          <span class="stat-pill-val">{{ getVariableCount() }}</span>
+          <span class="stat-pill-label">vars</span>
+        </div>
+      </div>
+
+      <div class="chat-messages" #chatScroll>
+        <div class="chat-empty" *ngIf="chatMessages.length === 0">
+          <span>🧪</span>
+          <p>Inicia una prueba para ver cómo interactúa tu bot.</p>
+        </div>
+        
+        <div *ngFor="let msg of chatMessages" class="msg" [ngClass]="msg.sender">
+          <div class="msg-text">{{ msg.text }}</div>
+          <div class="msg-meta" *ngIf="msg.meta && msg.sender === 'bot'">
+            <span>🪙 {{ msg.meta.tokens }} tokens</span>
+            <span>⏱️ {{ msg.meta.time }}ms</span>
+          </div>
+        </div>
+
+        <div class="typing" *ngIf="isBotTyping">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+
+      <!-- Historial de Ejecuciones de Sesión -->
+      <div class="exec-log-panel" *ngIf="sessionExecutionLog.length > 0">
+        <div class="exec-log-header">
+          <span>📊 Historial</span>
+          <span class="exec-log-count">{{ sessionExecutionLog.length }} pasos</span>
+        </div>
+        <div class="exec-log-scroll">
+          <div class="exec-log-entry" *ngFor="let entry of sessionExecutionLog">
+            <span class="entry-icon">{{ getNodeIcon(entry.nodeType) }}</span>
+            <span class="entry-label">{{ entry.nodeLabel }}</span>
+            <span class="entry-count">×{{ entry.totalCount }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" placeholder="Escribe un mensaje..." 
+               [(ngModel)]="userChatInput" (keyup.enter)="sendChatMessage()">
+        <button class="btn-send" (click)="sendChatMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
     </div>
 
     <!-- Panel Content: Architect (IA Assist) -->
@@ -672,42 +713,6 @@
       <input type="text" class="form-control" [(ngModel)]="editingNode.data.response_mapping" placeholder="resultado_db" />
     </div>
 
-    <!-- RESERVATION CHECK -->
-    <div *ngIf="editingNode.type === 'reservation_check'" class="form-group" style="grid-column: span 2;">
-      <label class="d-block mb-2">Recurso / Servicio a Consultar</label>
-      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.resource_id" placeholder="ID del Recurso (UUID)" />
-      
-      <label class="d-block mb-2">Fecha y Hora (Variables admitidas)</label>
-      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.start_time" placeholder="Ej: {fecha} {hora}" />
-      
-      <label class="d-block mb-2">Cantidad de Personas</label>
-      <input type="number" class="form-control" [(ngModel)]="editingNode.data.pax" placeholder="1" />
-      
-      <small class="text-muted mt-2 d-block">Resultados en: {{'reservation_available'}} (boolean)</small>
-    </div>
-
-    <!-- RESERVATION CREATE -->
-    <div *ngIf="editingNode.type === 'reservation_create'" class="form-group" style="grid-column: span 2;">
-      <label class="d-block mb-2">Recurso / Servicio</label>
-      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.resource_id" placeholder="ID del Recurso (UUID)" />
-      
-      <label class="d-block mb-2">Fecha y Hora</label>
-      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.start_time" placeholder="Ej: {fecha} {hora}" />
-      
-      <label class="d-block mb-2">Cantidad de Personas</label>
-      <input type="number" class="form-control mb-3" [(ngModel)]="editingNode.data.pax" placeholder="1" />
-      
-      <label class="d-block mb-2">Guardar Resultado en Variable</label>
-      <input type="text" class="form-control" [(ngModel)]="editingNode.data.response_mapping" placeholder="booking_status" />
-    </div>
-
-    <!-- CALENDAR SYNC -->
-    <div *ngIf="editingNode.type === 'calendar_sync'" class="form-group" style="grid-column: span 2;">
-      <p class="text-info">Este nodo activará la sincronización bidireccional con calendarios externos (Google, Airbnb, iCal) para los recursos configurados.</p>
-      <label class="d-block mb-2">URL de iCal Externa (Opcional)</label>
-      <input type="text" class="form-control" [(ngModel)]="editingNode.data.external_ical_url" placeholder="https://..." />
-    </div>
-
     <div *ngIf="editingNode.type === 'set_variable'" class="form-group" style="grid-column: span 2;">
       <label>Clave de la Variable</label>
       <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.variable_name" placeholder="ej: contador_intentos" />
@@ -921,7 +926,10 @@
         <label style="display: block; text-align: left; font-size: 0.9rem; color: #64748b; margin-bottom: 0.5rem;">Categoría</label>
         <select class="form-select" [(ngModel)]="newTemplate.category"
                 style="width: 100%; padding: 0.75rem; border-radius: 8px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b;">
-          <option *ngFor="let cat of templateCategories" [value]="cat.id">{{ cat.name }}</option>
+          <option value="restaurante">Restaurante</option>
+          <option value="servicios">Servicios</option>
+          <option value="ecommerce">E-commerce</option>
+          <option value="general">General</option>
         </select>
       </div>
     </div>

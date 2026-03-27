@@ -240,6 +240,10 @@ export class SupabaseService {
         return await supabase.from('categories').upsert(category).select().single();
     }
 
+    async deleteCategory(id: string) {
+        return await supabase.from('categories').delete().eq('id', id);
+    }
+
     async getProducts(merchantId: string) {
         if (!merchantId || !this.isValidUUID(merchantId)) {
             console.error('[SupabaseService] getProducts: Invalid or missing UUID:', merchantId);

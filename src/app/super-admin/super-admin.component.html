@@ -15,7 +15,7 @@
                 <span class="icon">📲</span> <span class="label">Descargar App</span>
             </button>
             <button class="ai-logic-btn" (click)="router.navigate(['/bot-builder'])">
-                <span class="icon">🤖</span> <span class="label">Bot Builder</span>
+                <span class="icon">🧬</span> <span class="label">ADN (Flujos)</span>
             </button>
             <button class="platform-config-btn" (click)="openPlatformConfig()">
                 <span class="icon">⚙️</span> <span class="label">Config</span>
@@ -54,6 +54,12 @@
                 </style>
             </div>
             <ng-container *ngIf="!isLoading">
+                <!-- Buscador Global -->
+                <div class="search-bar-container" style="margin-bottom: 20px;">
+                    <input type="text" placeholder="🔍 Buscar comercio por nombre o ID..." class="woox-input"
+                        [(ngModel)]="searchQuery" (input)="updateMerchantsView()" style="width: 100%; max-width: 400px; padding: 10px 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                </div>
+
                 <!-- VISTA ESCRITORIO: TABLA -->
                 <table class="merchants-table" *ngIf="!isMobile()">
                     <thead>
@@ -154,8 +160,8 @@
                                         <div class="action-group highlighted">
                                             <button class="config-icon-btn ai" title="Configuración de IA"
                                                 (click)="openAIConfig(m)">🤖</button>
-                                            <button class="config-icon-btn bot" title="Bot Builder"
-                                                (click)="goToBotBuilder(m)">🎨</button>
+                                            <button class="config-icon-btn bot" title="ADN (Flujos)"
+                                                (click)="goToBotBuilder(m)">🧬</button>
                                             <button *ngIf="m.industry_type === 'retail'" class="config-icon-btn catalog"
                                                 title="Catálogo" (click)="goToCatalog(m)">🍔</button>
                                             <button class="config-icon-btn brain"
@@ -510,13 +516,35 @@
                         </div>
                     </div>
 
-                    <div class="section-divider full-width">🧠 Inteligencia Artificial (Core Engine)</div>
+                    <div class="section-divider full-width">📱 Branding Móvil (PWA / App)</div>
 
                     <div class="form-group full-width">
-                        <label>AI Engine URL</label>
-                        <input type="text" [(ngModel)]="platformConfig.ai_engine_url"
-                            placeholder="http://167.86.73.89:8000/">
-                        <small>La URL pública o interna donde corre el motor de IA (Woox AI Engine).</small>
+                        <label>URL Icono App (PWA)</label>
+                        <input type="text" [(ngModel)]="platformConfig.pwa_icon_url"
+                            placeholder="https://.../icon-512x512.png">
+                        <small>Icono que aparecerá al instalar en Android/iOS (Ideal 512x512px, PNG).</small>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>URL Splash Screen (PWA)</label>
+                        <input type="text" [(ngModel)]="platformConfig.pwa_splash_url"
+                            placeholder="https://.../splash.png">
+                        <small>Imagen de carga de la aplicación (Ideal 1080x1920px, PNG).</small>
+                    </div>
+
+                    <!-- Vista Previa Móvil -->
+                    <div class="form-group full-width" *ngIf="platformConfig.pwa_icon_url || platformConfig.pwa_splash_url">
+                        <label>Vista Previa PWA</label>
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                            <div class="pwa-preview-box" *ngIf="platformConfig.pwa_icon_url" style="text-align: center;">
+                                <img [src]="platformConfig.pwa_icon_url" alt="PWA Icon" style="width: 80px; height: 80px; border-radius: 16px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                                <div style="margin-top: 8px; font-size: 12px; font-weight: 500;">Icono Móvil</div>
+                            </div>
+                            <div class="pwa-preview-box" *ngIf="platformConfig.pwa_splash_url" style="text-align: center;">
+                                <img [src]="platformConfig.pwa_splash_url" alt="PWA Splash" style="width: 100px; height: 180px; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                                <div style="margin-top: 8px; font-size: 12px; font-weight: 500;">Splash Screen</div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="section-divider full-width">🔗 Conectividad WhatsApp (Evolution API)</div>

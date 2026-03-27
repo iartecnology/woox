@@ -118,7 +118,8 @@ interface PlatformConfig {
     supabase_key?: string;
     evolution_api_url?: string;
     evolution_api_key?: string;
-    ai_engine_url?: string;
+    pwa_icon_url?: string;
+    pwa_splash_url?: string;
 }
 
 @Component({
@@ -138,6 +139,7 @@ export class SuperAdminComponent implements OnInit {
     sortDirection: 'asc' | 'desc' = 'asc';
     currentPage: number = 1;
     itemsPerPage: number = 5;
+    searchQuery: string = '';
     viewMerchants: Merchant[] = [];
     Math = Math;
 
@@ -651,7 +653,8 @@ export class SuperAdminComponent implements OnInit {
         supabase_key: localStorage.getItem('supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoZ2VndWtqcnR5am1vbmhhdmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTQ4MTAsImV4cCI6MjA4NTM3MDgxMH0.V-dc1zSkU5R5hj45ihWsHR-9FWFTP4qxWyVUnTC8qdc',
         evolution_api_url: localStorage.getItem('evolution_api_url') || '',
         evolution_api_key: localStorage.getItem('evolution_api_key') || '',
-        ai_engine_url: '' // Migrado a Supabase Edge Functions
+        pwa_icon_url: localStorage.getItem('pwa_icon_url') || '',
+        pwa_splash_url: localStorage.getItem('pwa_splash_url') || ''
     };
 
     isValidatingSupabase = false;
@@ -790,8 +793,7 @@ export class SuperAdminComponent implements OnInit {
     }
 
     openAIEngineMonitor() {
-        const url = this.platformConfig.ai_engine_url || 'http://167.86.73.89:8000/';
-        this.safeMonitorUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+        // Obsoleto, ya no se usa AI Engine URL
         this.showAIEngineMonitor = true;
         this.cdr.detectChanges();
     }
@@ -1777,8 +1779,7 @@ export class SuperAdminComponent implements OnInit {
         const { error } = await this.supabaseService.updatePlatformSettings({
             ...this.platformAiSettings,
             evolution_api_url: this.platformConfig.evolution_api_url,
-            evolution_api_key: this.platformConfig.evolution_api_key,
-            ai_engine_url: this.platformConfig.ai_engine_url
+            evolution_api_key: this.platformConfig.evolution_api_key
         });
 
         if (error) {
@@ -1797,8 +1798,8 @@ export class SuperAdminComponent implements OnInit {
         if (this.platformConfig.supabase_key) localStorage.setItem('supabase_key', this.platformConfig.supabase_key);
         if (this.platformConfig.evolution_api_url) localStorage.setItem('evolution_api_url', this.platformConfig.evolution_api_url);
         if (this.platformConfig.evolution_api_key) localStorage.setItem('evolution_api_key', this.platformConfig.evolution_api_key);
-        if (this.platformConfig.ai_engine_url) localStorage.setItem('ai_engine_url', this.platformConfig.ai_engine_url);
-
+        if (this.platformConfig.pwa_icon_url) localStorage.setItem('pwa_icon_url', this.platformConfig.pwa_icon_url);
+        if (this.platformConfig.pwa_splash_url) localStorage.setItem('pwa_splash_url', this.platformConfig.pwa_splash_url);
         this.notificationService.show('Configuración global actualizada correctamente', 'success');
         this.showPlatformConfig = false;
 
@@ -2606,7 +2607,13 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
     }
 
     updateMerchantsView(): void {
-        const sorted = [...this.merchants].sort((a, b) => {
+        const query = this.searchQuery.toLowerCase().trim();
+        const filtered = this.merchants.filter(m => 
+            (m.name || '').toLowerCase().includes(query) || 
+            (m.slug || '').toLowerCase().includes(query)
+        );
+
+        const sorted = [...filtered].sort((a, b) => {
             const valA = a[this.sortKey] || '';
             const valB = b[this.sortKey] || '';
 
@@ -2620,7 +2627,12 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
     }
 
     get totalPages(): number {
-        return Math.ceil(this.merchants.length / this.itemsPerPage);
+        const query = this.searchQuery.toLowerCase().trim();
+        const filtered = this.merchants.filter(m => 
+            (m.name || '').toLowerCase().includes(query) || 
+            (m.slug || '').toLowerCase().includes(query)
+        );
+        return Math.ceil(filtered.length / this.itemsPerPage) || 1;
     }
 
     get pagesArray(): number[] {

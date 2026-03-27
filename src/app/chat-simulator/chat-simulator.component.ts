@@ -20,6 +20,10 @@ interface Message {
     image_url: string;
     description: string;
   };
+  tokens?: number;
+  responseTimeMs?: number;
+  modelName?: string;
+  isRAGContextUsed?: boolean;
 }
 
 interface CartItem {
@@ -59,6 +63,11 @@ interface CartItem {
             <span class="stat-pill-icon">📍</span>
             <span class="stat-pill-val stat-pill-val--sm">{{ getActiveNodeLabel() }}</span>
           </div>
+          <div class="stat-pill" *ngIf="totalSessionTokens > 0">
+            <span class="stat-pill-icon">🪙</span>
+            <span class="stat-pill-val">{{ totalSessionTokens }}</span>
+            <span class="stat-pill-label">tkns</span>
+          </div>
           <div class="stat-pill">
             <span class="stat-pill-icon">📦</span>
             <span class="stat-pill-val">{{ getVariableCount() }}</span>
@@ -74,6 +83,14 @@ interface CartItem {
               <div class="bubble" *ngIf="msg.text" [innerHTML]="formatMessage(msg.text)">
               </div>
               
+              <!-- Meta-data de ejecución (Solo para IA) -->
+              <div class="msg-meta" *ngIf="msg.sender === 'ai' && (msg.responseTimeMs !== undefined || msg.tokens !== undefined || msg.modelName)">
+                <span *ngIf="msg.responseTimeMs !== undefined">⏱️ {{msg.responseTimeMs}}ms</span>
+                <span *ngIf="msg.tokens !== undefined">🪙 {{msg.tokens}} tkns</span>
+                <span *ngIf="msg.modelName" class="badge-model">{{msg.modelName}}</span>
+                <span *ngIf="msg.isRAGContextUsed" class="badge-rag" title="Respondido usando base de conocimiento">📚 RAG</span>
+              </div>
+
               <!-- Tarjeta de Producto (Estilo Texto/WhatsApp) -->
               <div *ngIf="msg.product" class="text-card product-text-card">
                 <div class="card-content">
@@ -265,27 +282,46 @@ interface CartItem {
       gap: 8px;
     }
     .bubble {
-      padding: 12px 16px;
-      border-radius: 18px;
-      font-size: 0.9rem;
-      line-height: 1.5;
-      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+      padding: 14px 18px;
+      border-radius: 20px;
+      font-size: 0.92rem;
+      line-height: 1.6;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.06);
       white-space: pre-wrap;
       word-break: break-word;
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      transition: all 0.2s ease;
+      animation: fadeInBubble 0.3s ease-out;
+    }
+    @keyframes fadeInBubble {
+      from { opacity: 0; transform: translateY(10px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .message:not(.user) .bubble {
-      background: white; color: #1f2937;
+      background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); 
+      color: #ffffff;
       border-bottom-left-radius: 4px;
+      border: 1px solid rgba(124, 58, 237, 0.2);
     }
     .message.user .bubble {
-      background: #dcfce7; color: #166534; /* Verde Claro Saliente */
+      background: #ffffff; 
+      color: #1f2937;
       border-bottom-right-radius: 4px;
-      border: 1px solid #bbf7d0;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.02);
     }
 
-    .message:not(.user) .bubble {
-      background: #7c3aed; color: #ffffff; /* Morado Entrante */
-      border-bottom-left-radius: 4px;
+    .bubble strong { font-weight: 800; color: inherit; }
+    .bubble em { opacity: 0.9; font-style: italic; }
+
+    .msg-meta {
+      display: flex; gap: 8px; font-size: 0.65rem; color: #64748b; margin-top: -4px; margin-left: 4px; flex-wrap: wrap; align-items: center;
+    }
+    .badge-model {
+      background: rgba(124, 58, 237, 0.1); color: #7c3aed; padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(124, 58, 237, 0.2); font-weight: 600;
+    }
+    .badge-rag {
+      background: #dcfce7; color: #166534; padding: 1px 6px; border-radius: 10px; border: 1px solid #bbf7d0; font-weight: 600;
     }
 
     .typing { 
@@ -487,6 +523,10 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
     return this.cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   }
 
+  get totalSessionTokens() {
+    return this.messages.reduce((sum, msg) => sum + (msg.tokens || 0), 0);
+  }
+
   constructor() { }
 
   // --- Métodos de Trazabilidad Unificados ---
@@ -497,7 +537,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
     this.sessionVariables = {};
     this.messages = [];
     if (this.aiWelcomeMessage) {
-      this.messages.push({ sender: 'ai', text: this.aiWelcomeMessage, time: new Date() });
+      this.messages.push({ sender: 'ai', text: this.aiWelcomeMessage, time: new Date(), tokens: 0, responseTimeMs: 0 });
     }
   }
 
@@ -574,7 +614,11 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
         // Si es modo BOT, procesar el primer mensaje (START) de forma silenciosa para obtener el saludo real
         if (this.botMode) {
            console.log('[Simulator] Processing bot START flow...');
+           const t0 = performance.now();
            const botRes = await this.botRuntime.processMessage(conv.id, this.merchantId, '');
+           const t1 = performance.now();
+           const stepMs = Math.round(t1 - t0);
+           
            if (botRes && botRes.messages.length > 0) {
              this.messages = []; // Limpiar el "Iniciando..."
              
@@ -590,7 +634,13 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
              }
 
              for (const msg of botRes.messages) {
-               this.messages.push({ sender: 'ai', text: msg, time: new Date() });
+               this.messages.push({ 
+                 sender: 'ai', 
+                 text: msg, 
+                 time: new Date(),
+                 responseTimeMs: stepMs,
+                 isRAGContextUsed: false
+               });
                await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg, true);
              }
            }
@@ -671,7 +721,10 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
     try {
       // --- LÓGICA DE BOT (NUEVA) ---
       if (this.botMode) {
+        const t0 = performance.now();
         const botResponse = await this.botRuntime.processMessage(this.dbConversationId!, this.merchantId, userText);
+        const t1 = performance.now();
+        const stepMs = Math.round(t1 - t0);
         
         // PROCESAR EXECUTION PATH
         if (botResponse && botResponse.executionPath) {
@@ -689,11 +742,18 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
           this.isTyping = false;
           if (botResponse && botResponse.messages.length > 0) {
             for (const msg of botResponse.messages) {
-              this.messages.push({ sender: 'ai', text: msg, time: new Date() });
+              this.messages.push({ 
+                sender: 'ai', 
+                text: msg, 
+                time: new Date(),
+                responseTimeMs: stepMs,
+                tokens: 0,
+                isRAGContextUsed: false
+              });
               await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg, true);
             }
           } else {
-            this.messages.push({ sender: 'ai', text: 'Lo siento, no tengo una respuesta programada para eso.', time: new Date() });
+            this.messages.push({ sender: 'ai', text: 'Lo siento, no tengo una respuesta programada para eso.', time: new Date(), tokens: 0, responseTimeMs: 0 });
           }
           this.cdr.detectChanges();
           this.scrollToBottom();
@@ -759,6 +819,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
       }
 
       // --- RAG: BÚSQUEDA SEMÁNTICA EN TIEMPO REAL (NUEVO CEREBRO) ---
+      let usedRAG = false;
       try {
         console.log('🔍 Generando embedding para búsqueda semántica...');
         const queryEmbedding = await this.supabaseService.generateEmbedding(userText, {
@@ -778,6 +839,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
 
           if (relevantChunks && relevantChunks.length > 0) {
             console.log('✨ Conocimiento encontrado:', relevantChunks.length, 'fragmentos');
+            usedRAG = true;
             fullSystemInstruction += `\n\n### 📚 CONOCIMIENTO EXTRAÍDO DEL CEREBRO (RAG):\nUsa esta información específica para responder con precisión:\n`;
             relevantChunks.forEach((chunk: any) => {
               fullSystemInstruction += `- ${chunk.content}\n`;
@@ -894,6 +956,8 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
 
       console.log('📤 Enviando request...');
 
+      const startTime = performance.now();
+
       let response = await fetch(apiUrl, {
         method: 'POST',
         headers: headers,
@@ -936,6 +1000,9 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
         });
       }
 
+      const endTime = performance.now();
+      const responseTimeMs = Math.round(endTime - startTime);
+
       console.log('📥 Response status:', response.status);
 
       if (!response.ok) {
@@ -946,9 +1013,11 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
 
       const data = await response.json();
       let aiText = '';
+      let usedTokens = 0;
 
       if (isOpenAI) {
         aiText = data.choices?.[0]?.message?.content || '';
+        usedTokens = data.usage?.total_tokens || 0;
       } else if (this.aiProvider === 'lmstudio') {
         if (data.choices && data.choices.length > 0) {
           aiText = data.choices[0].message?.content || data.choices[0].text || '';
@@ -963,10 +1032,13 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
         } else {
           aiText = JSON.stringify(data);
         }
+        usedTokens = data.usage?.total_tokens || 0;
       } else if (this.aiProvider === 'ollama') {
         aiText = data.message?.content || '';
+        usedTokens = data.eval_count ? data.prompt_eval_count + data.eval_count : 0;
       } else {
         aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        usedTokens = data.usageMetadata?.totalTokenCount || 0;
       }
 
       if (!aiText) {
@@ -1099,7 +1171,11 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
         text: aiText,
         time: new Date(),
         type: messageType,
-        product: lastProduct
+        product: lastProduct,
+        tokens: usedTokens,
+        responseTimeMs,
+        modelName,
+        isRAGContextUsed: usedRAG
       });
 
       // Guardar respuesta de la IA en la DB
@@ -1340,8 +1416,9 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
     // 2. Negritas: **texto** -> <strong>texto</strong>
     formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-    // 3. Cursivas: *texto* -> <i>texto</i>
+    // 3. Cursivas: *texto* o _texto_ -> <em>texto</em>
     formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    formatted = formatted.replace(/_(.*?)_/g, '<em>$1</em>');
 
     // 4. Listas: - item -> • item
     formatted = formatted.replace(/^\s*-\s+(.*)/gm, '• $1');

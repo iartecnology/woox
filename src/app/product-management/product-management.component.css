@@ -58,6 +58,41 @@
     color: #4F46E5;
 }
 
+.category-item-li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.category-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.delete-cat-btn {
+    opacity: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 4px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    margin-left: 8px;
+    color: #ef4444;
+}
+
+.category-item-li:hover .delete-cat-btn {
+    opacity: 1;
+}
+
+.delete-cat-btn:hover {
+    background: #fee2e2;
+}
+
 /* Main Content */
 .product-content {
     flex: 1;
