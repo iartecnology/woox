@@ -546,9 +546,9 @@ export class BotRuntimeService {
                 }
 
                 // 2. Crear la orden maestra
-                const { data: order, error } = await this.supabase.createOrder({
+                let orderRes = await this.supabase.createOrder({
                     merchant_id: session.merchant_id,
-                    customer_id: session.customer_id,
+                    customer_id: session.customer_id || null,
                     customer_name: customerName,
                     total: total,
                     status: 'pending',
@@ -559,7 +559,25 @@ export class BotRuntimeService {
                     internal_note: `Pedido vía Bot Flow. Variables: ${JSON.stringify(vars)}`
                 });
 
-                if (error || !order) return '⚠️ Error al registrar el pedido principal.';
+                if (orderRes.error && (orderRes.error.message.includes('column') || orderRes.error.message.includes('cache'))) {
+                    console.warn('⚠️ [BotRuntime] Detectado esquema local antiguo, reintentando registro básico...');
+                    orderRes = await this.supabase.createOrder({
+                        merchant_id: session.merchant_id,
+                        customer_id: session.customer_id || null,
+                        total: total,
+                        status: 'pending',
+                        delivery_address: deliveryAddress
+                    });
+                }
+
+                const { data: order, error } = orderRes;
+
+                if (error) {
+                    return `⚠️ Error al registrar el pedido principal. Detalles de base de datos: ${error.message || JSON.stringify(error)}`;
+                }
+                if (!order) {
+                    return '⚠️ Error al registrar el pedido principal: No se recibió respuesta de la BD.';
+                }
 
                 // 3. Registrar ítems de la orden
                 if (cart.length > 0) {
@@ -577,6 +595,7 @@ export class BotRuntimeService {
 
                 const orderNum = order.order_number || order.id.substring(0, 8);
                 session.variables['orderNumber'] = `#${orderNum}`;
+                session.variables['order_number'] = `#${orderNum}`;
                 
                 return `✅ ¡Gracias! Tu pedido #${orderNum} ha sido registrado exitosamente por un valor de $${total}.`;
             }
