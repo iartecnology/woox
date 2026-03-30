@@ -679,10 +679,11 @@ REGLAS IMPORTANTES:
       ]
     });
 
-    // Nodo intermedio: Confirmación de adición (Solo cuando se agrega algo)
-    const addedConfirmNode = this.createSpecificNode('message', x + 200, y + 350, {
-      label: 'Confirmación',
-      message: '✅ ¡Producto añadido con éxito!'
+    // Nodo intermedio: Confirmación de adición (Acción real)
+    const addedConfirmNode = this.createSpecificNode('action', x + 200, y + 350, {
+      label: 'Añadir al carrito',
+      actionType: 'add_to_cart',
+      params: { notes: '{{notas_preparacion}}' }
     });
     this.connectNodes(addedConfirmNode.id, 'output', decisionNode.id, 'input');
     
