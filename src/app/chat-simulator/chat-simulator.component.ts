@@ -1211,6 +1211,15 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
         
         setTimeout(async () => {
           this.isTyping = false;
+
+          // Si el flujo ya terminó (nodo end), detener el copiloto y no mostrar error
+          if (botResponse?.completed) {
+            this.isCopilotActive = false;
+            this.cdr.detectChanges();
+            this.scrollToBottom();
+            return;
+          }
+
           if (botResponse && botResponse.messages.length > 0) {
             for (const msg of botResponse.messages) {
               this.messages.push({ 

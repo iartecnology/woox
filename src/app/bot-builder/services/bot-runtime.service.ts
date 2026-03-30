@@ -8,6 +8,7 @@ export interface BotResponse {
     totalNodes?: number;
     allNodes?: { id: string, label: string, type: string }[];
     options?: any[]; // Opciones de menú si aplica
+    completed?: boolean; // true cuando el nodo 'end' fue alcanzado
 }
 
 @Injectable({
@@ -43,7 +44,12 @@ export class BotRuntimeService {
         );
         if (sessErr || !session) return null;
 
-        // 3. ¿Es sesión recién creada (sin waiting_for)? → Enviar mensaje del START y avanzar
+        // 3a. Sesión completada → No procesar más mensajes
+        if (session.status === 'completed' || session.status === 'transferred') {
+            return { messages: [], session, completed: true };
+        }
+
+        // 3b. ¿Es sesión recién creada (sin waiting_for)? → Enviar mensaje del START y avanzar
         if (!session.waiting_for) {
             const startMessage = this.resolveVariables(startNode.data?.message || '', session.variables, flow);
             const nextNodeId = this.getNextNodeId(flowData, startNode.id, 'output');
@@ -373,7 +379,7 @@ export class BotRuntimeService {
                         messages.push(this.resolveVariables(node.data.message, session.variables, flow));
                     }
                     await this.updateSession(session, node.id, null, 'completed');
-                    return { messages, session, executionPath };
+                    return { messages, session, executionPath, completed: true };
 
                 case 'reservation_create':
                     // Registrar la reserva en el CRM y la Agenda real
