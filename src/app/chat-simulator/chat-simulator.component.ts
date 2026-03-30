@@ -853,16 +853,16 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
                                      lastBotMsg.includes('cuánt') || lastBotMsg.includes('cuántos') ||
                                      lastBotMsg.includes('válido') || lastBotMsg.includes('cantidad')) && !isPhone;
 
-                    const isAddress = variableName.includes('dir') || variableName.includes('address') ||
-                                      lastBotMsg.includes('dirección') || lastBotMsg.includes('calle') ||
-                                      lastBotMsg.includes('barrio') || lastBotMsg.includes('ciudad') ||
-                                      lastBotMsg.includes('dónde') || lastBotMsg.includes('donde') ||
-                                      lastBotMsg.includes('entrega');
-
                     const isNote = lastBotMsg.includes('instrucción') || lastBotMsg.includes('instruccion') ||
                                    lastBotMsg.includes('nota') || lastBotMsg.includes('adicional') ||
                                    lastBotMsg.includes('observaci') || lastBotMsg.includes('especial') ||
-                                   lastBotMsg.includes('escribe "no"') || lastBotMsg.includes("escribe 'no'");
+                                   lastBotMsg.includes('si no, escribe') || lastBotMsg.includes('escribe "no"');
+
+                    const isAddress = !isNote && (variableName.includes('dir') || variableName.includes('address') ||
+                                      lastBotMsg.includes('direcci') || lastBotMsg.includes('calle') ||
+                                      lastBotMsg.includes('barrio') || lastBotMsg.includes('ciudad') ||
+                                      lastBotMsg.includes('domicilio') || lastBotMsg.includes('dónde') ||
+                                      lastBotMsg.includes('donde'));
 
                     if (isPhone) {
                         testInput = '3151234567';
@@ -872,16 +872,16 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
                         testInput = 'Daniel Woox';
                     } else if (variableName.includes('pax') || variableName.includes('asistentes')) {
                         testInput = '2';
+                    } else if (isNote) {
+                        testInput = 'no';
                     } else if (isAddress) {
                         testInput = 'Calle Falsa 123';
                     } else if (variableName.includes('email') || lastBotMsg.includes('correo')) {
                         testInput = 'test@woox.ai';
-                    } else if (isNote) {
-                        testInput = 'no';
                     } else if (lastBotMsg.includes('?') || lastBotMsg.includes('desea')) {
                         testInput = 'si';
                     } else {
-                        testInput = 'no'; // fallback seguro: evitar validaciones fallidas
+                        testInput = 'no'; // fallback seguro
                     }
                 } else if (waitingFor === 'ai_input') {
                     testInput = '¿Qué productos tienes disponibles?';
