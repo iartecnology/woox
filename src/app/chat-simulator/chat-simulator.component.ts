@@ -1219,7 +1219,7 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
               await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg, true);
             }
           } else {
-            this.messages.push({ sender: 'ai', text: 'Lo siento, no tengo una respuesta programada para eso. Escribe *volver* o *inicio* para reiniciar el flujo.', time: new Date(), tokens: 0, responseTimeMs: 0 });
+            this.messages.push({ sender: 'ai', text: 'No tengo una respuesta para eso.\n\nEscribe *0* para volver al inicio.', time: new Date(), tokens: 0, responseTimeMs: 0 });
           }
           this.cdr.detectChanges();
           this.scrollToBottom();

@@ -82,7 +82,7 @@ export class BotRuntimeService {
         const cleanedInput = userInput.trim().toLowerCase();
 
         // Comando global de reinicio (Volver / Inicio)
-        if (['volver', 'inicio', 'menu', 'menú', 'salir', 'reiniciar'].includes(cleanedInput)) {
+        if (['0', 'volver', 'inicio', 'menu', 'menú', 'salir', 'reiniciar'].includes(cleanedInput)) {
             const startNode = nodes.find((n: any) => n.type === 'start');
             if (startNode) {
                 const nextNodeId = this.getNextNodeId(flowData, startNode.id, 'output');
