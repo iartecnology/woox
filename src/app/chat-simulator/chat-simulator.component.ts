@@ -1223,17 +1223,7 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
         setTimeout(async () => {
           this.isTyping = false;
 
-          // Si el flujo ya terminó (nodo end o sesión completada), detener el copiloto
-          const isFlowDone = botResponse?.completed || 
-                             (botResponse && botResponse.messages.length === 0 && !botResponse.session?.waiting_for);
-
-          if (isFlowDone) {
-            this.isCopilotActive = false;
-            this.cdr.detectChanges();
-            this.scrollToBottom();
-            return;
-          }
-
+          // Siempre mostrar los mensajes primero, independientemente si el flujo terminó
           if (botResponse && botResponse.messages.length > 0) {
             for (const msg of botResponse.messages) {
               this.messages.push({ 
@@ -1246,11 +1236,26 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
               });
               await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg, true);
             }
-          } else {
-            this.messages.push({ sender: 'ai', text: 'No tengo una respuesta para eso.\n\nEscribe *0* para volver al inicio.', time: new Date(), tokens: 0, responseTimeMs: 0 });
           }
           this.cdr.detectChanges();
           this.scrollToBottom();
+
+          // Después de mostrar mensajes, verificar si el flujo terminó
+          const isFlowDone = botResponse?.completed || 
+                             (botResponse && botResponse.messages.length === 0 && !botResponse.session?.waiting_for);
+
+          if (isFlowDone) {
+            this.isCopilotActive = false;
+            this.cdr.detectChanges();
+            return;
+          }
+
+          // Si hay messages pero no está terminado, mostrar el fallback si no hubo respuesta
+          if (botResponse && botResponse.messages.length === 0) {
+            this.messages.push({ sender: 'ai', text: 'No tengo una respuesta para eso.\n\nEscribe *0* para volver al inicio.', time: new Date(), tokens: 0, responseTimeMs: 0 });
+            this.cdr.detectChanges();
+            this.scrollToBottom();
+          }
 
           // RECURSIÓN DEL COPILOTO: Continuar si está activo
           if (this.isCopilotActive && botResponse) {
