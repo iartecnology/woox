@@ -419,9 +419,9 @@ export class BotRuntimeService {
             messages.push('⚠️ Alerta: Se detectó un posible bucle infinito en el flujo. La ejecución se detuvo por seguridad.');
         }
 
-        // Si el bucle termina, actualizar estado final
+        // Si el bucle termina sin nodo 'end' explícito, marcar como completado igualmente
         await this.updateSession(session, session.current_node_id, null, 'completed');
-        return { messages, session, executionPath };
+        return { messages, session, executionPath, completed: messages.length === 0 };
     }
 
     private resolveVariables(template: string, variables: any = {}, flow: any): string {

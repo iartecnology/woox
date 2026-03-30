@@ -1212,8 +1212,11 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
         setTimeout(async () => {
           this.isTyping = false;
 
-          // Si el flujo ya terminó (nodo end), detener el copiloto y no mostrar error
-          if (botResponse?.completed) {
+          // Si el flujo ya terminó (nodo end o sesión completada), detener el copiloto
+          const isFlowDone = botResponse?.completed || 
+                             (botResponse && botResponse.messages.length === 0 && !botResponse.session?.waiting_for);
+
+          if (isFlowDone) {
             this.isCopilotActive = false;
             this.cdr.detectChanges();
             this.scrollToBottom();
