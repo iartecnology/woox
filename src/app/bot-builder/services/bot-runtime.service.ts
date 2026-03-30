@@ -79,6 +79,20 @@ export class BotRuntimeService {
         flow: any
     ): Promise<BotResponse> {
         const nodes = flowData.nodes || [];
+        const cleanedInput = userInput.trim().toLowerCase();
+
+        // Comando global de reinicio (Volver / Inicio)
+        if (['volver', 'inicio', 'menu', 'menú', 'salir', 'reiniciar'].includes(cleanedInput)) {
+            const startNode = nodes.find((n: any) => n.type === 'start');
+            if (startNode) {
+                const nextNodeId = this.getNextNodeId(flowData, startNode.id, 'output');
+                const nextNode = nodes.find((n: any) => n.id === nextNodeId);
+                if (nextNode) {
+                    session.variables = {}; // Reiniciar variables si es necesario
+                    return await this.advanceAndCollect(flowData, nextNode, session, flow);
+                }
+            }
+        }
 
         if (currentNode.type === 'question') {
             // Validar y guardar variable

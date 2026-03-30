@@ -797,7 +797,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
         }
     }
 
-    this.copilotTimer = setTimeout(() => {
+    this.copilotTimer = setTimeout(async () => {
         if (!this.isCopilotActive) return;
 
         let testInput = '';
@@ -814,47 +814,62 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
 
         // 2. FALLBACK A IA REACTIVA (Fase 3/4)
         if (!testInput) {
-            if (waitingFor === 'menu_selection' || waitingFor === 'menu') {
-                const options = lastResponse?.options;
-                if (options && options.length > 0) {
-                    const choice = Math.floor(Math.random() * options.length) + 1;
-                    testInput = choice.toString();
-                } else {
-                    testInput = '1';
+            // Intentar usar IA si hay API Key, de lo contrario usar hardocoded
+            if (this.aiApiKey && this.copilotMode === 'reactive') {
+                try {
+                    this.isTyping = true;
+                    // Generar respuesta del usuario usando al LLM en rol de cliente
+                    const lastBotMsg = lastResponse?.messages?.length > 0 ? lastResponse.messages[lastResponse.messages.length - 1] : '';
+                    testInput = await this.generateCopilotAIResponse(lastBotMsg, waitingFor, session?.waiting_for_variable);
+                    this.isTyping = false;
+                } catch (e) {
+                    console.error('Error generando IA para copiloto:', e);
+                    this.isTyping = false;
+                    testInput = 'Respuesta de emergencia';
                 }
-            } else if (waitingFor === 'input' || waitingFor === 'variable_input') {
-                const lastBotMsg = lastResponse?.messages?.length > 0 ? lastResponse.messages[lastResponse.messages.length - 1].toLowerCase() : '';
-                const variableName = session?.waiting_for_variable?.toLowerCase() || '';
-                
-                const isPhone = variableName.includes('tel') || variableName.includes('phone') || variableName.includes('cel') ||
-                                lastBotMsg.includes('celular') || lastBotMsg.includes('teléfon') || lastBotMsg.includes('telefon') ||
-                                lastBotMsg.includes('número') || lastBotMsg.includes('numero');
+            } else {
+                if (waitingFor === 'menu_selection' || waitingFor === 'menu') {
+                    const options = lastResponse?.options;
+                    if (options && options.length > 0) {
+                        const choice = Math.floor(Math.random() * options.length) + 1;
+                        testInput = choice.toString();
+                    } else {
+                        testInput = '1';
+                    }
+                } else if (waitingFor === 'input' || waitingFor === 'variable_input') {
+                    const lastBotMsg = lastResponse?.messages?.length > 0 ? lastResponse.messages[lastResponse.messages.length - 1].toLowerCase() : '';
+                    const variableName = session?.waiting_for_variable?.toLowerCase() || '';
+                    
+                    const isPhone = variableName.includes('tel') || variableName.includes('phone') || variableName.includes('cel') ||
+                                    lastBotMsg.includes('celular') || lastBotMsg.includes('teléfon') || lastBotMsg.includes('telefon') ||
+                                    lastBotMsg.includes('número') || lastBotMsg.includes('numero');
 
-                const isNumeric = (variableName.includes('cant') || variableName.includes('unid') || 
-                                 lastBotMsg.includes('cuánt') || lastBotMsg.includes('cuántos') ||
-                                 lastBotMsg.includes('válido') || lastBotMsg.includes('cantidad')) && !isPhone;
+                    const isNumeric = (variableName.includes('cant') || variableName.includes('unid') || 
+                                     lastBotMsg.includes('cuánt') || lastBotMsg.includes('cuántos') ||
+                                     lastBotMsg.includes('válido') || lastBotMsg.includes('cantidad')) && !isPhone;
 
-                if (isPhone) {
-                    testInput = '3151234567';
-                } else if (isNumeric) {
-                    testInput = '1';
-                } else if (variableName.includes('nombre') || lastBotMsg.includes('nombre')) {
-                    testInput = 'Daniel Woox';
-                } else if (variableName.includes('pax') || variableName.includes('asistentes')) {
-                    testInput = '2';
-                } else if (variableName.includes('direccion') || lastBotMsg.includes('donde') || lastBotMsg.includes('dirección')) {
-                    testInput = 'Calle Falsa 123';
-                } else if (variableName.includes('email') || lastBotMsg.includes('correo')) {
-                    testInput = 'test@woox.ai';
-                } else if (lastBotMsg.includes('instrucción') || lastBotMsg.includes('instruccion')) {
-                    testInput = 'no';
-                } else if (lastBotMsg.includes('?') || lastBotMsg.includes('desea')) {
-                    testInput = 'si';
-                } else {
-                    testInput = 'Respuesta genérica de prueba';
+                    if (isPhone) {
+                        testInput = '3151234567';
+                    } else if (isNumeric) {
+                        testInput = '1';
+                    } else if (variableName.includes('nombre') || lastBotMsg.includes('nombre')) {
+                        testInput = 'Daniel Woox';
+                    } else if (variableName.includes('pax') || variableName.includes('asistentes')) {
+                        testInput = '2';
+                    } else if (variableName.includes('direccion') || lastBotMsg.includes('donde') || lastBotMsg.includes('dirección')) {
+                        testInput = 'Calle Falsa 123';
+                    } else if (variableName.includes('email') || lastBotMsg.includes('correo')) {
+                        testInput = 'test@woox.ai';
+                    } else if (lastBotMsg.includes('instrucción') || lastBotMsg.includes('instruccion')) {
+                        testInput = 'no';
+                    } else if (lastBotMsg.includes('?') || lastBotMsg.includes('desea')) {
+                        testInput = 'si';
+                    } else {
+                        testInput = 'Respuesta genérica de prueba';
+                    }
+                } else if (waitingFor === 'ai_input') {
+                    testInput = '¿Qué productos tienes disponibles?';
                 }
-            } else if (waitingFor === 'ai_input') {
-                testInput = '¿Qué productos tienes disponibles?';
             }
         }
         
@@ -870,6 +885,107 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
             this.sendMessage();
         }
     }, this.copilotSpeed); 
+  }
+
+  // NUEVO: Función para generar respuestas del Copiloto (Cliente Misterioso)
+  private async generateCopilotAIResponse(lastBotMsg: string, waitingFor: string, expectedVar?: string): Promise<string> {
+      const modelName = (this.aiModel || 'gemini-1.5-flash').trim().replace(/\s+/g, '-');
+      const isOpenAI = modelName.toLowerCase().startsWith('gpt-') || modelName.toLowerCase().startsWith('o1-') || modelName.toLowerCase().startsWith('o3-');
+
+      const systemPrompt = `Eres un cliente misterioso probando un chatbot de WhatsApp de una tienda/restaurante.
+Tú NO eres el bot. Tú eres el HUMANO que escribe por WhatsApp.
+REGLAS ESTRICTAS:
+1. Responde de forma muy natural, corta y directa al último mensaje del bot (máximo 1 o 2 líneas).
+2. Si te piden un nombre, inventa uno simple (ej. Carlos, Laura).
+3. Si te piden un teléfono o dirección, da datos falsos verosímiles.
+4. Si te dan un menú numérico (ej. "1. Ver Carta, 2. Hablar con humano"), responde enviando SOLO EL NÚMERO (ej. "1" o "2").
+5. Si no entiendes el flujo, reacciona como un humano real ("no entiendo", "quiero comprar").
+6. NUNCA menciones que eres una IA ni que estás probando el sistema.
+7. NUNCA escribas placeholders HTML o etiquetas especiales.
+Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Variable esperada: ${expectedVar})` : ''}
+
+Último mensaje del bot para que respondas: "${lastBotMsg}"`;
+
+      let apiUrl = '';
+      let requestBody: any = {};
+      let headers: any = { 'Content-Type': 'application/json' };
+
+      if (this.aiProvider === 'ollama' || this.aiProvider === 'lmstudio') {
+        headers['ngrok-skip-browser-warning'] = 'true';
+        if (this.aiApiKey) headers['Authorization'] = `Bearer ${this.aiApiKey}`;
+      }
+
+      const recentMessages = this.messages.slice(-6).map(m => `${m.sender === 'ai' ? 'Bot' : 'Tú'}: ${m.text}`).join('\n');
+
+      if (isOpenAI) {
+        apiUrl = 'https://api.openai.com/v1/chat/completions';
+        headers['Authorization'] = `Bearer ${this.aiApiKey}`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Historial reciente:\n${recentMessages}\n\nEscribe tu próxima respuesta como cliente:` }
+          ],
+          temperature: 0.8,
+          max_tokens: 100
+        };
+      } else if (this.aiProvider === 'ollama') {
+        apiUrl = `${this.ollamaBaseUrl}/api/chat`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Escribe tu próxima respuesta como cliente. Historial:\n${recentMessages}` }
+          ],
+          stream: false,
+          options: { temperature: 0.8 }
+        };
+      } else if (this.aiProvider === 'lmstudio') {
+        let baseUrl = this.lmstudioBaseUrl.replace(/\/v1$/, '').replace(/\/api$/, '');
+        apiUrl = `${baseUrl}/api/v1/chat`;
+        requestBody = {
+          model: modelName,
+          system_prompt: systemPrompt,
+          input: `Historial:\n${recentMessages}\n\nEscribe tu próxima respuesta:`,
+          temperature: 0.8
+        };
+      } else {
+        // Google Gemini
+        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.aiApiKey}`;
+        const parts = [{ text: systemPrompt + `\n\nHistorial reciente:\n${recentMessages}\n\nEscribe tu próxima respuesta directa como el humano:` }];
+        requestBody = {
+          contents: [{ role: 'user', parts }],
+          generationConfig: { temperature: 0.8, maxOutputTokens: 100 }
+        };
+      }
+
+      try {
+        let response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(requestBody) });
+        if (!response.ok && apiUrl.includes('v1beta')) {
+           apiUrl = apiUrl.replace('v1beta', 'v1');
+           response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(requestBody) });
+        }
+        
+        if (!response.ok) return 'Necesito ayuda'; // Fallback pasivo
+
+        const data = await response.json();
+        let text = '';
+        if (isOpenAI) {
+           text = data.choices?.[0]?.message?.content || '';
+        } else if (this.aiProvider === 'lmstudio') {
+           text = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || '';
+        } else if (this.aiProvider === 'ollama') {
+           text = data.message?.content || '';
+        } else {
+           text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        }
+
+        const finalResponse = text.trim();
+        return finalResponse || 'Respuesta por defecto';
+      } catch (e) {
+        console.error('Error in Copilot API:', e);
+        return 'Respuesta manual';
+      }
   }
 
   async restartSession() {
@@ -1103,7 +1219,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
               await this.supabaseService.saveMessage(this.dbConversationId!, 'ai', msg, true);
             }
           } else {
-            this.messages.push({ sender: 'ai', text: 'Lo siento, no tengo una respuesta programada para eso.', time: new Date(), tokens: 0, responseTimeMs: 0 });
+            this.messages.push({ sender: 'ai', text: 'Lo siento, no tengo una respuesta programada para eso. Escribe *volver* o *inicio* para reiniciar el flujo.', time: new Date(), tokens: 0, responseTimeMs: 0 });
           }
           this.cdr.detectChanges();
           this.scrollToBottom();
