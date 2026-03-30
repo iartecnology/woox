@@ -61,7 +61,26 @@ export class BotRuntimeService {
 
         // 4. Sesión existente → Procesar input según el nodo actual
         const currentNode = nodes.find((n: any) => n.id === session.current_node_id);
-        if (!currentNode) return { messages: ['⚠️ Error: Nodo no encontrado.'], session };
+        if (!currentNode) {
+            // El nodo guardado ya no existe en el flujo (flujo regenerado).
+            // Reiniciar la sesión desde el inicio automáticamente.
+            console.warn('[BotRuntime] Nodo no encontrado, reinicinado flujo...');
+            const startNode = nodes.find((n: any) => n.type === 'start');
+            if (startNode) {
+                const nextNodeId = this.getNextNodeId(flowData, startNode.id, 'output');
+                const nextNode = nodes.find((n: any) => n.id === nextNodeId);
+                session.variables = {};
+                const response = await this.advanceAndCollect(flowData, nextNode, session, flow);
+                return {
+                    messages: ['🔄 El flujo fue actualizado. Reiniciando...', ...response.messages],
+                    session: response.session,
+                    totalNodes: nodes.length,
+                    allNodes: nodes.map((n: any) => ({ id: n.id, label: n.data?.label || n.type, type: n.type })),
+                    executionPath: response.executionPath
+                };
+            }
+            return { messages: ['⚠️ Error: Flujo no configurado correctamente.'], session };
+        }
 
         const response = await this.handleUserInput(flowData, currentNode, userMessage, session, flow);
         if (response) {
