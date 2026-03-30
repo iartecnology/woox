@@ -853,24 +853,35 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
                                      lastBotMsg.includes('cuánt') || lastBotMsg.includes('cuántos') ||
                                      lastBotMsg.includes('válido') || lastBotMsg.includes('cantidad')) && !isPhone;
 
+                    const isAddress = variableName.includes('dir') || variableName.includes('address') ||
+                                      lastBotMsg.includes('dirección') || lastBotMsg.includes('calle') ||
+                                      lastBotMsg.includes('barrio') || lastBotMsg.includes('ciudad') ||
+                                      lastBotMsg.includes('dónde') || lastBotMsg.includes('donde') ||
+                                      lastBotMsg.includes('entrega');
+
+                    const isNote = lastBotMsg.includes('instrucción') || lastBotMsg.includes('instruccion') ||
+                                   lastBotMsg.includes('nota') || lastBotMsg.includes('adicional') ||
+                                   lastBotMsg.includes('observaci') || lastBotMsg.includes('especial') ||
+                                   lastBotMsg.includes('escribe "no"') || lastBotMsg.includes("escribe 'no'");
+
                     if (isPhone) {
                         testInput = '3151234567';
                     } else if (isNumeric) {
                         testInput = '1';
-                    } else if (variableName.includes('nombre') || lastBotMsg.includes('nombre')) {
+                    } else if (variableName.includes('nombre') || lastBotMsg.includes('nombre') || lastBotMsg.includes('llamas') || lastBotMsg.includes('apellid')) {
                         testInput = 'Daniel Woox';
                     } else if (variableName.includes('pax') || variableName.includes('asistentes')) {
                         testInput = '2';
-                    } else if (variableName.includes('direccion') || lastBotMsg.includes('donde') || lastBotMsg.includes('dirección')) {
+                    } else if (isAddress) {
                         testInput = 'Calle Falsa 123';
                     } else if (variableName.includes('email') || lastBotMsg.includes('correo')) {
                         testInput = 'test@woox.ai';
-                    } else if (lastBotMsg.includes('instrucción') || lastBotMsg.includes('instruccion')) {
+                    } else if (isNote) {
                         testInput = 'no';
                     } else if (lastBotMsg.includes('?') || lastBotMsg.includes('desea')) {
                         testInput = 'si';
                     } else {
-                        testInput = 'Respuesta genérica de prueba';
+                        testInput = 'no'; // fallback seguro: evitar validaciones fallidas
                     }
                 } else if (waitingFor === 'ai_input') {
                     testInput = '¿Qué productos tienes disponibles?';
