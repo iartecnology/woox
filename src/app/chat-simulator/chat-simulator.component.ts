@@ -801,9 +801,15 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
         if (!this.isCopilotActive) return;
 
         let testInput = '';
+        const lastBotMsg = lastResponse?.messages?.length > 0 ? lastResponse.messages[lastResponse.messages.length - 1] : '';
+
+        // 0. ESCAPE DE EMERGENCIA
+        if (lastBotMsg && lastBotMsg.includes('volver al inicio')) {
+            testInput = '0';
+        }
 
         // 1. INTENTAR SEGUIR PLAN (Escenario Fase 5)
-        if (this.copilotMode === 'purchase' && this.plannedScenario.length > 0) {
+        if (!testInput && this.copilotMode === 'purchase' && this.plannedScenario.length > 0) {
             // Buscar si el nodo actual está en nuestro plan
             const step = this.plannedScenario.find(s => s.nodeId === currentNodeId);
             if (step) {
@@ -819,13 +825,12 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
                 try {
                     this.isTyping = true;
                     // Generar respuesta del usuario usando al LLM en rol de cliente
-                    const lastBotMsg = lastResponse?.messages?.length > 0 ? lastResponse.messages[lastResponse.messages.length - 1] : '';
                     testInput = await this.generateCopilotAIResponse(lastBotMsg, waitingFor, session?.waiting_for_variable);
                     this.isTyping = false;
                 } catch (e) {
                     console.error('Error generando IA para copiloto:', e);
                     this.isTyping = false;
-                    testInput = 'Respuesta de emergencia';
+                    testInput = '0';
                 }
             } else {
                 if (waitingFor === 'menu_selection' || waitingFor === 'menu') {
