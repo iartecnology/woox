@@ -344,6 +344,7 @@ export class SuperAdminComponent implements OnInit {
             localStorage.removeItem('merchant_slug');
             localStorage.removeItem('merchant_industry_type');
         }
+        this.mobileService.setHeader('Panel Admin', false);
         await this.loadInitialData();
     }
 

@@ -140,7 +140,7 @@
       <p style="font-weight: 800; color: #6d28d9; letter-spacing: 0.5px;">Cargando conversación...</p>
     </div>
     <ng-container *ngIf="selectedConversation; else noChat">
-      <header class="chat-banner">
+      <header class="chat-banner" *ngIf="!isMobile()">
         <div class="customer-info">
           <div class="customer-avatar">
             {{ selectedConversation.customer_name_initial || '?' }}

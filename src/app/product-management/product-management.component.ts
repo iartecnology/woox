@@ -5,6 +5,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CatalogService, Category, Product } from '../catalog.service';
 import { SupabaseService } from '../supabase.service';
 import { NotificationService } from '../notification.service';
+import { MobileService } from '../mobile.service';
 
 @Component({
     selector: 'app-product-management',
@@ -15,6 +16,7 @@ import { NotificationService } from '../notification.service';
 })
 export class ProductManagementComponent implements OnInit {
     private catalogService = inject(CatalogService);
+    public mobileService = inject(MobileService);
     private supabaseService = inject(SupabaseService);
     private route = inject(ActivatedRoute);
     private notificationService = inject(NotificationService);
@@ -46,6 +48,7 @@ export class ProductManagementComponent implements OnInit {
     isSyncing: boolean = false;
 
     async ngOnInit() {
+        this.mobileService.setHeader('Catálogo', false);
         this.route.queryParams.subscribe(async params => {
             const rawId = params['merchantId'] || localStorage.getItem('active_merchant_id') || '';
 
