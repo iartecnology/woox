@@ -645,7 +645,6 @@ REGLAS IMPORTANTES:
     this.cdr.detectChanges();
   }
 
-
   private async generateProductFlow() {
     const { data: categories } = await this.supabase.getCategories(this.merchantId);
     if (!categories || categories.length === 0) {
@@ -654,21 +653,20 @@ REGLAS IMPORTANTES:
     }
 
     const { data: allProducts } = await this.supabase.getProducts(this.merchantId);
+    const products = allProducts || [];
 
     let x = 600;
     let y = 100;
 
     // 1. Inicio
-    const startNode = this.createSpecificNode('start', x, y, { label: 'Bienvenida', message: '¡Hola! Bienvenido a {{merchantName}}. 👋\n¿En qué podemos ayudarte hoy?' });
+    const startNode = this.createSpecificNode('start', x, y, { 
+      label: 'Bienvenida', 
+      message: '¡Hola! Bienvenido a {{merchantName}}. 👋\n¿En qué podemos ayudarte hoy?' 
+    });
     y += 180;
 
-    // 2. Menú de Categorías (Centro del flujo)
-    const catOptions = categories.slice(0, 10).map(cat => ({ id: `cat_${cat.id}`, text: cat.name, value: cat.id }));
-    const menuNode = this.createSpecificNode('menu', x, y, { label: 'Categorías', message: 'Contamos con las siguientes categorías. Por favor elige una:', options: catOptions });
-    this.connectNodes(startNode.id, 'output', menuNode.id, 'input');
-
-    // 3. Nodo de decisión central (Neutral)
-    const decisionNode = this.createSpecificNode('menu', x + 400, y + 200, { 
+    // 2. Nodo de decisión central (Para después de añadir al carrito)
+    const decisionNode = this.createSpecificNode('menu', x + 1200, y + 200, { 
       label: '¿Qué sigue?', 
       message: '¿Cómo deseas continuar con tu pedido?',
       options: [
@@ -679,91 +677,131 @@ REGLAS IMPORTANTES:
       ]
     });
 
-    // Nodo intermedio: Confirmación de adición (Acción real)
-    const addedConfirmNode = this.createSpecificNode('action', x + 200, y + 350, {
+    // Nodo intermedio: Confirmación de adición
+    const addedConfirmNode = this.createSpecificNode('action', x + 1000, y + 350, {
       label: 'Añadir al carrito',
       actionType: 'add_to_cart',
       params: { notes: '{{notas_preparacion}}' }
     });
     this.connectNodes(addedConfirmNode.id, 'output', decisionNode.id, 'input');
     
-    // Nodo para Ver Pedido (Resumen real)
-    const viewOrderNode = this.createSpecificNode('message', x + 600, y + 50, {
+    // Nodo para Ver Pedido
+    const viewOrderNode = this.createSpecificNode('message', x + 1400, y + 50, {
       label: 'Resumen',
       message: '🛒 Tu Pedido Actual:\n{{cartSummary}}\n\n¿Qué deseas hacer ahora?'
     });
-
-    // Conexiones de decisión
-    this.connectNodes(decisionNode.id, 'opt_continue', menuNode.id, 'input');
     this.connectNodes(decisionNode.id, 'opt_view', viewOrderNode.id, 'input');
     this.connectNodes(viewOrderNode.id, 'output', decisionNode.id, 'input');
 
     // Acción para vaciar carrito
-    const emptyActionNode = this.createSpecificNode('action', x + 600, y + 200, {
+    const emptyActionNode = this.createSpecificNode('action', x + 1400, y + 200, {
       label: 'Vaciar Carrito',
       actionType: 'empty_cart'
     });
     this.connectNodes(decisionNode.id, 'opt_empty', emptyActionNode.id, 'input');
-    this.connectNodes(emptyActionNode.id, 'output', menuNode.id, 'input');
 
-    // 4. Captura de Información del Usuario
-    const nameNode = this.createSpecificNode('question', x + 800, y + 300, { label: 'Nombre', message: '¡Perfecto! Para agendar tu pedido, ¿cuál es tu nombre completo?', variable: 'customer_name' });
-    const phoneNode = this.createSpecificNode('question', x + 800, y + 450, { label: 'Teléfono', message: 'Gracias {{customer_name}}, ¿a qué número telefónico podemos contactarte?', variable: 'phone', validation: 'phone' });
-    const addressNode = this.createSpecificNode('question', x + 800, y + 600, { label: 'Dirección', message: 'Por último, ¿cuál es la dirección de entrega?', variable: 'direccion_entrega' });
-    const deliveryNoteNode = this.createSpecificNode('question', x + 800, y + 750, { label: 'Instrucción Entrega', message: '¿Alguna instrucción adicional para la entrega o para nosotros? (Si no, escribe "no")', variable: 'notas_entrega' });
+    // 3. Nodos de Captura de Datos Finales
+    const nameNode = this.createSpecificNode('question', x + 1600, y + 300, { label: 'Nombre', message: '¡Perfecto! Para agendar tu pedido, ¿cuál es tu nombre completo?', variable: 'customer_name' });
+    const phoneNode = this.createSpecificNode('question', x + 1600, y + 450, { label: 'Teléfono', message: 'Gracias {{customer_name}}, ¿a qué número telefónico podemos contactarte?', variable: 'phone', validation: 'phone' });
+    const addressNode = this.createSpecificNode('question', x + 1600, y + 600, { label: 'Dirección', message: 'Por último, ¿cuál es la dirección de entrega?', variable: 'direccion_entrega' });
+    const deliveryNoteNode = this.createSpecificNode('question', x + 1600, y + 750, { label: 'Instrucción Entrega', message: '¿Alguna instrucción adicional para la entrega o para nosotros? (Si no, escribe "no")', variable: 'notas_entrega' });
     
     this.connectNodes(decisionNode.id, 'opt_finish', nameNode.id, 'input');
     this.connectNodes(nameNode.id, 'output', phoneNode.id, 'input');
     this.connectNodes(phoneNode.id, 'output', addressNode.id, 'input');
     this.connectNodes(addressNode.id, 'output', deliveryNoteNode.id, 'input');
     
-    // 5. Acción Final: Registrar Pedido
-    const actionNode = this.createSpecificNode('action', x + 800, y + 900, { label: 'Registrar Pedido', actionType: 'register_order' });
-    this.connectNodes(deliveryNoteNode.id, 'output', actionNode.id, 'input');
+    const registerOrderNode = this.createSpecificNode('action', x + 1600, y + 900, { label: 'Registrar Pedido', actionType: 'register_order' });
+    this.connectNodes(deliveryNoteNode.id, 'output', registerOrderNode.id, 'input');
 
-    const endNode = this.createSpecificNode('end', x + 800, y + 1050, { 
+    const endNode = this.createSpecificNode('end', x + 1600, y + 1050, { 
       label: 'Despedida', 
       message: '¡Listo! Tu pedido {{orderNumber}} ha sido registrado con éxito. 🚀\n\nResumen final:\n{{cartSummary}}\nEntrega en: {{direccion_entrega}}\nNotas: {{notas_entrega}}\n\n¡Gracias por tu compra!' 
     });
-    this.connectNodes(actionNode.id, 'output', endNode.id, 'input');
+    this.connectNodes(registerOrderNode.id, 'output', endNode.id, 'input');
 
-    // 6. Generar menús de productos por categoría
-    categories.slice(0, 6).forEach((cat, index) => {
-      const products = (allProducts || []).filter(p => p.category_id === cat.id).slice(0, 8);
-      if (products.length > 0) {
-        const prodX = x + (index % 2 === 0 ? -400 : -800);
-        const prodY = y + 250 + (index * 150);
+    // 4. Generación Jerárquica de Menús
+    const buildCategoryMenu = (parentId: string | null = null, depth: number = 0): FlowNode | null => {
+      if (depth > 5) return null; // Seguridad contra recursión infinita
 
-        const prodOptions = products.map(p => ({ id: `prod_${p.id}`, text: `${p.name} ($${p.price})`, value: `${p.id}|${p.price}` }));
-        // Añadir opción de Volver
-        prodOptions.push({ id: `back_${cat.id}`, text: '⬅️ Volver al menú principal', value: 'back' });
+      const subCats = categories.filter(c => c.parent_id === parentId);
+      const catProducts = products.filter(p => p.category_id === (parentId || 'root')); 
+      
+      if (parentId === null && subCats.length === 0) return null;
 
-        const prodMenu = this.createSpecificNode('menu', prodX, prodY, { label: `Productos: ${cat.name}`, message: `Estos son nuestros productos en ${cat.name}:`, options: prodOptions });
-        
-        // Conectar categoría con su menú de productos
-        this.connectNodes(menuNode.id, `cat_${cat.id}`, prodMenu.id, 'input');
-        
-        // Conectar botón volver al menú principal
-        this.connectNodes(prodMenu.id, `back_${cat.id}`, menuNode.id, 'input');
-
-        // 7. Preguntar cantidad por cada producto
-        const qtyNode = this.createSpecificNode('question', prodX - 300, prodY + 100, { label: 'Cantidad', message: '¿Cuántas unidades deseas ordenar?', variable: 'cantidad_actual', validation: 'number' });
-        
-        products.forEach(p => {
-          this.connectNodes(prodMenu.id, `prod_${p.id}`, qtyNode.id, 'input');
-        });
-
-        // 8. Instrucciones especiales de preparación
-        const prepNoteNode = this.createSpecificNode('question', prodX - 600, prodY + 100, { label: 'Notas Especiales', message: '¿Alguna instrucción especial? (ej: Sin cebolla, extra queso). Si no, escribe "no"', variable: 'notas_preparacion' });
-        this.connectNodes(qtyNode.id, 'output', prepNoteNode.id, 'input');
-
-        // 9. Después de la nota, ir al nodo de confirmación y luego a la decisión
-        this.connectNodes(prepNoteNode.id, 'output', addedConfirmNode.id, 'input');
+      let label = 'Categorías Principales';
+      let message = 'Contamos con las siguientes categorías. Por favor elige una:';
+      
+      if (parentId) {
+        const cat = categories.find(c => c.id === parentId);
+        label = `Menú: ${cat?.name || 'Subcategoría'}`;
+        message = `Estás en ${cat?.name}. Elige una opción:`;
       }
-    });
 
-    // Organizar linealmente de forma automática
-    setTimeout(() => this.organizeFlow(), 100);
+      const options: any[] = [];
+      
+      subCats.slice(0, 8).forEach(sc => {
+        options.push({ id: `cat_${sc.id}`, text: `📁 ${sc.name}`, value: sc.id });
+      });
+
+      catProducts.slice(0, 8).forEach(p => {
+        options.push({ id: `prod_${p.id}`, text: `${p.name} ($${p.price})`, value: `${p.id}|${p.price}` });
+      });
+
+      if (parentId) {
+        options.push({ id: `back_${parentId}`, text: '⬅️ Volver', value: 'back' });
+      }
+
+      const menuNode = this.createSpecificNode('menu', x + (depth * 300), y + (parentId ? 200 : 0), { 
+        label, 
+        message, 
+        options 
+      });
+
+      subCats.slice(0, 8).forEach(sc => {
+        const subMenu = buildCategoryMenu(sc.id, depth + 1);
+        if (subMenu) {
+          this.connectNodes(menuNode.id, `cat_${sc.id}`, subMenu.id, 'input');
+          const backConn = this.botFlow.flow_data.connections.find(c => c.from === subMenu.id && c.fromPort === `back_${sc.id}`);
+          if (backConn) backConn.to = menuNode.id;
+          else {
+             this.connectNodes(subMenu.id, `back_${sc.id}`, menuNode.id, 'input');
+          }
+        }
+      });
+
+      if (catProducts.length > 0) {
+        const qtyNode = this.createSpecificNode('question', menuNode.position.x + 250, menuNode.position.y + 150, { 
+          label: 'Cantidad', 
+          message: '¿Cuántas unidades deseas ordenar?', 
+          variable: 'cantidad_actual', 
+          validation: 'number' 
+        });
+        const prepNoteNode = this.createSpecificNode('question', qtyNode.position.x + 250, qtyNode.position.y, { 
+          label: 'Notas Especiales', 
+          message: '¿Alguna instrucción especial? (ej: Sin cebolla, extra queso). Si no, escribe "no"', 
+          variable: 'notas_preparacion' 
+        });
+        
+        this.connectNodes(qtyNode.id, 'output', prepNoteNode.id, 'input');
+        this.connectNodes(prepNoteNode.id, 'output', addedConfirmNode.id, 'input');
+
+        catProducts.slice(0, 8).forEach(p => {
+          this.connectNodes(menuNode.id, `prod_${p.id}`, qtyNode.id, 'input');
+        });
+      }
+
+      return menuNode;
+    };
+
+    const rootMenu = buildCategoryMenu(null, 0);
+    if (rootMenu) {
+      this.connectNodes(startNode.id, 'output', rootMenu.id, 'input');
+      this.connectNodes(decisionNode.id, 'opt_continue', rootMenu.id, 'input');
+      this.connectNodes(emptyActionNode.id, 'output', rootMenu.id, 'input');
+    }
+
+    setTimeout(() => this.organizeFlow(), 200);
   }
 
   private async generateServiceFlow() {

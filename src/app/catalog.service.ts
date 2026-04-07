@@ -5,6 +5,7 @@ export interface Category {
     id: string;
     merchant_id: string;
     name: string;
+    parent_id?: string | null;
 }
 
 export interface Product {
@@ -52,18 +53,43 @@ export class CatalogService {
             return 'No hay productos cargados en el menú aún.';
         }
 
-        let context = 'Menú de Productos:\n';
-        categories.forEach(cat => {
-            const catProducts = products.filter(p => p.category_id === cat.id);
-            if (catProducts.length > 0) {
-                context += `\nCategoría: ${cat.name}\n`;
-                catProducts.forEach(p => {
-                    const status = p.is_available ? '[DISPONIBLE]' : '[AGOTADO]';
-                    const desc = p.description ? `- ${p.description}` : '';
-                    context += `- ${p.name} ($${p.price.toLocaleString()}) ${status} ${desc}\n`;
-                });
-            }
-        });
+        let context = 'Menú de Productos (Estructura Jerárquica):\n';
+
+        const buildMenuContext = (parentId: string | null = null, indent: string = '') => {
+            const subCats = categories.filter(c => c.parent_id === parentId);
+            const catProducts = products.filter(p => p.category_id === (parentId || 'root'));
+
+            subCats.forEach(cat => {
+                const subProducts = products.filter(p => p.category_id === cat.id);
+                const hasSubCats = categories.some(c => c.parent_id === cat.id);
+                
+                if (subProducts.length > 0 || hasSubCats) {
+                    context += `\n${indent}📁 Categoría: ${cat.name}\n`;
+                    
+                    // Listar productos de esta categoría
+                    subProducts.forEach(p => {
+                        const status = p.is_available ? '[DISPONIBLE]' : '[AGOTADO]';
+                        const desc = p.description ? `- ${p.description}` : '';
+                        context += `${indent}  - ${p.name} ($${p.price.toLocaleString()}) ${status} ${desc}\n`;
+                    });
+
+                    // Llamada recursiva para subcategorías
+                    buildMenuContext(cat.id, indent + '  ');
+                }
+            });
+        };
+
+        buildMenuContext(null);
+
+        // Añadir productos huérfanos (si los hay)
+        const orphanProducts = products.filter(p => !p.category_id || p.category_id === 'root');
+        if (orphanProducts.length > 0) {
+            context += '\nOtros Productos:\n';
+            orphanProducts.forEach(p => {
+                const status = p.is_available ? '[DISPONIBLE]' : '[AGOTADO]';
+                context += `- ${p.name} ($${p.price.toLocaleString()}) ${status}\n`;
+            });
+        }
 
         return context;
     }

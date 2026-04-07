@@ -9,8 +9,11 @@
                 🌍 Todas las Categorías
             </li>
             <li *ngFor="let cat of filteredCategories" [class.active]="selectedCategoryId === cat.id"
-                (click)="selectCategory(cat.id)" class="category-item-li">
-                <span class="category-name">{{ cat.name }}</span>
+                (click)="selectCategory(cat.id)" class="category-item-li"
+                [style.padding-left.px]="cat.parent_id ? 24 : 12">
+                <span class="category-name">
+                    {{ cat.parent_id ? '↳ ' : '' }}{{ cat.name }}
+                </span>
                 <button class="delete-cat-btn" (click)="requestDeleteCategory(cat, $event)" title="Eliminar categoría">🗑️</button>
             </li>
         </ul>
@@ -175,6 +178,14 @@
         <div class="form-group">
             <label>Nombre de la Categoría</label>
             <input type="text" [(ngModel)]="newCategoryName" placeholder="Ej: Pizzas, Postres...">
+        </div>
+        <div class="form-group">
+            <label>Categoría Padre (Opcional)</label>
+            <select [(ngModel)]="newCategoryParentId">
+                <option value="">-- Ninguna (Categoría Principal) --</option>
+                <option *ngFor="let cat of filteredCategories" [value]="cat.id">{{ cat.name }}</option>
+            </select>
+            <p style="font-size: 0.7rem; color: #64748b; margin-top: 4px;">Las subcategorías se mostrarán dentro de su padre en el menú del bot.</p>
         </div>
         <div class="modal-actions">
             <button class="cancel-btn" (click)="showCategoryModal = false">Cancelar</button>

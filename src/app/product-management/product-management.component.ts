@@ -45,6 +45,7 @@ export class ProductManagementComponent implements OnInit {
     };
 
     newCategoryName: string = '';
+    newCategoryParentId: string = '';
     isSyncing: boolean = false;
 
     async ngOnInit() {
@@ -231,6 +232,7 @@ export class ProductManagementComponent implements OnInit {
 
     openCategoryModal() {
         this.newCategoryName = '';
+        this.newCategoryParentId = '';
         this.showCategoryModal = true;
     }
 
@@ -243,7 +245,8 @@ export class ProductManagementComponent implements OnInit {
         try {
             const { error } = await this.supabaseService.saveCategory({
                 merchant_id: this.merchantId,
-                name: this.newCategoryName.trim()
+                name: this.newCategoryName.trim(),
+                parent_id: this.newCategoryParentId || null
             });
 
             if (error) throw error;

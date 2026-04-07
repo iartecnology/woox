@@ -242,30 +242,54 @@ async function executeAgentTool(
             const queryRaw = (toolArgs?.query || '').toLowerCase().trim();
             const query = queryRaw.endsWith('s') ? queryRaw.slice(0, -1) : queryRaw; // Manejar plurales básicos
             
-            // 1. Buscar categorías que coincidan
-            const { data: cats } = await supabase.from('categories').select('id, name').eq('merchant_id', merchantId).ilike('name', `%${query}%`);
-            const catIds = (cats || []).map((c: any) => c.id);
+            // 1. Buscar categorías que coincidan (incluyendo subcategorías)
+            const { data: cats } = await supabase.from('categories')
+                .select('id, name, parent_id')
+                .eq('merchant_id', merchantId)
+                .ilike('name', `%${query}%`);
+            
+            let allCatIds = (cats || []).map((c: any) => c.id);
+            
+            // Si encontramos categorías, ver si alguna es padre para incluir sus hijos
+            if (allCatIds.length > 0) {
+                const { data: subCats } = await supabase.from('categories')
+                    .select('id')
+                    .in('parent_id', allCatIds);
+                if (subCats && subCats.length > 0) {
+                    allCatIds = [...allCatIds, ...subCats.map((sc: any) => sc.id)];
+                }
+            }
 
-            // 2. Buscar productos (Por nombre, descripción o categoría)
+            // 2. Buscar productos (Por nombre, descripción o categoría/subcategoría)
             let q = supabase.from('products').select('name, price, description, stock').eq('merchant_id', merchantId).gt('stock', 0);
             
-            if (catIds.length > 0) {
-                q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%,category_id.in.(${catIds.join(',')})`);
+            if (allCatIds.length > 0) {
+                q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%,category_id.in.(${allCatIds.join(',')})`);
             } else {
                 q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
             }
 
-            const { data: prods } = await q.limit(6);
+            const { data: prods } = await q.limit(10);
 
             if (!prods || prods.length === 0) {
-                // Sugerencia: si no hay nada, mostrar los primeros 3
+                // Si no hay productos, ver si hay subcategorías para sugerir
+                if (cats && cats.length > 0) {
+                    const { data: listSub } = await supabase.from('categories').select('name').in('parent_id', cats.map((c: any) => c.id));
+                    if (listSub && listSub.length > 0) {
+                        return `En la categoría "${cats[0].name}" tenemos estas subcategorías:\n${listSub.map((s: any) => `• ${s.name}`).join('\n')}\n\n¿Cuál te interesa?`;
+                    }
+                }
+                
+                // Sugerencia genérica: si no hay nada, mostrar los primeros 3
                 const { data: others } = await supabase.from('products').select('name, price').eq('merchant_id', merchantId).gt('stock', 0).limit(3);
                 if (others && others.length > 0) {
-                   return `No encontré productos exactos para "${queryRaw}", pero te sugiero estos:\n${others.map((p: any) => `• ${p.name} - $${p.price}`).join('\n')}`;
+                   return `No encontré productos exactos para "${queryRaw}", pero te sugiero estos destacados:\n${others.map((p: any) => `• ${p.name} - $${p.price}`).join('\n')}`;
                 }
-                return `No encontré productos que coincidan con "${queryRaw}". ¿Puedo probar con otro término?`;
+                return `No encontré productos que coincidan con "${queryRaw}". ¿Puedo intentar buscando otra cosa?`;
             }
-            return `Productos encontrados:\n${prods.map((p: any) => `• ${p.name} - $${p.price}${p.description ? ` (${p.description.substring(0, 40)})` : ''}`).join('\n')}`;
+            
+            const results = prods.map((p: any) => `• ${p.name} - $${p.price}${p.description ? ` (${p.description.substring(0, 40)})` : ''}`).join('\n');
+            return `He encontrado esto para ti:\n${results}${prods.length >= 10 ? '\n\n...y algunos más. ¿Buscas algo específico?' : ''}`;
         }
 
         case 'inventory_check': {
