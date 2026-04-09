@@ -1666,6 +1666,8 @@
                 <div class="form-row-inline">
                     <input type="text" [(ngModel)]="globalUserForm.full_name" placeholder="Nombre completo">
                     <input type="email" [(ngModel)]="globalUserForm.email" placeholder="Correo electrónico">
+                    <input type="password" [(ngModel)]="globalUserForm.password" 
+                        [placeholder]="editingUser ? 'Nueva contraseña (vacío para mantener)' : 'Contraseña'">
                     <select [(ngModel)]="globalUserForm.role">
                         <option value="superadmin">Super Admin</option>
                         <option value="merchant_admin">Admin de Comercio</option>

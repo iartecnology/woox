@@ -1058,7 +1058,7 @@ export class SuperAdminComponent implements OnInit {
 
         this.newUser = {
             ...user,
-            password: '', // No mostrar la contraseña actual
+            password: '', // Limpiar para edición
             team_id: currentTeamId
         };
         this.cdr.detectChanges();
@@ -1094,15 +1094,16 @@ export class SuperAdminComponent implements OnInit {
 
         if (!this.newUser.id) {
             // Es nuevo usuario
-            profileData.password = this.newUser.password;
+            profileData.password = this.newUser.password || 'password123';
         } else {
             // Es edición
             if (this.newUser.password) {
                 // Si el administrador escribió una nueva contraseña
                 profileData.password = this.newUser.password;
             } else {
-                // Si no escribió nada, mantenemos el password_plain si existe en el objeto original
-                profileData.password = this.newUser.password_plain || this.newUser.password;
+                // Si no escribió nada, NO enviamos el campo password para que no se sobrescriba
+                // Supabase upsert solo actualizará los campos presentes en el objeto
+                delete profileData.password;
             }
         }
 
@@ -2771,6 +2772,11 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
             return;
         }
 
+        if (!this.editingUser && !this.globalUserForm.password) {
+            this.notificationService.show('La contraseña es obligatoria para nuevos usuarios', 'error');
+            return;
+        }
+
         const userData: any = { ...this.globalUserForm };
 
         if (userData.role === 'superadmin') {
@@ -2779,6 +2785,10 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
 
         if (this.editingUser) {
             userData.id = this.editingUser.id;
+            // Si es edición y no hay nueva contraseña, quitar el campo para no sobrescribir
+            if (!userData.password) {
+                delete userData.password;
+            }
         }
 
         const { data, error } = await this.supabaseService.saveProfile(userData);
@@ -2800,7 +2810,7 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
         this.globalUserForm = {
             full_name: user.full_name,
             email: user.email,
-            password: user.password,
+            password: '', // Limpiar para que no se muestre el hash o valor anterior
             role: user.role,
             merchant_id: user.merchant_id,
             is_active: user.is_active
