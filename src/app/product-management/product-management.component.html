@@ -4,17 +4,27 @@
             <h3>Menú</h3>
             <button class="add-btn-small" (click)="openCategoryModal()">+</button>
         </div>
-        <ul class="category-list">
+        <ul class="category-list" cdkDropList (cdkDropListDropped)="onCategoryDrop($event)">
             <li [class.active]="selectedCategoryId === ''" (click)="selectCategory('')">
                 🌍 Todas las Categorías
             </li>
-            <li *ngFor="let cat of filteredCategories" [class.active]="selectedCategoryId === cat.id"
+            <li *ngFor="let cat of displayCategories" [class.active]="selectedCategoryId === cat.id"
+                [class.drop-target]="isDraggingProducts && selectedCategoryId !== cat.id"
                 (click)="selectCategory(cat.id)" class="category-item-li"
-                [style.padding-left.px]="cat.parent_id ? 24 : 12">
+                [style.padding-left.px]="cat.parent_id ? 24 : 12"
+                (dragover)="$event.preventDefault()"
+                (drop)="onDropToCategory(cat.id)"
+                cdkDrag>
+                <span class="drag-handle" cdkDragHandle title="Mover categoría">⠿</span>
                 <span class="category-name">
                     {{ cat.parent_id ? '↳ ' : '' }}{{ cat.name }}
                 </span>
-                <button class="delete-cat-btn" (click)="requestDeleteCategory(cat, $event)" title="Eliminar categoría">🗑️</button>
+                <div class="cat-action-btns">
+                    <button class="edit-cat-btn" (click)="openCategoryModal(cat); $event.stopPropagation()" title="Editar categoría">✏️</button>
+                    <button class="delete-cat-btn" (click)="requestDeleteCategory(cat, $event)" title="Eliminar categoría">🗑️</button>
+                </div>
+                <!-- Placeholder visual al arrastrar -->
+                <div *cdkDragPlaceholder class="drag-placeholder"></div>
             </li>
         </ul>
     </aside>
@@ -25,7 +35,7 @@
                 <div class="breadcrumb">
                     <a routerLink="/super-admin">Super Admin</a> / <span>Catálogo</span>
                 </div>
-                <h2>Catálogo de Productos</h2>
+                <h2>Catálogo: {{ selectedCategoryName }}</h2>
                 <p>Gestiona los productos disponibles para esta empresa.</p>
             </div>
             <div class="header-actions">
@@ -33,6 +43,13 @@
                     <span *ngIf="!isSyncing">🔄 Sincronizar WooCommerce</span>
                     <span *ngIf="isSyncing">⌛ Sincronizando...</span>
                 </button>
+                <div class="excel-actions">
+                    <button class="import-excel-btn" (click)="excelInput.click()">
+                        <span>📂 Cargar Excel</span>
+                    </button>
+                    <input type="file" #excelInput (change)="onFileSelected($event)" accept=".xlsx, .xls" style="display: none">
+                    <a href="javascript:void(0)" (click)="downloadTemplate()" class="template-link">Descargar Ejemplo</a>
+                </div>
                 <button class="add-product-btn" (click)="openProductModal()">
                     <span>+ Nuevo Producto</span>
                 </button>
@@ -40,25 +57,21 @@
         </header>
 
         <div class="product-grid">
-            <!-- Loading Spinner -->
-            <div *ngIf="isLoading"
-                style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; width: 100%;">
-                <div class="spinner"
-                    style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;">
+            <!-- Skeleton Shimmer Loading -->
+            <ng-container *ngIf="isLoading">
+                <div class="product-card skeleton-card" *ngFor="let i of [1,2,3,4,5,6,7,8]">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="skeleton-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-desc"></div>
+                        <div class="skeleton skeleton-desc short"></div>
+                        <div class="skeleton-footer">
+                            <div class="skeleton skeleton-price"></div>
+                            <div class="skeleton skeleton-btn"></div>
+                        </div>
+                    </div>
                 </div>
-                <p style="margin-top: 15px; color: #666; font-size: 1.1em;">Cargando catálogo...</p>
-                <style>
-                    @keyframes spin {
-                        0% {
-                            transform: rotate(0deg);
-                        }
-
-                        100% {
-                            transform: rotate(360deg);
-                        }
-                    }
-                </style>
-            </div>
+            </ng-container>
 
             <!-- Content (Solo visible si NO está cargando) -->
             <ng-container *ngIf="!isLoading">
@@ -106,8 +119,18 @@
                     </div>
                 </div>
 
-                <div *ngFor="let product of filteredProducts" class="product-card">
-                    <div class="product-image" [style.background-image]="'url(' + product.image_url + ')'">
+                <div *ngFor="let product of filteredProducts" class="product-card"
+                    [class.selected]="isProductSelected(product.id)"
+                    draggable="true"
+                    (dragstart)="onProductDragStarted(product.id)"
+                    (dragend)="onProductDragEnded()"
+                    (click)="toggleProductSelection(product.id, $event)">
+                    
+                    <div class="product-selection-overlay">
+                        <input type="checkbox" [checked]="isProductSelected(product.id)" (change)="toggleProductSelection(product.id, $event)">
+                    </div>
+
+                    <div class="product-image" [style]="getProductImageStyle(product)">
                         <div class="status-badge" [class.unavailable]="!product.is_available">
                             {{ product.is_available ? 'Disponible' : 'Agotado' }}
                         </div>
@@ -120,12 +143,12 @@
                         <p class="desc">{{ product.description }}</p>
                         <div class="actions">
                             <button class="toggle-stock-btn" [class.unavailable]="!product.is_available"
-                                (click)="toggleAvailability(product)">
+                                (click)="toggleAvailability(product); $event.stopPropagation()">
                                 {{ product.is_available ? 'Marcar Agotado' : 'Marcar Disponible' }}
                             </button>
                             <div class="action-row">
-                                <button class="edit-btn" (click)="openProductModal(product)">Editar</button>
-                                <button class="delete-btn" (click)="requestDeleteProduct(product.id)">Eliminar</button>
+                                <button class="edit-btn" (click)="openProductModal(product); $event.stopPropagation()">Editar</button>
+                                <button class="delete-btn" (click)="requestDeleteProduct(product.id); $event.stopPropagation()">Eliminar</button>
                             </div>
                         </div>
                     </div>
@@ -174,7 +197,7 @@
 <!-- Modal de Categoría -->
 <div class="modal-overlay" *ngIf="showCategoryModal" (click)="showCategoryModal = false">
     <div class="modal-content small" (click)="$event.stopPropagation()">
-        <h2>Nueva Categoría</h2>
+        <h2>{{ editingCategory ? 'Editar Categoría' : 'Nueva Categoría' }}</h2>
         <div class="form-group">
             <label>Nombre de la Categoría</label>
             <input type="text" [(ngModel)]="newCategoryName" placeholder="Ej: Pizzas, Postres...">
@@ -183,13 +206,17 @@
             <label>Categoría Padre (Opcional)</label>
             <select [(ngModel)]="newCategoryParentId">
                 <option value="">-- Ninguna (Categoría Principal) --</option>
-                <option *ngFor="let cat of filteredCategories" [value]="cat.id">{{ cat.name }}</option>
+                <option *ngFor="let cat of filteredCategories"
+                    [value]="cat.id"
+                    [disabled]="editingCategory?.id === cat.id">
+                    {{ cat.name }}
+                </option>
             </select>
             <p style="font-size: 0.7rem; color: #64748b; margin-top: 4px;">Las subcategorías se mostrarán dentro de su padre en el menú del bot.</p>
         </div>
         <div class="modal-actions">
             <button class="cancel-btn" (click)="showCategoryModal = false">Cancelar</button>
-            <button class="save-btn" (click)="saveCategory()">Crear Categoría</button>
+            <button class="save-btn" (click)="saveCategory()">{{ editingCategory ? 'Guardar Cambios' : 'Crear Categoría' }}</button>
         </div>
     </div>
 </div>

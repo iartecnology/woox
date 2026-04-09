@@ -91,12 +91,38 @@ Deno.serve(async (req: Request) => {
             }
         } catch (e: any) { aiResponse = "Lo siento, tuve un problema procesándolo. 🤖⚙️"; }
         const cleanResponse = sanitizeMarkdown(aiResponse);
+        const parts = cleanResponse.split('\n\n');
         const waUrl = `https://graph.facebook.com/v22.0/${m.whatsapp_phone_number_id}/messages`;
-        await fetch(waUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${m.whatsapp_token}` },
-            body: JSON.stringify({ messaging_product: "whatsapp", to: customerPhone, text: { body: cleanResponse } })
-        });
+
+        for (const part of parts) {
+            if (part.startsWith('[PDF:') && part.endsWith(']')) {
+                const pdfData = part.slice(5, -1).split(':');
+                const url = pdfData[0];
+                const caption = pdfData.slice(1).join(':'); // Rejoin in case caption has colons
+                
+                await fetch(waUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${m.whatsapp_token}` },
+                    body: JSON.stringify({
+                        messaging_product: "whatsapp",
+                        to: customerPhone,
+                        type: "document",
+                        document: {
+                            link: url,
+                            caption: caption || "Menú",
+                            filename: "Menu.pdf"
+                        }
+                    })
+                });
+            } else if (part.trim()) {
+                await fetch(waUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${m.whatsapp_token}` },
+                    body: JSON.stringify({ messaging_product: "whatsapp", to: customerPhone, text: { body: part } })
+                });
+            }
+        }
+
         await supabase.from("messages").insert({ conversation_id: conversation!.id, sender_type: "ai", content: cleanResponse });
         await supabase.from("conversations").update({ last_message: cleanResponse, last_message_at: new Date().toISOString() }).eq("id", conversation!.id);
         return new Response("ok", { headers: corsHeaders });

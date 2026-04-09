@@ -397,6 +397,20 @@
     </div>
 
     <!-- Campos específicos según tipo -->
+    <div class="form-group" *ngIf="editingNode.type === 'send_pdf'">
+      <label>Título del PDF (Caption)</label>
+      <input type="text" class="form-control" [(ngModel)]="editingNode.data.pdf_caption" placeholder="Ej: Menú Digital">
+      
+      <label class="mt-3">URL del PDF</label>
+      <div class="input-group">
+        <input type="text" class="form-control" [(ngModel)]="editingNode.data.pdf_url" placeholder="https://ejemplo.com/menu.pdf">
+        <button class="btn btn-outline-secondary" *ngIf="editingNode.data.pdf_url" (click)="testPdfUrl(editingNode.data.pdf_url)">
+          👁️ Ver
+        </button>
+      </div>
+      <div class="label-hint">Puedes usar <code>{{"{{merchant_menu_pdf}}"}}</code> para el PDF configurado en el comercio.</div>
+    </div>
+
     <div class="form-group" *ngIf="['start', 'message', 'question', 'menu', 'end'].includes(editingNode.type)">
       <label>{{ editingNode.type === 'question' ? 'Pregunta' : 'Mensaje' }}</label>
       <textarea class="form-control" rows="3" [(ngModel)]="editingNode.data.message"></textarea>
@@ -806,6 +820,39 @@
       <label>Variable de Dirección de Entrega</label>
       <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.variable" placeholder="direccion_entrega" />
       <div class="label-hint">Asegúrate de haber capturado esta variable antes.</div>
+    </div>
+
+    <!-- Campos del Nodo Send PDF -->
+    <div *ngIf="editingNode.type === 'send_pdf'" class="form-group" style="grid-column: span 2;">
+      <div class="alert alert-info py-2 small mb-3">
+        📄 Envía un documento PDF al cliente. Puedes subirlo o colocar una URL externa.
+      </div>
+      
+      <div class="pdf-upload-container p-3 border rounded mb-3" style="background: #f8fafc;">
+        <label class="fw-bold d-block mb-2">Opción 1: Subir Archivo PDF</label>
+        <div class="d-flex align-items-center gap-2">
+          <input type="file" #pdfInput (change)="onPdfFileSelected($event)" accept=".pdf" style="display:none">
+          <button class="btn btn-primary btn-sm flex-grow-1" (click)="pdfInput.click()" [disabled]="isUploadingPdf">
+            <span *ngIf="!isUploadingPdf">📁 Seleccionar y Subir PDF</span>
+            <span *ngIf="isUploadingPdf">⏳ Subiendo...</span>
+          </button>
+        </div>
+        <div class="label-hint mt-2">El archivo se guardará de forma segura en Woox Storage.</div>
+      </div>
+
+      <div class="pdf-url-container">
+        <label class="fw-bold d-block mb-1">Opción 2: URL Manual</label>
+        <div class="d-flex gap-2">
+          <input type="text" class="form-control mb-1" [(ngModel)]="editingNode.data.pdf_url" placeholder="https://ejemplo.com/menu.pdf" />
+          <a *ngIf="editingNode.data.pdf_url" [href]="editingNode.data.pdf_url" target="_blank" class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center" style="min-width: 45px;" title="Ver PDF">
+            <i class="fas fa-external-link-alt"></i>
+          </a>
+        </div>
+        <div class="label-hint mb-3">Si subiste un archivo arriba, esta URL se completará sola.</div>
+      </div>
+      
+      <label class="fw-bold d-block mb-1">Subtítulo / Mensaje acampañante</label>
+      <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.pdf_caption" placeholder="Aquí tienes nuestro menú..." />
     </div>
 
   </div>

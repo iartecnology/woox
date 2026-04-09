@@ -81,8 +81,40 @@ Deno.serve(async (req: Request) => {
             if (!aiResponse) return new Response("ok", { headers: corsHeaders });
         } catch (e: any) { aiResponse = "Ups! Tuve un problema procesándolo. 🤖⚙️"; }
         const cleanResponse = sanitizeMarkdown(aiResponse);
+        const parts = cleanResponse.split('\n\n');
         const fbUrl = `https://graph.facebook.com/v22.0/me/messages?access_token=${m.facebook_page_access_token}`;
-        await fetch(fbUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { id: senderId }, message: { text: cleanResponse } }) });
+        
+        for (const part of parts) {
+            if (part.startsWith('[PDF:') && part.endsWith(']')) {
+                const pdfData = part.slice(5, -1).split(':');
+                const url = pdfData[0];
+                const caption = pdfData.slice(1).join(':');
+                
+                await fetch(fbUrl, { 
+                    method: "POST", 
+                    headers: { "Content-Type": "application/json" }, 
+                    body: JSON.stringify({ 
+                        recipient: { id: senderId }, 
+                        message: { 
+                            attachment: {
+                                type: "file",
+                                payload: {
+                                    url: url,
+                                    is_reusable: true
+                                }
+                            }
+                        } 
+                    }) 
+                });
+            } else if (part.trim()) {
+                await fetch(fbUrl, { 
+                    method: "POST", 
+                    headers: { "Content-Type": "application/json" }, 
+                    body: JSON.stringify({ recipient: { id: senderId }, message: { text: part } }) 
+                });
+            }
+        }
+
         await supabase.from("messages").insert({ conversation_id: conversation!.id, sender_type: "ai", content: cleanResponse });
         await supabase.from("conversations").update({ last_message: cleanResponse, last_message_at: new Date().toISOString() }).eq("id", conversation!.id);
         return new Response("ok", { headers: corsHeaders });

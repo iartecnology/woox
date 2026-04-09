@@ -13,6 +13,7 @@ import { SupabaseService } from '../supabase.service';
 import { AppInfoPanelComponent } from '../app-info-panel/app-info-panel.component';
 import { MobileService } from '../mobile.service';
 import { PwaService } from '../pwa.service';
+import { supabase } from '../supabase-config';
 
 interface Team {
     id: string;
@@ -320,6 +321,15 @@ export class SuperAdminComponent implements OnInit {
         action: async () => { }
     };
 
+    showClearDataModal = false;
+    currentClearingMerchant: Merchant | null = null;
+    clearDataOptions = {
+        orders: false,
+        chats: false,
+        products: false,
+        categories: false
+    };
+
     private supabaseService = inject(SupabaseService);
     private notificationService = inject(NotificationService);
     private catalogService = inject(CatalogService);
@@ -352,6 +362,21 @@ export class SuperAdminComponent implements OnInit {
         const outcome = await this.pwaService.installPwa();
         if (outcome === 'accepted') {
             this.notificationService.show('¡Instalación iniciada!', 'success');
+        }
+    }
+
+    async initializeMerchantFolder(merchant: Merchant) {
+        if (!confirm(`¿Deseas crear las carpetas de almacenamiento para ${merchant.name}?`)) return;
+        
+        try {
+            const emptyFile = new File([''], '.placeholder', { type: 'text/plain' });
+            await this.supabaseService.uploadFile('merchant-data', `${merchant.id}/menus/.placeholder`, emptyFile);
+            await this.supabaseService.uploadFile('merchant-data', `${merchant.id}/productos/.placeholder`, emptyFile);
+            await this.supabaseService.uploadFile('merchant-data', `${merchant.id}/logos/.placeholder`, emptyFile);
+            this.notificationService.show(`Carpetas inicializadas exitosamente para ${merchant.name}`, 'success');
+        } catch (err) {
+            console.error(`Error inicializando carpetas para ${merchant.name}:`, err);
+            this.notificationService.show(`Error inicializando carpetas. Revisa la consola.`, 'error');
         }
     }
 
@@ -2306,22 +2331,62 @@ export class SuperAdminComponent implements OnInit {
         this.router.navigate(['/agents']);
     }
 
-    async clearMerchantOrders(merchant: any) {
+    openClearDataModal(merchant: any) {
+        this.currentClearingMerchant = merchant;
+        this.clearDataOptions = { orders: false, chats: false, products: false, categories: false };
+        this.showClearDataModal = true;
+    }
+
+    async processClearData() {
+        if (!this.currentClearingMerchant) return;
+        const merchant = this.currentClearingMerchant;
+        const opts = this.clearDataOptions;
+        
+        if (!opts.orders && !opts.chats && !opts.products && !opts.categories) {
+            this.notificationService.show('Selecciona al menos una opción para limpiar.', 'warning');
+            return;
+        }
+
+        let message = `¿Estás seguro de limpiar los siguientes datos del comercio "${merchant.name}"?\n\n`;
+        if (opts.orders) message += '- Todos los Pedidos\n';
+        if (opts.chats) message += '- Todos los Chats y Mensajes\n';
+        if (opts.products) message += '- Todos los Productos\n';
+        if (opts.categories) message += '- Todas las Categorías\n';
+        message += '\n¡Esta acción es irreversible!';
+
         this.deleteModalConfig = {
-            title: '¿Limpiar historial de pedidos?',
-            message: `Esta acción eliminará permanentemente todos los pedidos e ítems del comercio "${merchant.name}". No se puede deshacer.`,
-            confirmLabel: 'Limpiar Pedidos',
-            icon: '🧹',
+            title: '¿Confirmar Limpieza Extrema?',
+            message: message,
+            confirmLabel: 'Sí, Eliminar Datos',
+            icon: '⚠️',
             isProcessing: false,
             action: async () => {
                 this.deleteModalConfig.isProcessing = true;
+                this.showClearDataModal = false;
                 try {
-                    const { error } = await this.supabaseService.deleteAllOrders(merchant.id);
-                    if (error) throw error;
-                    this.notificationService.show('Pedidos eliminados correctamente.', 'success');
+                    if (opts.orders) {
+                        const { error } = await this.supabaseService.deleteAllOrders(merchant.id);
+                        if (error) throw error;
+                    }
+                    if (opts.chats) {
+                        const { error: err1 } = await supabase.from('messages').delete().eq('merchant_id', merchant.id);
+                        if (err1) throw err1;
+                        const { error: err2 } = await supabase.from('chats').delete().eq('merchant_id', merchant.id);
+                        if (err2) throw err2;
+                    }
+                    if (opts.products) {
+                        const { error: err1 } = await supabase.from('products').delete().eq('merchant_id', merchant.id);
+                        if (err1) throw err1;
+                    }
+                    if (opts.categories) {
+                        const { error: err2 } = await supabase.from('categories').delete().eq('merchant_id', merchant.id);
+                        if (err2) throw err2;
+                    }
+                    
+                    this.notificationService.show('Datos limpiados correctamente.', 'success');
                     this.showDeleteConfirmModal = false;
                 } catch (err: any) {
-                    this.notificationService.show('Error: ' + err.message, 'error');
+                    this.notificationService.show('Error limpiando datos: ' + err.message, 'error');
                 } finally {
                     this.deleteModalConfig.isProcessing = false;
                 }

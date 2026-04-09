@@ -30,6 +30,9 @@ export class BotRuntimeService {
         const { data: flow, error: flowErr } = await this.supabase.getActiveBotFlow(merchantId);
         if (flowErr || !flow) return null;
 
+        // 1.1 Cargar info del comercio (para variables como merchant_menu_pdf)
+        const { data: merchant } = await this.supabase.getMerchantById(merchantId);
+
         const flowData = flow.flow_data;
         const nodes = flowData.nodes || [];
         const startNode = nodes.find((n: any) => n.type === 'start');
@@ -43,6 +46,16 @@ export class BotRuntimeService {
             startNode.id
         );
         if (sessErr || !session) return null;
+
+        // Inyectar info del comercio en las variables para resolución
+        if (merchant) {
+            session.variables = {
+                ...(session.variables || {}),
+                merchant_name: merchant.name || '',
+                merchant_menu_pdf: merchant.menu_pdf_url || '',
+                menu_pdf: merchant.menu_pdf_url || ''
+            };
+        }
 
         // 3a. Sesión completada → No procesar más mensajes
         if (session.status === 'completed' || session.status === 'transferred') {
@@ -75,7 +88,11 @@ export class BotRuntimeService {
             if (startNode) {
                 const nextNodeId = this.getNextNodeId(flowData, startNode.id, 'output');
                 const nextNode = nodes.find((n: any) => n.id === nextNodeId);
-                session.variables = {};
+                session.variables = {
+                    merchant_name: merchant?.name || '',
+                    merchant_menu_pdf: merchant?.menu_pdf_url || '',
+                    menu_pdf: merchant?.menu_pdf_url || ''
+                };
                 const response = await this.advanceAndCollect(flowData, nextNode, session, flow);
                 return {
                     messages: ['🔄 El flujo fue actualizado. Reiniciando...', ...response.messages],
@@ -113,7 +130,13 @@ export class BotRuntimeService {
                 const nextNodeId = this.getNextNodeId(flowData, startNode.id, 'output');
                 const nextNode = nodes.find((n: any) => n.id === nextNodeId);
                 if (nextNode) {
-                    session.variables = {}; // Reiniciar variables si es necesario
+                    // Reiniciar variables pero manteniendo las info del comercio
+                    const { data: merchant } = await this.supabase.getMerchantById(session.merchant_id);
+                    session.variables = {
+                        merchant_name: merchant?.name || '',
+                        merchant_menu_pdf: merchant?.menu_pdf_url || '',
+                        menu_pdf: merchant?.menu_pdf_url || ''
+                    };
                     return await this.advanceAndCollect(flowData, nextNode, session, flow);
                 }
             }
@@ -326,6 +349,16 @@ export class BotRuntimeService {
                     node = nodes.find((n: any) => n.id === nextMsgNodeId);
                     break;
 
+                case 'send_pdf':
+                    const pdfUrl = this.resolveVariables(node.data?.pdf_url || '', session.variables, flow);
+                    const pdfCaption = this.resolveVariables(node.data?.pdf_caption || '', session.variables, flow);
+                    if (pdfUrl) {
+                        messages.push(`[PDF:${pdfUrl}:${pdfCaption || 'Documento PDF'}]`);
+                    }
+                    const nextPdfNodeId = this.getNextNodeId(flowData, node.id, 'output');
+                    node = nodes.find((n: any) => n.id === nextPdfNodeId);
+                    break;
+
                 case 'question':
                     const qMsg = node.data?.message || node.data?.question;
                     if (qMsg) messages.push(this.resolveVariables(qMsg, session.variables, flow));
@@ -428,13 +461,18 @@ export class BotRuntimeService {
         if (!template) return '';
         let result = template;
         
-        // Variables de sesión
         for (const [key, value] of Object.entries(variables)) {
-            result = result.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+            result = result.replace(new RegExp(`{{${key}}}`, 'g'), value !== null && value !== undefined ? String(value) : '');
         }
         
-        // Variables del sistema
-        result = result.replace(/{{merchantName}}/g, flow.name || 'Comercio');
+        // Variables del sistema (Mapeo redundante para compatibilidad)
+        const merchantName = variables['merchant_name'] || flow.name || 'Comercio';
+        result = result.replace(/{{merchantName}}/g, merchantName);
+        result = result.replace(/{{merchant_name}}/g, merchantName);
+        
+        const menuPdf = variables['merchant_menu_pdf'] || variables['menu_pdf'] || '';
+        result = result.replace(/{{merchant_menu_pdf}}/g, menuPdf);
+        result = result.replace(/{{menu_pdf}}/g, menuPdf);
         
         // Generar Resumen del Carrito dinámicamente
         if (result.includes('{{cartSummary}}')) {

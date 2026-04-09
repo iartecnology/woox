@@ -89,6 +89,7 @@ export class BotBuilderComponent implements OnInit {
         { type: 'message', label: 'Mensaje', icon: '💬', description: 'Enviar texto' },
         { type: 'question', label: 'Pregunta', icon: '❓', description: 'Capturar respuesta' },
         { type: 'menu', label: 'Menú', icon: '📋', description: 'Opciones múltiples' },
+        { type: 'send_pdf', label: 'Enviar PDF', icon: '📄', description: 'Enviar menú en PDF' },
         { type: 'end', label: 'Fin', icon: '🛑', description: 'Terminar flujo' }
       ]
     },
@@ -206,25 +207,72 @@ export class BotBuilderComponent implements OnInit {
   hoveredConnectionId: string | null = null;
 
 
+  // PDF Upload state
+  isUploadingPdf = false;
+
   constructor() {}
 
+
+  async onPdfFileSelected(event: any) {
+    const file = event.target.files[0];
+    if (!file || !this.editingNode) return;
+
+    if (file.type !== 'application/pdf') {
+       this.notification.show('Por favor, selecciona un archivo PDF válido.', 'error');
+       return;
+    }
+
+    this.isUploadingPdf = true;
+    try {
+      const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+      const fullPath = `${this.merchantId}/menus/${fileName}`;
+      const { data, error } = await this.supabase.uploadFile('merchant-data', fullPath, file);
+      
+      if (error) throw error;
+
+      if (data && this.editingNode) {
+        this.editingNode.data.pdf_url = data.publicUrl;
+        this.notification.show('Menú PDF subido correctamente.', 'success');
+        this.cdr.detectChanges();
+      }
+    } catch (err: any) {
+      this.notification.show('Error al subir el PDF: ' + err.message, 'error');
+    } finally {
+      this.isUploadingPdf = false;
+    }
+  }
+
+
+  testPdfUrl(url: string) {
+    if (!url) return;
+    // Resolver variables básicas para la vista previa rápida
+    let resolved = url;
+    if (url.includes('{{merchant_menu_pdf}}')) {
+      resolved = this.simulationState.variables['merchant_menu_pdf'] || '';
+    }
+    if (resolved) {
+      window.open(resolved, '_blank');
+    } else {
+      alert('⚠️ No hay URL válida configurada en el comercio.');
+    }
+  }
 
   async ngOnInit() {
     this.merchantId = localStorage.getItem('active_merchant_id') || '';
     this.isSuperAdmin = localStorage.getItem('user_role') === 'superadmin';
-    
+
     if (this.merchantId) {
-      // Cargar info del comercio primero para que no salga "Cargando..."
-      const { data: m } = await this.supabase.getMerchantById(this.merchantId);
-      if (m) {
-        this.merchantName = m.name;
-        this.botFlow.name = `Flujo de ${m.name}`;
-        this.cdr.detectChanges(); // Asegurar que el nombre se actualice en la UI
+      const { data: merchant } = await this.supabase.getMerchantById(this.merchantId);
+      if (merchant) {
+         this.merchantName = merchant.name;
+         this.simulationState.variables['merchant_name'] = merchant.name;
+         this.simulationState.variables['merchant_menu_pdf'] = merchant.menu_pdf;
+         this.simulationState.variables['menu_pdf'] = merchant.menu_pdf;
       }
       await this.loadFlow();
+      await this.loadTemplates();
+      await this.loadSkillsCatalog();
     }
-    await this.loadTemplates();
-    await this.loadSkillsCatalog();
     await this.loadKnowledgeDocuments();
   }
 
@@ -586,6 +634,16 @@ REGLAS:
     });
     y += 180;
 
+    // 1.1 Enviar PDF Menú
+    const pdfNode = this.createSpecificNode('send_pdf', x, y, {
+      label: 'Enviar Menú PDF',
+      pdf_url: '{{merchant_menu_pdf}}',
+      pdf_caption: 'Aquí tienes nuestro menú completo en PDF 📄'
+    });
+    y += 180;
+    
+    this.connectNodes(startNode.id, 'output', pdfNode.id, 'input');
+
     // 2. Agente IA (Cerebro del flujo)
     const aiAgentNode = this.createSpecificNode('ai_agent', x, y, { 
       label: 'Asistente de Ventas IA', 
@@ -608,7 +666,8 @@ REGLAS IMPORTANTES:
       temperature: 0.7,
       memory_limit: 6
     });
-    this.connectNodes(startNode.id, 'output', aiAgentNode.id, 'input');
+
+    this.connectNodes(pdfNode.id, 'output', aiAgentNode.id, 'input');
 
     // 3. Skills - Todas las herramientas disponibles
     const skillPositions = [
@@ -664,6 +723,16 @@ REGLAS IMPORTANTES:
       message: '¡Hola! Bienvenido a {{merchantName}}. 👋\n¿En qué podemos ayudarte hoy?' 
     });
     y += 180;
+
+    // 1.1 Enviar PDF Menú
+    const pdfNode = this.createSpecificNode('send_pdf', x, y, {
+      label: 'Enviar Menú PDF',
+      pdf_url: '{{merchant_menu_pdf}}',
+      pdf_caption: 'Aquí tienes nuestro menú completo en PDF 📄'
+    });
+    y += 180;
+    
+    this.connectNodes(startNode.id, 'output', pdfNode.id, 'input');
 
     // 2. Nodo de decisión central (Para después de añadir al carrito)
     const decisionNode = this.createSpecificNode('menu', x + 1200, y + 200, { 
@@ -796,7 +865,7 @@ REGLAS IMPORTANTES:
 
     const rootMenu = buildCategoryMenu(null, 0);
     if (rootMenu) {
-      this.connectNodes(startNode.id, 'output', rootMenu.id, 'input');
+      this.connectNodes(pdfNode.id, 'output', rootMenu.id, 'input');
       this.connectNodes(decisionNode.id, 'opt_continue', rootMenu.id, 'input');
       this.connectNodes(emptyActionNode.id, 'output', rootMenu.id, 'input');
     }
@@ -927,6 +996,8 @@ REGLAS IMPORTANTES:
         switch_cases: type === 'switch' ? [{ id: `case_${now}`, value: 'Ventas', label: 'Ventas' }] : undefined,
         delay_hours: type === 'delay' ? 0 : undefined,
         delay_minutes: type === 'delay' ? 30 : undefined,
+        pdf_url: type === 'send_pdf' ? '{{merchant_menu_pdf}}' : undefined,
+        pdf_caption: type === 'send_pdf' ? 'Menú Digital' : undefined,
         timezone: type === 'business_hours' ? 'America/Bogota' : undefined,
         business_hours: type === 'business_hours' ? [
           { day: 'monday', open: '08:00', close: '18:00', enabled: true },
@@ -1038,6 +1109,8 @@ REGLAS IMPORTANTES:
     switch (node.type) {
       case 'condition': 
         return `${node.data.variable || '?'} ${node.data.operator || '=='} ${node.data.value || '?'}`;
+      case 'send_pdf':
+        return `📄 PDF: ${node.data?.pdf_caption || 'Documento PDF'} (${node.data?.pdf_url || 'Sin URL'})`;
       case 'ai_agent':
         return `IA: ${(node.data.prompt || '').substring(0, 30)}...`;
       case 'action':
@@ -1975,7 +2048,7 @@ REGLAS:
         setTimeout(() => this.scrollChatToBottom(), 50);
 
         // Continuar automáticamente en nodos de paso
-        const autoAdvanceTypes = ['start', 'message', 'action', 'logic'];
+        const autoAdvanceTypes = ['start', 'message', 'action', 'logic', 'send_pdf'];
         if (autoAdvanceTypes.includes(node.type)) {
           const nextId = this.findNextNodeId(node.id, 'output');
           if (nextId) await this.moveToNextNode(nextId, depth + 1);
@@ -2234,6 +2307,12 @@ REGLAS:
 
   private collectSimulationMessages(node: FlowNode): string[] {
     const msgs: string[] = [];
+    if (node.type === 'send_pdf') {
+       const url = this.resolveSimVariables(node.data?.pdf_url || '');
+       const cap = this.resolveSimVariables(node.data?.pdf_caption || 'Documento PDF');
+       if (url) msgs.push(`[PDF:${url}:${cap}]`);
+       return msgs;
+    }
     if (!node.data.message && node.type !== 'menu') return [];
 
     let msg = this.resolveSimVariables(node.data.message || '');
@@ -2296,7 +2375,8 @@ REGLAS:
       
       // Fallbacks especiales
       const lowerKey = k.toLowerCase();
-      if (lowerKey === 'merchantname') return this.merchantName;
+      if (lowerKey === 'merchantname' || lowerKey === 'merchant_name') return this.merchantName;
+      if (lowerKey === 'merchant_menu_pdf' || lowerKey === 'menu_pdf') return this.simulationState.variables['merchant_menu_pdf'] || 'https://v1.woox.ai/assets/pdf/menu_digital_v1.pdf';
       if (lowerKey === 'ordernumber' || lowerKey === 'order_number') return '#T-1000' + Math.floor(Math.random()*9); 
       
       return match;

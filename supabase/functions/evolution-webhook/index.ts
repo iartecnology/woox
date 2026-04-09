@@ -65,6 +65,10 @@ Deno.serve(async (req: Request) => {
         if (!customer) {
             const { data: nc } = await supabase.from("customers").insert({ merchant_id: m.id, full_name: customerName, phone: customerPhone }).select().single();
             customer = nc;
+        } else if ((customer.full_name === "Cliente Evolution" || !customer.full_name) && data.pushName && data.pushName !== "Cliente Evolution") {
+            // Actualizar nombre si era genérico y ahora tenemos uno mejor
+            const { data: uc } = await supabase.from("customers").update({ full_name: data.pushName }).eq("id", customer.id).select().single();
+            customer = uc;
         }
         let { data: conversation } = await supabase.from("conversations").select("*").eq("merchant_id", m.id).eq("customer_id", customer!.id).eq("status", "open").maybeSingle();
         if (!conversation) {
@@ -75,28 +79,90 @@ Deno.serve(async (req: Request) => {
         await supabase.from("conversations").update({ last_message: messageText, last_message_at: new Date().toISOString(), unread_count: (conversation!.unread_count || 0) + 1 }).eq("id", conversation!.id);
         let aiResponse = "";
         try {
+            console.log(`[Evolution] Processing message from ${customerPhone} for merchant ${m.name}`);
             if (conversation!.ai_active) {
                 const engineRes = await processBotFlow(supabase, m.id, conversation!.id, messageText, customer!.id);
                 if (engineRes) aiResponse = engineRes;
             }
             if (!aiResponse) {
+                console.log(`[Evolution] No AI response generated or AI disabled. Notifying agents.`);
                 await notifyMerchantAgents(supabase, m.id, "Nuevo mensaje (WA)", `De: ${customer!.full_name || 'Cliente'}\nMensaje: ${messageText.slice(0, 50)}...`);
                 return new Response("ok", { headers: corsHeaders });
             }
-        } catch (e: any) { aiResponse = "Ups! Tuve un problema procesándolo. 🤖⚙️"; }
+        } catch (e: any) { 
+            console.error(`[Evolution] Error in bot engine:`, e);
+            aiResponse = "Ups! Tuve un problema procesándolo. 🤖⚙️"; 
+        }
+
         const cleanResponse = sanitizeMarkdown(aiResponse);
+        const parts = cleanResponse.split('\n\n');
+        
         try {
             const { data: ps2 } = await supabase.from("platform_settings").select("evolution_api_url, evolution_api_key").eq("id", "global").maybeSingle();
-            const evoUrl = ps2?.evolution_api_url || m.evolution_api_url || "";
-            const evoKey = ps2?.evolution_api_key || m.evolution_api_key || "";
+            const evoUrl = ps2?.evolution_api_url || (m as any).evolution_api_url || Deno.env.get("EVOLUTION_API_URL") || "";
+            const evoKey = ps2?.evolution_api_key || (m as any).evolution_api_key || Deno.env.get("EVOLUTION_API_KEY") || "";
             const evoInstance = m.wa_session_id || instanceName || m.merchant_code || "";
+            
             if (evoUrl && evoKey && evoInstance) {
-                const sendUrl = `${evoUrl.replace(/\/$/, '')}/message/sendText/${evoInstance}`;
-                await fetch(sendUrl, { method: "POST", headers: { "Content-Type": "application/json", "apikey": evoKey }, body: JSON.stringify({ number: customerPhone, text: cleanResponse, delay: 1200 }) });
+                const baseUrl = evoUrl.replace(/\/$/, '');
+                console.log(`[Evolution] Sending response to WhatsApp via ${baseUrl} (Instance: ${evoInstance})`);
+                
+                for (const part of parts) {
+                    if (part.startsWith('[PDF:') && part.endsWith(']')) {
+                        const pdfData = part.slice(5, -1).split(':');
+                        const url = pdfData[0];
+                        const caption = pdfData.slice(1).join(':');
+                        
+                        const sendMediaUrl = `${baseUrl}/message/sendMedia/${evoInstance}`;
+                        console.log(`[Evolution] Sending PDF: ${url}`);
+                        const res = await fetch(sendMediaUrl, { 
+                            method: "POST", 
+                            headers: { "Content-Type": "application/json", "apikey": evoKey }, 
+                            body: JSON.stringify({ 
+                                number: customerPhone, 
+                                media: url,
+                                mediatype: "document",
+                                caption: caption || "Menú",
+                                fileName: "Menu.pdf",
+                                delay: 1200 
+                            }) 
+                        });
+                        if (!res.ok) console.error(`[Evolution] Failed to send PDF: ${res.status} ${await res.text()}`);
+                    } else if (part.trim()) {
+                        const sendTextUrl = `${baseUrl}/message/sendText/${evoInstance}`;
+                        const res = await fetch(sendTextUrl, { 
+                            method: "POST", 
+                            headers: { "Content-Type": "application/json", "apikey": evoKey }, 
+                            body: JSON.stringify({ 
+                                number: customerPhone, 
+                                text: part, 
+                                delay: 1200 
+                            }) 
+                        });
+                        if (!res.ok) console.error(`[Evolution] Failed to send text: ${res.status} ${await res.text()}`);
+                    }
+                }
+            } else {
+                console.error(`[Evolution] Missing configuration for sending. Url: ${!!evoUrl}, Key: ${!!evoKey}, Instance: ${!!evoInstance}`);
             }
-        } catch (sendErr: any) {}
-        await supabase.from("messages").insert({ conversation_id: conversation!.id, sender_type: "ai", content: cleanResponse });
-        await supabase.from("conversations").update({ last_message: cleanResponse, last_message_at: new Date().toISOString() }).eq("id", conversation!.id);
+        } catch (sendErr: any) {
+            console.error(`[Evolution] Error sending message via Evolution API:`, sendErr);
+        }
+
+        await supabase.from("messages").insert({ 
+            conversation_id: conversation!.id, 
+            sender_type: "ai", 
+            content: cleanResponse 
+        });
+        
+        await supabase.from("conversations").update({ 
+            last_message: cleanResponse, 
+            last_message_at: new Date().toISOString() 
+        }).eq("id", conversation!.id);
+
         return new Response("ok", { headers: corsHeaders });
-    } catch (error: any) { return new Response("ok", { headers: corsHeaders }); }
+    } catch (error: any) { 
+        console.error(`[Evolution Webhook CRITICAL ERROR]:`, error);
+        return new Response("ok", { headers: corsHeaders }); 
+    }
 });

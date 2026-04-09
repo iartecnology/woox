@@ -166,7 +166,7 @@
                                                 title="Catálogo" (click)="goToCatalog(m)">🍔</button>
                                             <button class="config-icon-btn brain"
                                                 title="Cerebro" (click)="goToBrain(m)">🧠</button>
-                                            <button class="config-icon-btn res" title="Reservaciones"
+                                            <button *ngIf="m.industry_type === 'reservations'" class="config-icon-btn res" title="Reservaciones"
                                                 (click)="goToReservations(m)">📅</button>
                                             <button class="config-icon-btn landing" title="AI Landing Builder"
                                                 (click)="goToLandingBuilder(m)">🪄</button>
@@ -190,8 +190,10 @@
                                                 (click)="openModal(m)">⚙️</button>
                                             <button class="config-icon-btn live" title="Monitor"
                                                 (click)="openLiveMonitor(m)">🛒</button>
-                                            <button class="config-icon-btn purge" title="Limpiar"
-                                                (click)="clearMerchantOrders(m)">🧹</button>
+                                            <button class="config-icon-btn purge" title="Limpiar Datos"
+                                                (click)="openClearDataModal(m)">🧹</button>
+                                            <button class="config-icon-btn folders" title="Inicializar Carpetas"
+                                                (click)="initializeMerchantFolder(m)" style="background:var(--gray-200); color:var(--gray-700)">📁</button>
                                             <button class="config-icon-btn delete-merchant" title="Eliminar"
                                                 (click)="confirmDeleteMerchant(m)">🗑️</button>
                                         </div>
@@ -237,8 +239,11 @@
                             <button class="action-btn omni" (click)="openOmniConfig(m)" title="Canales">💬</button>
                             <button class="action-btn bio" (click)="openBiolinkConfig(m)" title="BioLink">🔗</button>
                             <button class="action-btn sim" (click)="testChatSimulator(m)" title="Simulador">🚀</button>
+                            <button *ngIf="m.industry_type === 'reservations'" class="action-btn res" (click)="goToReservations(m)" title="Reservaciones">📅</button>
                             <button class="action-btn stats" (click)="viewMerchantStats(m)" title="Estadísticas">📊</button>
-                            <button class="action-btn live" (click)="openLiveMonitor(m)" title="Pedidos">🛒</button>
+                            <button *ngIf="m.industry_type !== 'reservations'" class="action-btn live" (click)="openLiveMonitor(m)" title="Pedidos">🛒</button>
+                            <button class="action-btn purge" (click)="openClearDataModal(m)" title="Limpiar Datos">🧹</button>
+                            <button class="action-btn folders" (click)="initializeMerchantFolder(m)" title="Init Carpetas">📁</button>
                             <button class="action-btn login" (click)="enterAsMerchant(m)" title="Entrar">🚪</button>
                             <button class="action-btn delete" (click)="confirmDeleteMerchant(m)" title="Borrar">🗑️</button>
                         </div>
@@ -265,6 +270,58 @@
             </div>
         </div>
     </section>
+
+    <!-- Modal de Opciones para Limpiar Datos -->
+    <div class="modal-overlay" *ngIf="showClearDataModal" (click)="showClearDataModal = false">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+            <h2>🧹 Limpiar Datos del Comercio</h2>
+            <p class="modal-desc">Selecciona qué información deseas eliminar permanentemente para <strong>{{ currentClearingMerchant?.name }}</strong>. Útil para resetear después de pruebas.</p>
+
+            <div class="form-grid">
+                <div class="form-group full-width">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <input type="checkbox" [(ngModel)]="clearDataOptions.orders" style="width: 20px; height: 20px;">
+                        <div>
+                            <div style="font-weight: bold;">Limpiar Pedidos</div>
+                            <small style="color: #64748b;">Elimina el historial de pedidos y sus ítems.</small>
+                        </div>
+                    </label>
+                </div>
+                <div class="form-group full-width">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <input type="checkbox" [(ngModel)]="clearDataOptions.chats" style="width: 20px; height: 20px;">
+                        <div>
+                            <div style="font-weight: bold;">Limpiar Chats de Clientes</div>
+                            <small style="color: #64748b;">Elimina todos los historiales de conversación y contactos de IA.</small>
+                        </div>
+                    </label>
+                </div>
+                <div class="form-group full-width">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <input type="checkbox" [(ngModel)]="clearDataOptions.products" style="width: 20px; height: 20px;">
+                        <div>
+                            <div style="font-weight: bold;">Limpiar Productos</div>
+                            <small style="color: #64748b;">Elimina únicamente los productos del catálogo.</small>
+                        </div>
+                    </label>
+                </div>
+                <div class="form-group full-width">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <input type="checkbox" [(ngModel)]="clearDataOptions.categories" style="width: 20px; height: 20px;">
+                        <div>
+                            <div style="font-weight: bold;">Limpiar Categorías</div>
+                            <small style="color: #64748b;">Elimina absolutamente todas las categorías.</small>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 25px;">
+                <button class="cancel-btn" (click)="showClearDataModal = false">Cancelar</button>
+                <button class="save-btn" (click)="processClearData()" style="background-color: #ef4444;">Continuar Limpieza</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal para Registro/Edición/Configuración -->
     <div class="modal-overlay" *ngIf="showModal" (click)="showModal = false">

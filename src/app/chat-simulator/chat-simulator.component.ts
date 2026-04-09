@@ -1034,6 +1034,7 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
       case 'action': return '⚡';
       case 'condition': return '🔀';
       case 'ai_agent': return '🧠';
+      case 'send_pdf': return '📄';
       case 'end': return '🏁';
       default: return '📍';
     }
@@ -1927,7 +1928,50 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
     // 4. Listas: - item -> • item
     formatted = formatted.replace(/^\s*-\s+(.*)/gm, '• $1');
 
-    // 5. Limpieza agresiva de etiquetas técnicas e internas (Case Insensitive)
+    // 5. Detectar y renderizar PDF: [PDF:url:caption]
+    const pdfRegex = /\[PDF:(.*?):(.*?)\]/gi;
+    formatted = formatted.replace(pdfRegex, (match, url, caption) => {
+      // Manejar caso donde la URL tiene dos puntos (ej: https://)
+      // El regex anterior puede romper si hay más de dos puntos.
+      // Re-analizar la cadena: [PDF: ...content... ]
+      const content = match.slice(5, -1);
+      const lastColonIndex = content.lastIndexOf(':');
+      let finalUrl = url;
+      let finalCaption = caption;
+      
+      if (lastColonIndex !== -1) {
+        finalUrl = content.slice(0, lastColonIndex);
+        finalCaption = content.slice(lastColonIndex + 1);
+      }
+
+      // Si la URL es un placeholder no resuelto, mostrar aviso amable
+      if (finalUrl.includes('{{')) {
+        return `
+          <div class="pdf-message-card p-2 rounded border my-2" style="background: #fff7ed; border-color: #fdba74 !important; border-width: 1px !important; border-style: solid !important; display: flex; align-items: center; gap: 12px; max-width: 300px;">
+            <div style="color: #ea580c; font-size: 1.2rem; min-width: 40px; text-align: center;">⚠️</div>
+            <div style="flex: 1; font-size: 0.75rem; color: #9a3412;">
+              <strong>Menú no configurado</strong><br>
+              Debes subir el PDF en el panel del comercio para que este enlace funcione.
+            </div>
+          </div>`;
+      }
+
+      return `
+        <div class="pdf-message-card p-2 rounded border my-2" style="background: #f8fafc; border-color: #e2e8f0 !important; border-width: 1px !important; border-style: solid !important; display: flex; align-items: center; gap: 12px; max-width: 300px;">
+          <div class="pdf-icon" style="background: #fee2e2; color: #ef4444; min-width: 40px; width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+            <i class="fas fa-file-pdf"></i>
+          </div>
+          <div class="pdf-info" style="flex: 1; overflow: hidden;">
+            <div class="pdf-caption fw-bold small text-truncate" style="color: #1e293b;">${finalCaption || 'Documento PDF'}</div>
+            <a href="${finalUrl}" target="_blank" class="btn btn-primary btn-sm mt-1 w-100 py-1" style="font-size: 0.75rem; border-radius: 6px; background-color: #6366f1; border-color: #6366f1; color: white !important; text-decoration: none; display: inline-block; text-align: center;">
+              <i class="fas fa-external-link-alt me-1"></i> Ver PDF
+            </a>
+          </div>
+        </div>
+      `;
+    });
+
+    // 6. Limpieza agresiva de etiquetas técnicas e internas (Case Insensitive)
     formatted = formatted.replace(/\[UPDATE_CART:.*?\]/gi, '');
     formatted = formatted.replace(/\[PRODUCT:.*?\]/gi, '');
     formatted = formatted.replace(/\[ORDER_CONFIRMED:[\s\S]*?\}\s*\]/gi, '');

@@ -26,8 +26,9 @@ function resolveVariables(text: string, variables: any, flowName?: string): stri
         const k = key.trim();
         if (k.toLowerCase() === 'merchantname') return variables['merchantName'] || flowName || 'Comercio';
         const varKey = Object.keys(variables).find(v => v.toLowerCase() === k.toLowerCase());
-        if (varKey && variables[varKey] !== undefined && variables[varKey] !== null) {
-            return String(variables[varKey]);
+        if (varKey) {
+            const val = variables[varKey];
+            return val !== undefined && val !== null ? String(val) : '';
         }
         return match;
     });
@@ -48,7 +49,13 @@ function evaluateCondition(operator: string, varValue: string, targetValue: stri
 }
 
 async function createOrderSafe(supabase: any, orderData: any) {
-    const fullData = { ...orderData, source: 'bot_flow', closing_agent_type: 'bot' };
+    const fullData = { 
+        ...orderData, 
+        source: orderData.source || 'bot_flow', 
+        closing_agent_type: orderData.closing_agent_type || 'bot' 
+    };
+    
+    // Asegurar que nombres y teléfonos se incluyan en el insert
     let { data, error } = await supabase.from('orders').insert(fullData).select('*').single();
 
     if (error && (error.message.includes('column') || error.message.includes('cache'))) {
@@ -58,7 +65,9 @@ async function createOrderSafe(supabase: any, orderData: any) {
             customer_id: orderData.customer_id,
             total: orderData.total,
             delivery_address: orderData.delivery_address,
-            status: orderData.status
+            status: orderData.status,
+            customer_name: orderData.customer_name,
+            customer_phone: orderData.customer_phone
         };
         if (orderData.channel) basicData.channel = orderData.channel;
         const res = await supabase.from('orders').insert(basicData).select('*').single();
@@ -135,11 +144,11 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
         
         // --- 1. ACTUALIZAR CLIENTE CON DATOS RECOLECTADOS DE VARIABLES ---
         const customerUpdate: any = {};
-        if (variables['nombre_cliente'] || variables['nombre'] || variables['name']) {
-            customerUpdate.full_name = variables['nombre_cliente'] || variables['nombre'] || variables['name'];
+        if (variables['customer_name'] || variables['nombre_cliente'] || variables['nombre'] || variables['name']) {
+            customerUpdate.full_name = variables['customer_name'] || variables['nombre_cliente'] || variables['nombre'] || variables['name'];
         }
-        if (variables['telefono_cliente'] || variables['telefono'] || variables['phone']) {
-            customerUpdate.phone = variables['telefono_cliente'] || variables['telefono'] || variables['phone'];
+        if (variables['customer_phone'] || variables['telefono_cliente'] || variables['telefono'] || variables['phone']) {
+            customerUpdate.phone = variables['customer_phone'] || variables['telefono_cliente'] || variables['telefono'] || variables['phone'];
         }
         if (Object.keys(customerUpdate).length > 0 && customerId) {
             await supabase.from('customers').update(customerUpdate).eq('id', customerId);
@@ -153,7 +162,9 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
         const { data: order, error: orderErr } = await createOrderSafe(supabase, {
             merchant_id: merchantId, customer_id: customerId, total,
             delivery_address: variables['direccion_entrega'] || variables['direccion'] || 'No proporcionada',
-            status: 'pending', conversation_id: conversationId, channel: finalChannel
+            status: 'pending', conversation_id: conversationId, channel: finalChannel,
+            customer_name: customerUpdate.full_name || variables['customer_name'],
+            customer_phone: customerUpdate.phone || variables['customer_phone']
         });
 
         if (!orderErr && order) {
@@ -162,8 +173,13 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
             const currentCart = variables['cart'] || [];
             if (currentCart.length > 0) {
                 const items = currentCart.map((it: any) => ({
-                    order_id: order.id, product_id: it.id, product_name: it.name,
-                    quantity: it.qty, unit_price: it.price, subtotal: it.price * it.qty
+                    order_id: order.id, 
+                    product_id: it.id, 
+                    product_name: it.name,
+                    quantity: it.qty, 
+                    unit_price: it.price, 
+                    subtotal: it.price * it.qty,
+                    notes: it.notes || null
                 }));
                 await supabase.from('order_items').insert(items);
             }
@@ -311,6 +327,8 @@ async function executeAgentTool(
         case 'add_to_cart': {
             const productName = toolArgs?.product_name || toolArgs?.query || '';
             const quantity = parseInt(toolArgs?.quantity) || 1;
+            const notes = toolArgs?.notes || '';
+            
             const { data: prod } = await supabase
                 .from('products')
                 .select('id, name, price, stock')
@@ -319,13 +337,22 @@ async function executeAgentTool(
                 .gt('stock', 0)
                 .limit(1)
                 .maybeSingle();
+            
             if (!prod) return `No encontré el producto "${productName}" en nuestro catálogo o no hay stock disponible.`;
+            
             const cart = variables['cart'] || [];
             const existing = cart.find((i: any) => i.id === prod.id);
-            if (existing) { existing.qty += quantity; } else { cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: quantity }); }
+            
+            if (existing) { 
+                existing.qty += quantity; 
+                if (notes) existing.notes = existing.notes ? `${existing.notes}, ${notes}` : notes;
+            } else { 
+                cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: quantity, notes }); 
+            }
+            
             variables['cart'] = cart;
             const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
-            return `✅ ${prod.name} x${quantity} añadido al carrito. Total actual del carrito: $${total}`;
+            return `✅ ${prod.name} x${quantity} añadido al carrito${notes ? ` con notas: "${notes}"` : ''}. Total actual del carrito: $${total}`;
         }
 
         case 'get_cart': {
@@ -348,17 +375,36 @@ async function executeAgentTool(
             const cart = variables['cart'] || [];
             if (cart.length === 0) return 'Tu carrito está vacío. Primero añade productos para poder registrar el pedido.';
             const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
+            
+            const clientName = toolArgs?.customer_name || variables['customer_name'] || variables['nombre_cliente'];
+            const clientPhone = toolArgs?.customer_phone || variables['customer_phone'] || variables['telefono_cliente'];
             const address = toolArgs?.address || variables['direccion_entrega'] || 'Por confirmar';
+
+            // Actualizar tabla de clientes si tenemos nuevos datos
+            if (clientName || clientPhone) {
+                const update: any = {};
+                if (clientName) update.full_name = clientName;
+                if (clientPhone) update.phone = clientPhone;
+                await supabase.from('customers').update(update).eq('id', customerId);
+            }
+
             const { data: order, error: orderErr } = await createOrderSafe(supabase, {
                 merchant_id: merchantId, customer_id: customerId, total,
-                delivery_address: address, status: 'pending', conversation_id: conversationId
+                delivery_address: address, status: 'pending', conversation_id: conversationId,
+                customer_name: clientName, customer_phone: clientPhone,
+                source: 'ai_agent', closing_agent_type: 'ai'
             });
             if (!orderErr && order) {
                 const orderNum = `#${order.order_number || order.id.substring(0, 8)}`;
                 variables['orderNumber'] = orderNum;
                 const items = cart.map((it: any) => ({
-                    order_id: order.id, product_id: it.id, product_name: it.name,
-                    quantity: it.qty, unit_price: it.price, subtotal: it.price * it.qty
+                    order_id: order.id, 
+                    product_id: it.id, 
+                    product_name: it.name,
+                    quantity: it.qty, 
+                    unit_price: it.price, 
+                    subtotal: it.price * it.qty,
+                    notes: it.notes || null
                 }));
                 await supabase.from('order_items').insert(items);
                 variables['cart'] = []; // Limpiar carrito tras registrar
@@ -486,11 +532,11 @@ async function executeAgentTool(
 const TOOL_DEFINITIONS: Record<string, any> = {
     catalog_search: {
         name: 'catalog_search',
-        description: 'Busca productos disponibles en el catálogo de la tienda. Úsala cuando el cliente pregunte qué hay disponible, qué vendemos, o busque un producto específico.',
+        description: 'Busca productos o categorías en el catálogo. Úsala cuando el cliente pregunte por lo que vendemos, pida una categoría (ej: "bebidas") o busque un producto específico. La búsqueda incluye subcategorías automáticamente.',
         parameters: {
             type: 'object',
             properties: {
-                query: { type: 'string', description: 'Nombre o tipo de producto a buscar. Ej: "hamburguesa", "pizza", "bebida"' }
+                query: { type: 'string', description: 'Nombre del producto, plato o categoría a buscar.' }
             },
             required: ['query']
         }
@@ -508,12 +554,13 @@ const TOOL_DEFINITIONS: Record<string, any> = {
     },
     add_to_cart: {
         name: 'add_to_cart',
-        description: 'Añade un producto al carrito del cliente. Úsala cuando el cliente elija un producto o indique que quiere comprarlo.',
+        description: 'Añade un producto al carrito del cliente. Úsala cuando el cliente elija un producto o indique que quiere comprarlo. Puedes incluir notas especiales (ej: "sin cebolla").',
         parameters: {
             type: 'object',
             properties: {
-                product_name: { type: 'string', description: 'Nombre exacto del producto a añadir (buscado en el catálogo)' },
-                quantity: { type: 'number', description: 'Cantidad a añadir. Por defecto 1.' }
+                product_name: { type: 'string', description: 'Nombre exacto del producto a añadir' },
+                quantity: { type: 'number', description: 'Cantidad a añadir. Por defecto 1.' },
+                notes: { type: 'string', description: 'Observaciones o notas especiales para el producto' }
             },
             required: ['product_name']
         }
@@ -536,11 +583,13 @@ const TOOL_DEFINITIONS: Record<string, any> = {
     },
     register_order: {
         name: 'register_order',
-        description: 'Registra y confirma el pedido del cliente en el sistema. USA ESTA FUNCIÓN SOLO cuando el cliente confirme explícitamente que desea hacer el pedido (diga "sí", "confirmar", "proceder", "realizar el pedido", etc.)',
+        description: 'Registra y confirma el pedido del cliente en el sistema. USA ESTA FUNCIÓN SOLO cuando el cliente confirme explícitamente que desea hacer el pedido. Asegúrate de pedir primero el nombre, teléfono y dirección si no los conoces.',
         parameters: {
             type: 'object',
             properties: {
-                address: { type: 'string', description: 'Dirección de entrega si el cliente la ha proporcionado' }
+                address: { type: 'string', description: 'Dirección de entrega' },
+                customer_name: { type: 'string', description: 'Nombre completo del cliente' },
+                customer_phone: { type: 'string', description: 'Número de teléfono de contacto' }
             }
         }
     },
@@ -707,8 +756,13 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
     let waitingFor: string | null = session.waiting_for;
 
     // Cargar nombre del comercio en variables para resolver {{merchantName}}
-    const { data: merchantData } = await supabase.from('merchants').select('name').eq('id', merchantId).single();
-    if (merchantData) variables['merchantName'] = merchantData.name;
+    const { data: merchantData } = await supabase.from('merchants').select('name, menu_pdf_url').eq('id', merchantId).single();
+    if (merchantData) {
+        variables['merchantName'] = merchantData.name;
+        variables['merchant_name'] = merchantData.name;
+        variables['merchant_menu_pdf'] = merchantData.menu_pdf_url || '';
+        variables['menu_pdf'] = merchantData.menu_pdf_url || '';
+    }
 
     // 3. Procesar la respuesta del usuario según el estado anterior
     if (waitingFor === 'menu_selection') {
@@ -755,6 +809,20 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
             // También guardamos las notas del producto para usarlas en el carrito.
             if (varName === 'last_product_notes' && variables['last_selected_product_id']) {
                 variables['last_product_notes_value'] = messageText.trim();
+            }
+
+            // AUTO-UPDATE CUSTOMER PROFILE IF CAPTURING IDENTITY DATA
+            if (customerId) {
+                const nameVars = ['customer_name', 'nombre_cliente', 'nombre', 'name'];
+                const phoneVars = ['customer_phone', 'telefono_cliente', 'telefono', 'phone'];
+                const identityUpdate: any = {};
+                
+                if (nameVars.includes(varName)) identityUpdate.full_name = messageText.trim();
+                if (phoneVars.includes(varName)) identityUpdate.phone = messageText.trim();
+                
+                if (Object.keys(identityUpdate).length > 0) {
+                    await supabase.from('customers').update(identityUpdate).eq('id', customerId);
+                }
             }
 
             const conn = connections.find((c: any) => c.from === currentNodeId && c.fromPort === 'output');
@@ -812,7 +880,7 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
             const { data: merchant } = await supabase.from('merchants').select('name, ai_api_key, ai_model').eq('id', merchantId).single();
             const { data: platform } = await supabase.from('platform_settings').select('ai_api_key, ai_model').eq('id', 'global').maybeSingle();
             
-            const apiKey = merchant?.ai_api_key || platform?.ai_api_key;
+            const apiKey = merchant?.ai_api_key || platform?.ai_api_key || Deno.env.get("GEMINI_API_KEY");
 
             // Prioridad de modelo: 1. Configuración del comercio, 2. Configuración del bloque, 3. Configuración plataforma, 4. Fallback
             const modelRaw = merchant?.ai_model || node.data.model || platform?.ai_model || 'gemini-1.5-flash';
@@ -1090,6 +1158,18 @@ ${customNodeInstructions}
             }
         }
 
+        // ── ENVIAR PDF ───────────────────────────────
+        if (node.type === 'send_pdf' && node.data.pdf_url) {
+            const pdfUrl = resolveVariables(node.data.pdf_url, variables, flow.name);
+            const pdfCaption = node.data.pdf_caption ? resolveVariables(node.data.pdf_caption, variables, flow.name) : '';
+            console.log(`[BOT-ENGINE] Resolviendo PDF: ${pdfUrl}`);
+            if (pdfUrl) {
+                messagesToReturn.push(`[PDF:${pdfUrl}:${pdfCaption}]`);
+            } else {
+                console.warn(`[BOT-ENGINE] PDF URL resolved as empty for node ${node.id}`);
+            }
+        }
+
         // ── CATEGORÍA 2: CONTEXTO Y MEMORIA ──────────
         if (node.type === 'memory_extract' && node.data.memory_prompt && node.data.memory_key) {
             console.log(`[BOT-ENGINE] Extrayendo a memoria clave: ${node.data.memory_key}`);
@@ -1279,13 +1359,13 @@ ${customNodeInstructions}
         }
 
         if (node.type === 'catalog_search') {
-            const { data: products } = await supabase.from('products').select('*').eq('merchant_id', merchantId).limit(5);
-            if (products && products.length > 0) {
-                const list = products.map((p: any) => `- ${p.name}: $${p.price}`).join('\n');
-                messagesToReturn.push(`🛒 Productos disponibles:\n${list}`);
-            } else {
-                messagesToReturn.push('No hay productos disponibles en este momento.');
-            }
+            const query = node.data.query ? resolveVariables(node.data.query, variables, flow.name) : '';
+            console.log(`[BOT-ENGINE] Manual Catalog Search: query="${query}"`);
+            
+            // Reusar la lógica de búsqueda de la herramienta para consistencia
+            const toolResult = await executeAgentTool(supabase, 'catalog_search', { query }, variables, merchantId, conversationId, customerId);
+            messagesToReturn.push(toolResult);
+            
             const conn = connections.find((c: any) => c.from === currentNodeId && (c.fromPort === 'output' || !c.fromPort));
             if (conn) { currentNodeId = conn.to; continue; } else break;
         }

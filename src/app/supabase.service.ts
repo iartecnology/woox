@@ -13,6 +13,21 @@ export class SupabaseService {
 
     constructor() { }
 
+    async uploadFile(bucket: string, path: string, file: File) {
+        const { data, error } = await supabase.storage
+            .from(bucket)
+            .upload(path, file, { cacheControl: '3600', upsert: true });
+        
+        if (error) return { data: null, error };
+        
+        // Obtener URL Pública
+        const { data: { publicUrl } } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(data.path);
+        
+        return { data: { ...data, publicUrl }, error: null };
+    }
+
     isValidUUID(uuid: string): boolean {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         return uuidRegex.test(uuid);
@@ -200,6 +215,19 @@ export class SupabaseService {
             .upsert(merchant)
             .select()
             .single();
+
+        if (data && data.id) {
+            try {
+                const emptyFile = new File([''], '.placeholder', { type: 'text/plain' });
+                // We ensure the folder structure exists visually by uploading a 0-byte placeholder
+                await supabase.storage.from('merchant-data').upload(`${data.id}/menus/.placeholder`, emptyFile, { upsert: true });
+                await supabase.storage.from('merchant-data').upload(`${data.id}/productos/.placeholder`, emptyFile, { upsert: true });
+                await supabase.storage.from('merchant-data').upload(`${data.id}/logos/.placeholder`, emptyFile, { upsert: true });
+            } catch (err) {
+                console.warn('Could not initialize merchant storage folders:', err);
+            }
+        }
+
         return { data, error };
     }
 
@@ -227,17 +255,40 @@ export class SupabaseService {
             console.error('[SupabaseService] getCategories: Invalid or missing UUID:', merchantId);
             return { data: [], error: { message: `ID de comercio inválido ("${merchantId}"). Por favor, selecciona la empresa nuevamente.` } };
         }
-        const { data, error } = await supabase
+        // Intentar con sort_order (requiere migración). Si falla, volver a ordenar por nombre.
+        let result = await supabase
             .from('categories')
             .select('*')
             .eq('merchant_id', merchantId)
-            .order('name');
-        if (error) console.error('[SupabaseService] Error loading categories:', error);
-        return { data, error };
+            .order('sort_order', { ascending: true })
+            .order('name', { ascending: true });
+
+        if (result.error?.message?.includes('sort_order')) {
+            console.warn('[SupabaseService] sort_order column not found, falling back to name order. Run migration 20260410_categories_sort_order.sql');
+            result = await supabase
+                .from('categories')
+                .select('*')
+                .eq('merchant_id', merchantId)
+                .order('name', { ascending: true });
+        }
+
+        if (result.error) console.error('[SupabaseService] Error loading categories:', result.error);
+        return { data: result.data, error: result.error };
+    }
+
+    async updateCategoriesOrder(updates: { id: string; sort_order: number }[]) {
+        const promises = updates.map(u =>
+            supabase.from('categories').update({ sort_order: u.sort_order }).eq('id', u.id)
+        );
+        return Promise.all(promises);
     }
 
     async saveCategory(category: any) {
         return await supabase.from('categories').upsert(category).select().single();
+    }
+
+    async updateCategory(id: string, updates: any) {
+        return await supabase.from('categories').update(updates).eq('id', id);
     }
 
     async deleteCategory(id: string) {

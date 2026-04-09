@@ -6,6 +6,7 @@ export interface Category {
     merchant_id: string;
     name: string;
     parent_id?: string | null;
+    sort_order?: number;
 }
 
 export interface Product {

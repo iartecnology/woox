@@ -9,7 +9,11 @@
 
 /* Sidebar */
 .category-sidebar {
-    width: 250px;
+    width: 320px;
+    min-width: 250px;
+    max-width: 500px;
+    resize: horizontal;
+    overflow: auto;
     background: white;
     border-radius: 20px;
     padding: 24px;
@@ -63,6 +67,55 @@
     justify-content: space-between;
     align-items: center;
     position: relative;
+    gap: 6px;
+}
+
+/* CDK Drag & Drop */
+.drag-handle {
+    cursor: grab;
+    color: #CBD5E1;
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: color 0.2s;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.drag-handle:hover {
+    color: #94A3B8;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.cdk-drag-preview {
+    background: white;
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: #4F46E5;
+    list-style: none;
+}
+
+.cdk-drag-animating {
+    transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.category-list.cdk-drop-list-dragging .category-item-li:not(.cdk-drag-placeholder) {
+    transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.drag-placeholder {
+    height: 44px;
+    background: #EEF2FF;
+    border: 2px dashed #818CF8;
+    border-radius: 12px;
+    margin-bottom: 4px;
 }
 
 .category-name {
@@ -72,8 +125,20 @@
     text-overflow: ellipsis;
 }
 
-.delete-cat-btn {
+.cat-action-btns {
+    display: flex;
+    gap: 4px;
     opacity: 0;
+    transition: opacity 0.2s;
+    align-items: center;
+}
+
+.category-item-li:hover .cat-action-btns {
+    opacity: 1;
+}
+
+.edit-cat-btn,
+.delete-cat-btn {
     background: transparent;
     border: none;
     cursor: pointer;
@@ -81,12 +146,18 @@
     padding: 4px;
     border-radius: 6px;
     transition: all 0.2s;
-    margin-left: 8px;
-    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.category-item-li:hover .delete-cat-btn {
-    opacity: 1;
+.edit-cat-btn:hover {
+    background: #EEF2FF;
+    color: #4F46E5;
+}
+
+.delete-cat-btn {
+    color: #ef4444;
 }
 
 .delete-cat-btn:hover {
@@ -176,6 +247,42 @@
 .add-product-btn:hover {
     background: #4338CA;
     transform: translateY(-2px);
+}
+
+.excel-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.import-excel-btn {
+    background: #10B981;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.import-excel-btn:hover {
+    background: #059669;
+    transform: translateY(-2px);
+}
+
+.template-link {
+    font-size: 0.75rem;
+    color: #059669;
+    text-decoration: underline;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.template-link:hover {
+    color: #047857;
 }
 
 /* Product Grid */
@@ -415,4 +522,113 @@ select {
     background: #4F46E5;
     color: white;
     border: none;
+}
+
+/* ─── Skeleton Shimmer Loading ───────────────────────── */
+@keyframes shimmer {
+    0%   { background-position: -800px 0; }
+    100% { background-position: 800px 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg,
+        #f0f0f0 25%,
+        #e0e0e0 37%,
+        #f0f0f0 63%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s infinite linear;
+    border-radius: 8px;
+}
+
+.skeleton-card {
+    pointer-events: none;
+}
+
+.skeleton-img {
+    height: 200px;
+    border-radius: 0;
+    width: 100%;
+}
+
+.skeleton-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.skeleton-title {
+    height: 18px;
+    width: 70%;
+}
+
+.skeleton-desc {
+    height: 13px;
+    width: 100%;
+}
+
+.skeleton-desc.short {
+    width: 55%;
+}
+
+.skeleton-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.skeleton-price {
+    height: 20px;
+    width: 80px;
+}
+
+.skeleton-btn {
+    height: 36px;
+    width: 90px;
+    border-radius: 10px;
+}
+
+/* ─── Drag & Drop / Selection ───────────────────────── */
+
+.product-card {
+    cursor: grab;
+    user-select: none;
+}
+
+.product-card:active {
+    cursor: grabbing;
+}
+
+.product-card.selected {
+    border: 2px solid #4F46E5;
+    background: #F5F3FF !important;
+}
+
+.product-selection-overlay {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 10;
+}
+
+.product-selection-overlay input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #4F46E5;
+    border-radius: 6px;
+}
+
+.category-item-li.drop-target {
+    border: 2px dashed #4F46E5 !important;
+    background: #EEF2FF !important;
+    color: #4F46E5 !important;
+    transform: scale(1.05);
+    z-index: 10;
+}
+
+.category-item-li.active {
+    background: #EEF2FF;
+    color: #4F46E5;
 }

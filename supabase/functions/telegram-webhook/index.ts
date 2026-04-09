@@ -140,34 +140,69 @@ Deno.serve(async (req: Request) => {
         }
 
         // Enviar respuesta a Telegram
-        const finalMessage = typeof aiResponse === 'string' ? sanitizeMarkdown(aiResponse) : "Lo siento, tuve un problema procesando tu mensaje.";
+        const finalMessage = typeof aiResponse === 'string' ? sanitizeMarkdown(aiResponse) : "Lo siento, tuve un problema procesándolo tu mensaje.";
+        const parts = finalMessage.split('\n\n');
         
         try {
-            const tgRes = await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    chat_id: chatId,
-                    text: finalMessage,
-                    parse_mode: "Markdown"
-                })
-            });
+            for (const part of parts) {
+                if (part.startsWith('[PDF:') && part.endsWith(']')) {
+                    const pdfData = part.slice(5, -1).split(':');
+                    const url = pdfData[0];
+                    const caption = pdfData.slice(1).join(':');
 
-            if (!tgRes.ok) {
-                // Fallback: Si el error es de parseo de Markdown, enviar como texto plano
-                const errorData = await tgRes.json();
-                if (errorData.description?.includes("can't parse entities")) {
-                    console.warn("[GATEWAY] Error de Markdown, reintentando como texto plano");
-                    await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
+                    const tgRes = await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendDocument`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             chat_id: chatId,
-                            text: finalMessage
+                            document: url,
+                            caption: caption || "Menú",
+                            parse_mode: "Markdown"
                         })
                     });
-                } else {
-                    throw new Error(`Telegram API Error: ${tgRes.status} - ${JSON.stringify(errorData)}`);
+
+                    if (!tgRes.ok) {
+                        const errorData = await tgRes.json();
+                        console.error("[GATEWAY] Telegram sendDocument Error:", errorData);
+                        // Fallback a enviar solo el link si falla el documento
+                        await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                chat_id: chatId,
+                                text: `📄 *Menú PDF*:\n${url}\n\n${caption}`,
+                                parse_mode: "Markdown"
+                            })
+                        });
+                    }
+                } else if (part.trim()) {
+                    const tgRes = await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            chat_id: chatId,
+                            text: part,
+                            parse_mode: "Markdown"
+                        })
+                    });
+
+                    if (!tgRes.ok) {
+                        // Fallback: Si el error es de parseo de Markdown, enviar como texto plano
+                        const errorData = await tgRes.json();
+                        if (errorData.description?.includes("can't parse entities")) {
+                            console.warn("[GATEWAY] Error de Markdown, reintentando como texto plano");
+                            await fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendMessage`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    chat_id: chatId,
+                                    text: part
+                                })
+                            });
+                        } else {
+                            throw new Error(`Telegram API Error: ${tgRes.status} - ${JSON.stringify(errorData)}`);
+                        }
+                    }
                 }
             }
         } catch (tgError) {
