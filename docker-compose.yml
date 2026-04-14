@@ -11,6 +11,8 @@ services:
       - AUTH_SECRET
       - NEXT_PUBLIC_SUPABASE_URL
       - NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ports:
+      - "8080:80"
     restart: always
     deploy:
       resources:
