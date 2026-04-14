@@ -42,6 +42,12 @@ export class ProductManagementComponent implements OnInit {
     draggedCategoryId: string | null = null;
     activeDropTargetId: string | null = null;
     isDraggingProducts: boolean = false;
+ 
+    // Sidebar Resizing
+    sidebarWidth: number = 320;
+    isResizing: boolean = false;
+    private startX: number = 0;
+    private startWidth: number = 0;
 
     newProduct: Partial<Product> = {
         name: '',
@@ -696,6 +702,43 @@ export class ProductManagementComponent implements OnInit {
                 console.error('Error moving category:', err);
                 this.notificationService.show('Error al mover la categoría', 'error');
             }
+        }
+    }
+
+    // --- Sidebar Resizing Methods ---
+    startResizing(event: MouseEvent) {
+        this.isResizing = true;
+        this.startX = event.clientX;
+        this.startWidth = this.sidebarWidth;
+        
+        // Añadir clases al body para evitar selección de texto y cambiar cursor
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        // Escuchar eventos globales
+        const onMouseMove = (e: MouseEvent) => this.onMouseMove(e);
+        const onMouseUp = () => {
+            this.isResizing = false;
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = 'auto';
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    }
+
+    private onMouseMove(event: MouseEvent) {
+        if (!this.isResizing) return;
+        
+        const deltaX = event.clientX - this.startX;
+        const newWidth = this.startWidth + deltaX;
+        
+        // Límites: Min 200px, Max 600px
+        if (newWidth >= 200 && newWidth <= 600) {
+            this.sidebarWidth = newWidth;
+            this.cdr.detectChanges();
         }
     }
 }

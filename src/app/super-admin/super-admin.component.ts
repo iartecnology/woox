@@ -752,7 +752,7 @@ export class SuperAdminComponent implements OnInit {
         telegram_bot_token: '',
         facebook_page_token: '',
         subscription_plan: 'pro',
-        subscription_expires_at: '',
+        subscription_expires_at: undefined,
         ai_provider: 'google_gemini',
         ai_api_key: '',
         ai_model: '',
@@ -1525,7 +1525,7 @@ export class SuperAdminComponent implements OnInit {
                 telegram_bot_token: '',
                 facebook_page_token: '',
                 subscription_plan: 'pro',
-                subscription_expires_at: '',
+                subscription_expires_at: undefined,
                 ai_provider: 'openai',
                 ai_api_key: '',
                 ai_schedule_enabled: false,
@@ -2300,11 +2300,16 @@ export class SuperAdminComponent implements OnInit {
             delete (merchantData as any).id;
         }
 
-        // --- ROBUSTEZ: Evitar errores de esquema si la columna biolink aún no existe ---
-        // Si biolink es null o undefined, lo eliminamos del objeto para que Supabase no intente insertarlo 
-        // en una columna que podría no existir todavía en el cache del esquema.
         if (merchantData.biolink === undefined || merchantData.biolink === null) {
             delete merchantData.biolink;
+        }
+
+        // LIMPIEZA DE FECHAS: Convertir "" a null para evitar errores de PostgreSQL
+        if (merchantData.subscription_expires_at === '') {
+            merchantData.subscription_expires_at = undefined;
+        }
+        if ((merchantData as any).wa_last_connection === '') {
+            (merchantData as any).wa_last_connection = undefined;
         }
 
         const { error } = await this.supabaseService.saveMerchant(merchantData);

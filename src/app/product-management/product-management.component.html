@@ -1,5 +1,5 @@
 <div class="product-mgmt-container">
-    <aside class="category-sidebar">
+    <aside class="category-sidebar" [style.width.px]="sidebarWidth">
         <div class="sidebar-header">
             <h3>Menú</h3>
             <button class="add-btn-small" (click)="openCategoryModal()">+</button>
@@ -38,6 +38,9 @@
             </li>
         </ul>
     </aside>
+
+    <!-- Resizer Handle -->
+    <div class="sidebar-resizer" (mousedown)="startResizing($event)" [class.active]="isResizing"></div>
 
     <main class="product-content">
         <header class="content-header">

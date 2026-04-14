@@ -1,6 +1,6 @@
 .product-mgmt-container {
     display: flex;
-    gap: 32px;
+    gap: 0px; /* Quitamos el gap para que el resizer esté pegado */
     max-width: 1400px;
     margin: 40px auto;
     padding: 0 20px;
@@ -9,11 +9,9 @@
 
 /* Sidebar */
 .category-sidebar {
-    width: 320px;
-    min-width: 250px;
-    max-width: 500px;
-    resize: horizontal;
-    overflow: auto;
+    width: 320px; /* Ancho inicial movido a TS */
+    min-width: 200px;
+    max-width: 600px;
     background: white;
     border-radius: 20px;
     padding: 24px;
@@ -168,6 +166,24 @@
 /* Main Content */
 .product-content {
     flex: 1;
+    padding-left: 32px; /* Añadimos el padding aquí para compensar el gap quitado */
+}
+
+/* Sidebar Resizer */
+.sidebar-resizer {
+    width: 6px;
+    cursor: col-resize;
+    background: transparent;
+    transition: background 0.2s, border-color 0.2s;
+    border-left: 1px solid #F3F4F6;
+    margin: 40px 0; /* Alinear con el contenedor */
+    z-index: 10;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer.active {
+    background: #EEF2FF;
+    border-left: 2px solid #4F46E5;
 }
 
 .content-header {
