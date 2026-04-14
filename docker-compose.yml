@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: woox-frontend-main
     environment:
       - SUPABASE_URL
       - SUPABASE_ANON_KEY
