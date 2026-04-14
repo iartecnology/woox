@@ -8,6 +8,8 @@ services:
       - SUPABASE_SERVICE_ROLE_KEY
       - GOOGLE_API_KEY
       - AUTH_SECRET
+    ports:
+      - "8088:8088"
     restart: always
     deploy:
       resources:
