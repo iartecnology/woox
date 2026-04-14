@@ -61,3 +61,26 @@ supabase/secrets.env
 
 # Firebase credentials (Service Accounts)
 android/app/*firebase-adminsdk*.json
+
+# Python AI Engine - entorno virtual y artefactos Python
+woox-ai-engine/venv/
+woox-ai-engine/__pycache__/
+woox-ai-engine/*.pyc
+woox-ai-engine/*.pyo
+woox-ai-engine/*.egg-info/
+woox-ai-engine/.pytest_cache/
+woox-ai-engine/.env
+
+# Python generic (aplica a todo el repo)
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+
+# Tests y scratch files
+test_db.ts
+.qwen/

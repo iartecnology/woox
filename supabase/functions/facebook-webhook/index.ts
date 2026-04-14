@@ -73,13 +73,31 @@ Deno.serve(async (req: Request) => {
         await supabase.from("messages").insert({ conversation_id: conversation!.id, sender_type: "customer", content: messageText, metadata: { fb_message_id: fbMessageId } });
         await supabase.from("conversations").update({ last_message: messageText, last_message_at: new Date().toISOString(), unread_count: (conversation!.unread_count || 0) + 1 }).eq("id", conversation!.id);
         let aiResponse = "";
+        
+        // Enviar acción 'typing' repetidamente para FB/Instagram
+        const fbUrlTyping = `https://graph.facebook.com/v22.0/me/messages?access_token=${m.facebook_page_access_token}`;
+        const sendTyping = () => fetch(fbUrlTyping, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ recipient: { id: senderId }, sender_action: "typing_on" })
+        }).catch(() => {});
+        
+        sendTyping();
+        const typingInterval = setInterval(sendTyping, 4000);
+
         try {
             if (conversation!.ai_active) {
                 const engineRes = await processBotFlow(supabase, m.id, conversation!.id, messageText, customer!.id);
                 if (engineRes) aiResponse = engineRes;
             }
-            if (!aiResponse) return new Response("ok", { headers: corsHeaders });
-        } catch (e: any) { aiResponse = "Ups! Tuve un problema procesándolo. 🤖⚙️"; }
+            if (!aiResponse) {
+                clearInterval(typingInterval);
+                return new Response("ok", { headers: corsHeaders });
+            }
+        } catch (e: any) { 
+            aiResponse = "Ups! Tuve un problema procesándolo. 🤖⚙️"; 
+        } finally {
+            clearInterval(typingInterval);
+        }
         const cleanResponse = sanitizeMarkdown(aiResponse);
         const parts = cleanResponse.split('\n\n');
         const fbUrl = `https://graph.facebook.com/v22.0/me/messages?access_token=${m.facebook_page_access_token}`;

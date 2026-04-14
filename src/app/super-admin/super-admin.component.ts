@@ -2484,6 +2484,10 @@ export class SuperAdminComponent implements OnInit {
                     this.channelStatus[channel] = 'connected';
                     this.notificationService.show(`✅ Telegram conectado: @${data.result.username}`, 'success');
                     await this.setupTelegramWebhook(token, merchant.id);
+                    // Actualizar en la base de datos automáticamente
+                    await this.supabaseService.updateMerchant(merchant.id, {
+                        telegram_bot_token: token
+                    });
                 } else {
                     this.channelStatus[channel] = 'error';
                     this.notificationService.show(`❌ Token de Telegram inválido`, 'error');
@@ -2515,6 +2519,49 @@ export class SuperAdminComponent implements OnInit {
         }
 
         this.verifyingChannel = null;
+    }
+
+    async disconnectTelegram(merchant: any) {
+        if (!merchant.telegram_bot_token) return;
+
+        this.deleteModalConfig = {
+            title: '¿DESCONECTAR TELEGRAM?',
+            message: `Vas a eliminar el token de Telegram para "${merchant.name}". El bot dejará de recibir mensajes inmediatamente y el webhook será desactivado.`,
+            confirmLabel: 'Desconectar Telegram',
+            icon: '🔌',
+            isProcessing: false,
+            action: async () => {
+                this.deleteModalConfig.isProcessing = true;
+                try {
+                    // 1. Intentar borrar el webhook en Telegram (limpieza)
+                    // Usamos fetch directo a la API de Telegram
+                    await fetch(`https://api.telegram.org/bot${merchant.telegram_bot_token}/deleteWebhook`).catch(e => {
+                        console.warn('No se pudo borrar el webhook de Telegram:', e);
+                    });
+
+                    // 2. Limpiar localmente y actualizar estado de UI
+                    merchant.telegram_bot_token = '';
+                    this.channelStatus['telegram'] = 'idle';
+
+                    // 3. Actualizar en la base de datos
+                    const { error } = await this.supabaseService.updateMerchant(merchant.id, {
+                        telegram_bot_token: ''
+                    });
+
+                    if (error) throw error;
+
+                    this.notificationService.show('Telegram desconectado correctamente', 'warning');
+                    this.showDeleteConfirmModal = false;
+                    this.cdr.detectChanges();
+                } catch (error: any) {
+                    console.error('Error disconnecting Telegram:', error);
+                    this.notificationService.show('Error al desconectar Telegram: ' + error.message, 'error');
+                } finally {
+                    this.deleteModalConfig.isProcessing = false;
+                }
+            }
+        };
+        this.showDeleteConfirmModal = true;
     }
 
     async setupTelegramWebhook(botToken: string, merchantId: string) {

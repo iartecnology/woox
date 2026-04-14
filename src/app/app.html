@@ -24,7 +24,9 @@
                 <ng-template #brandTpl>
                     <div style="display: flex; align-items: center; gap: 8px;">
                       <img *ngIf="usePlatformLogoImage && platformLogoUrl" [src]="platformLogoUrl" alt="Logo" style="height: 28px; width: auto; object-fit: contain;">
-                      <span *ngIf="!usePlatformLogoImage || !platformLogoUrl"><span style="color: #6366f1;">W</span>{{ platformName.substring(1) }}</span>
+                      <span *ngIf="!usePlatformLogoImage || !platformLogoUrl" style="font-weight: 800; font-size: 1.25rem;">
+                          <span style="color: #6366f1;">{{ platformName.substring(0, 2) }}</span><span style="color: #111827;">{{ platformName.substring(2) }}</span>
+                      </span>
                       <small *ngIf="!isMobile()" class="app-version-tag" style="font-size: 0.6rem; opacity: 0.5; font-weight: 500; font-family: monospace; margin-top: 4px;">v{{ appVersion }}</small>
                     </div>
                 </ng-template>
@@ -114,8 +116,9 @@
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <img *ngIf="usePlatformLogoImage && platformLogoUrl" [src]="platformLogoUrl" alt="Platform Logo"
                         class="sidebar-logo-img">
-                    <span *ngIf="!usePlatformLogoImage || !platformLogoUrl"
-                        style="font-weight: 800; font-size: 1.3rem;">{{ platformName }}</span>
+                    <span *ngIf="!usePlatformLogoImage || !platformLogoUrl" style="font-weight: 800; font-size: 1.3rem;">
+                        <span style="color: #6366f1;">{{ platformName.substring(0, 2) }}</span><span style="color: #111827;">{{ platformName.substring(2) }}</span>
+                    </span>
                 </div>
                 <small class="app-version-tag"
                     style="font-size: 0.6rem; opacity: 0.4; font-weight: 500; font-family: monospace; margin-left: 2px;">PRO

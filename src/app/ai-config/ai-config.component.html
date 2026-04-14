@@ -83,35 +83,20 @@
             <section class="config-section highlight" style="background: #f8fafc; border-left: 5px solid #6366f1;">
                 <div class="section-header">
                     <h3>🎮 Control de Automatización</h3>
-                    <div class="automation-status-badge" [ngClass]="{'manual': !merchantConfig.ai_enabled && !merchantConfig.bot_mode}">
-                        {{ merchantConfig.ai_enabled ? '🧠 IA ACTIVA' : (merchantConfig.bot_mode ? '🤖 BOT ACTIVO' : '👤 MODO MANUAL') }}
+                    <div class="automation-status-badge" [ngClass]="{'manual': !merchantConfig.bot_mode}">
+                        {{ merchantConfig.bot_mode ? '🧬 ASISTENTE ADN ACTIVO' : '👤 MODO MANUAL' }}
                     </div>
                 </div>
                 <p class="desc">Define cómo quieres que se respondan los mensajes de tus clientes. Puedes elegir entre IA Generativa, un Bot Programado o desactivar ambos para atención humana manual.</p>
                 
-                <div class="automation-grid">
-                    <!-- Opción IA -->
-                    <div class="automation-card" [class.active]="merchantConfig.ai_enabled">
-                        <div class="card-top">
-                            <span class="card-icon">🧠</span>
-                            <div class="card-info">
-                                <strong>Inteligencia Artificial</strong>
-                                <span>Creativa y flexible</span>
-                            </div>
-                            <label class="switch">
-                                <input type="checkbox" [(ngModel)]="merchantConfig.ai_enabled" (change)="toggleAiEnabled()">
-                                <span class="slider round"></span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Opción Bot -->
+                <div class="automation-grid" style="grid-template-columns: 1fr;">
+                    <!-- Única Opción: Asistente Automatizado (ADN Builder) -->
                     <div class="automation-card" [class.active]="merchantConfig.bot_mode">
                         <div class="card-top">
-                            <span class="card-icon">🤖</span>
+                            <span class="card-icon">🧬</span>
                             <div class="card-info">
-                                <strong>Bot Programado</strong>
-                                <span>Flujos fijos y seguros</span>
+                                <strong>Asistente Automatizado (ADN)</strong>
+                                <span>Toda la inteligencia artificial y la lógica programada ahora se centraliza en el Diseñador de Flujos.</span>
                             </div>
                             <label class="switch">
                                 <input type="checkbox" [(ngModel)]="merchantConfig.bot_mode" (change)="toggleBotMode()">
@@ -119,7 +104,7 @@
                             </label>
                         </div>
                         <div *ngIf="merchantConfig.bot_mode" class="card-footer-action">
-                            <button class="link-btn" routerLink="/bot-builder">🎨 Ajustar Flujo Visual</button>
+                            <button class="link-btn" routerLink="/bot-builder">🎨 Abrir Diseñador de Flujos (ADN)</button>
                         </div>
                     </div>
                 </div>

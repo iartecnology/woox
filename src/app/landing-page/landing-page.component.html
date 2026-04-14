@@ -3,7 +3,11 @@
     <!-- Navegación Minimalista -->
     <nav class="l-nav">
         <div class="l-container">
-            <span class="l-brand">{{ landing.content_blocks.brand_name || 'Woox Site' }}</span>
+            <div class="l-brand-wrap">
+                <img *ngIf="landing.logo_url" [src]="landing.logo_url" alt="Logo" class="l-nav-logo"
+                    onerror="this.style.display='none'">
+                <span class="l-brand">{{ landing.content_blocks.brand_name || 'Woox Site' }}</span>
+            </div>
             <div class="l-nav-links">
                 <a (click)="scrollToSection('features')">Beneficios</a>
                 <a (click)="scrollToSection('about')">Nosotros</a>

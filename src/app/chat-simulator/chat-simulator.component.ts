@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../supabase.service';
@@ -541,7 +541,7 @@ interface CartItem {
     }
   `]
 })
-export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewChecked {
+export class ChatSimulatorComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked {
   @ViewChild('scrollMe') private myScrollContainer!: ElementRef;
   @ViewChild('messageInput') private messageInput!: ElementRef;
 
@@ -564,6 +564,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, AfterViewCheck
   @Input() allNodes: any[] = [];
   @Input() allConnections: any[] = [];
   @Input() showStats: boolean = true;
+  @Input() botFlow: any = null;
   @Input() showLog: boolean = true;
   @Output() onNodeExecuted = new EventEmitter<string>();
   @Output() onClose = new EventEmitter<void>();
@@ -1041,20 +1042,42 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
   }
 
   ngOnInit(): void {
-    this.initSimulator();
+    if (this.merchantId && this.merchantId !== 'Cargando...') {
+      this.initSimulator();
+    }
+  }
+
+  ngOnChanges(changes: any): void {
+    // Si cambia el merchantId o merchantName y no es "Cargando...", reiniciar
+    if ((changes.merchantId || changes.merchantName) && 
+        this.merchantId && this.merchantId !== 'Cargando...' && 
+        this.merchantName !== 'Cargando...') {
+       
+       // Solo reiniciamos si es el primer cambio real o si cambió de merchant
+       if (!changes.merchantId?.previousValue || changes.merchantId.currentValue !== changes.merchantId.previousValue) {
+          this.initSimulator();
+       }
+    }
   }
 
   private async initSimulator() {
+    if (!this.merchantId || this.merchantId === 'Cargando...') return;
+
     this.clearSimulatorSession();
+    
     // Cargar estado del comercio
     const { data: merchant } = await this.supabaseService.getMerchantById(this.merchantId);
-    this.botMode = merchant?.bot_mode || false;
+    
+    // Solo sobreescribir botMode si no se forzó via Input
+    if (!this.botMode) {
+      this.botMode = merchant?.bot_mode || false;
+    }
 
     let greeting = this.aiWelcomeMessage || `¡Hola! Soy el asistente virtual de ${this.merchantName}. ¿En qué puedo ayudarte hoy?`;
 
     // Si estamos en modo Bot, el saludo inicial vendrá del proceso del bot
     if (this.botMode) {
-      greeting = 'Iniciando asistente...';
+      greeting = 'Iniciando asistente... 🤖';
     }
 
     // Reemplazar placeholders dinámicos
@@ -1089,7 +1112,7 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
         if (this.botMode) {
            console.log('[Simulator] Processing bot START flow...');
            const t0 = performance.now();
-           const botRes = await this.botRuntime.processMessage(conv.id, this.merchantId, '');
+           const botRes = await this.botRuntime.processMessage(conv.id, this.merchantId, '', this.botFlow);
            const t1 = performance.now();
            const stepMs = Math.round(t1 - t0);
            
@@ -1122,6 +1145,13 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
              if (this.isCopilotActive) {
                 this.checkAndRunCopilotAction(botRes);
              }
+           } else {
+             this.messages = [{ 
+               sender: 'ai', 
+               text: '⚠️ No se pudo iniciar el flujo. Asegúrate de que el bloque de Inicio esté conectado y que el flujo sea válido.', 
+               time: new Date() 
+             }];
+             this.cdr.detectChanges();
            }
         } else {
           // Guardar el saludo inicial de la IA
@@ -1201,7 +1231,7 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
       // --- LÓGICA DE BOT (NUEVA) ---
       if (this.botMode) {
         const t0 = performance.now();
-        const botResponse = await this.botRuntime.processMessage(this.dbConversationId!, this.merchantId, userText);
+        const botResponse = await this.botRuntime.processMessage(this.dbConversationId!, this.merchantId, userText, this.botFlow);
         const t1 = performance.now();
         const stepMs = Math.round(t1 - t0);
         

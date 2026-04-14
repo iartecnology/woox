@@ -909,37 +909,20 @@
                                 <p>Define el nivel de respuesta automática para este comercio.</p>
                             </div>
                         </div>
-                        <div class="automation-badge" [ngClass]="{'manual': !selectedMerchant.ai_enabled && !selectedMerchant.bot_mode}">
-                            {{ selectedMerchant.ai_enabled ? '🧠 IA ACTIVA' : (selectedMerchant.bot_mode ? '🤖 BOT ACTIVO' : '👤 MODO MANUAL') }}
+                        <div class="automation-badge" [ngClass]="{'manual': !selectedMerchant.bot_mode}">
+                            {{ selectedMerchant.bot_mode ? '🧬 ASISTENTE ADN ACTIVO' : '👤 MODO MANUAL' }}
                         </div>
                     </div>
 
-                    <div class="automation-options-grid">
-                        <!-- Opción IA -->
-                        <div class="auto-card" [class.active]="selectedMerchant.ai_enabled">
-                            <div class="auto-card-content">
-                                <div class="auto-card-info">
-                                    <span class="auto-icon">🧠</span>
-                                    <div class="auto-details">
-                                        <strong>Inteligencia Artificial</strong>
-                                        <p>Respuestas creativas y fluidas basadas en el cerebro configurado.</p>
-                                    </div>
-                                </div>
-                                <label class="switch-pill">
-                                    <input type="checkbox" [(ngModel)]="selectedMerchant.ai_enabled" (change)="toggleAiEnabled()">
-                                    <span class="slider-pill round"></span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Opción Bot -->
+                    <div class="automation-options-grid" style="grid-template-columns: 1fr;">
+                        <!-- Única Opción: Asistente Automatizado (ADN Builder) -->
                         <div class="auto-card" [class.active]="selectedMerchant.bot_mode">
                             <div class="auto-card-content">
                                 <div class="auto-card-info">
-                                    <span class="auto-icon">🤖</span>
+                                    <span class="auto-icon">🧬</span>
                                     <div class="auto-details">
-                                        <strong>Bot Programado</strong>
-                                        <p>Flujos lógicos diseñados en el Bot Builder para procesos fijos.</p>
+                                        <strong>Asistente Automatizado (ADN)</strong>
+                                        <p>Toda la inteligencia artificial y la lógica programada ahora se centraliza en el Diseñador de Flujos.</p>
                                     </div>
                                 </div>
                                 <label class="switch-pill">
@@ -947,8 +930,8 @@
                                     <span class="slider-pill round bot-pill-slider"></span>
                                 </label>
                             </div>
-                            <div *ngIf="selectedMerchant.bot_mode" class="auto-card-footer">
-                                <button class="btn-builder-link" (click)="goToBotBuilder(currentManagingMerchant!)">🎨 Abrir Diseñador de Flujos</button>
+                            <div *ngIf="selectedMerchant.bot_mode" class="auto-card-footer" style="display: flex; gap: 10px;">
+                                <button class="btn-builder-link" (click)="goToBotBuilder(currentManagingMerchant!)" style="flex: 1;">🎨 Abrir Diseñador de Flujos (ADN)</button>
                             </div>
                         </div>
                     </div>
@@ -1349,10 +1332,16 @@
                                 <span class="channel-icon">✈️</span>
                                 Telegram Bot Token
                             </label>
-                            <button class="help-action-btn" (click)="verifyChannel('telegram')"
-                                [disabled]="verifyingChannel === 'telegram'">
-                                {{ verifyingChannel === 'telegram' ? '⏳ Verificando...' : '⚡ Probar Conexión' }}
-                            </button>
+                            <div class="channel-actions">
+                                <button class="help-action-btn" (click)="verifyChannel('telegram')"
+                                    [disabled]="verifyingChannel === 'telegram'">
+                                    {{ verifyingChannel === 'telegram' ? '⏳ Verificando...' : '⚡ Probar Conexión' }}
+                                </button>
+                                <button class="action-btn-danger-small" *ngIf="selectedMerchant.telegram_bot_token"
+                                    (click)="disconnectTelegram(selectedMerchant)" title="Desconectar Telegram">
+                                    🚫
+                                </button>
+                            </div>
                         </div>
                         <div class="token-input-wrapper">
                             <input [type]="tokenVisibility['telegram'] ? 'text' : 'password'"

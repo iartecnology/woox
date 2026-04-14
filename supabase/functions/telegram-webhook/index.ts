@@ -61,12 +61,7 @@ Deno.serve(async (req: Request) => {
         const { data: m } = await supabase.from("merchants").select("*").eq("id", merchantId).single();
         if (!m) throw new Error("Merchant not found");
 
-        // Enviar acción 'typing'
-        fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendChatAction`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: chatId, action: "typing" })
-        }).catch(e => console.error("Error sending typing action", e));
+
 
         // Obtener o crear cliente
         let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", merchantId).eq("telegram_user_id", telegramUserId).maybeSingle();
@@ -118,6 +113,16 @@ Deno.serve(async (req: Request) => {
 
         // --- NUEVA LÓGICA: BOT FLOW ENGINE (SUPABASE NATIVO) ---
         let aiResponse = "";
+        
+        // Enviar acción 'typing' repetidamente mientras espera
+        const sendTyping = () => fetch(`https://api.telegram.org/bot${m.telegram_bot_token}/sendChatAction`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, action: "typing" })
+        }).catch(e => console.error("Error sending typing action", e));
+        
+        sendTyping();
+        const typingInterval = setInterval(sendTyping, 4000);
+
         try {
             // Solo procesar si la IA está activa para esta conversación
             if (conversation!.ai_active) {
@@ -132,11 +137,14 @@ Deno.serve(async (req: Request) => {
                 // Si la IA no está activa o no hay respuesta del flujo, no respondemos automáticamente
                 // NOTIFICAR A LOS AGENTES
                 await notifyMerchantAgents(supabase, merchantId, "Nuevo mensaje (TG)", `De: ${customer!.full_name || 'Cliente'}\nMensaje: ${messageText.slice(0, 50)}...`);
+                clearInterval(typingInterval);
                 return new Response("ok", { headers: corsHeaders });
             }
         } catch (e: any) {
             console.error("[BOT-ENGINE ERROR]", e);
             aiResponse = "Ups! Tuve un pequeño error procesando eso. 🤖⚙️";
+        } finally {
+            clearInterval(typingInterval);
         }
 
         // Enviar respuesta a Telegram

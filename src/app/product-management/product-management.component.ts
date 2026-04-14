@@ -37,7 +37,10 @@ export class ProductManagementComponent implements OnInit {
 
     filteredCategories: Category[] = [];
     products: Product[] = [];
-    selectedProductIds: Set<string> = new Set();
+    selectedProductIds: Set<string> = new Set<string>();
+    isDraggingCategory: boolean = false;
+    draggedCategoryId: string | null = null;
+    activeDropTargetId: string | null = null;
     isDraggingProducts: boolean = false;
 
     newProduct: Partial<Product> = {
@@ -159,27 +162,44 @@ export class ProductManagementComponent implements OnInit {
     }
 
     async onCategoryDrop(event: CdkDragDrop<Category[]>) {
-        if (event.previousIndex === event.currentIndex) return;
-
-        // Clonar la lista visual para reordenar
         const list = [...this.displayCategories];
-        moveItemInArray(list, event.previousIndex, event.currentIndex);
+        const draggedItem = list[event.previousIndex];
+        
+        // 1. Determinar si se soltó SOBRE una categoría específica
+        let newParentId = draggedItem.parent_id;
+        let parentChanged = false;
 
-        // Reasignar sort_order en memoria para re-renderizar inmediatamente
-        list.forEach((cat, index) => { cat.sort_order = index; });
-        // Forzar rebuild de filteredCategories reflejando el nuevo orden
-        this.filteredCategories = this.filteredCategories.map(c => {
-            const updated = list.find(l => l.id === c.id);
-            return updated ? { ...c, sort_order: updated.sort_order } : c;
-        });
-        this.cdr.detectChanges();
+        // activeDropTargetId se actualiza mediante (mouseenter) en el HTML
+        if (this.activeDropTargetId !== null && this.activeDropTargetId !== draggedItem.id) {
+            // Si es '', significa que se soltó sobre "Todas las Categorías" (raíz)
+            newParentId = this.activeDropTargetId === '' ? null : this.activeDropTargetId;
+            parentChanged = draggedItem.parent_id !== newParentId;
+            
+            // Si cambió el padre, no necesitamos reordenar el array local ya que loadData lo hará
+        } else {
+            // 2. Si no hay objetivo, es un reordenamiento normal en la misma lista
+            if (event.previousIndex === event.currentIndex) return;
+            moveItemInArray(list, event.previousIndex, event.currentIndex);
+        }
 
-        // Persistir en Supabase
+        // 3. Persistir en la base de datos
         try {
-            const updates = list.map((cat, i) => ({ id: cat.id, sort_order: i }));
+            if (parentChanged) {
+                await this.supabaseService.updateCategory(draggedItem.id, { parent_id: newParentId });
+                this.notificationService.show('Categoría organizada correctamente', 'success');
+            }
+
+            // Actualizar sort_order basado en el orden actual de la lista
+            const updates = list.map((cat, index) => ({ id: cat.id, sort_order: index }));
             await this.supabaseService.updateCategoriesOrder(updates);
+            
+            await this.loadData();
         } catch (err: any) {
-            this.notificationService.show('Error guardando el orden: ' + err.message, 'error');
+            console.error('Error organizando categorías:', err);
+            this.notificationService.show('Error al organizar categorías', 'error');
+        } finally {
+            this.activeDropTargetId = null;
+            this.cdr.detectChanges();
         }
     }
 
@@ -618,6 +638,29 @@ export class ProductManagementComponent implements OnInit {
         }
     }
 
+    onCategoryDragStarted(categoryId: string) {
+        this.isDraggingCategory = true;
+        this.draggedCategoryId = categoryId;
+        this.cdr.detectChanges();
+    }
+
+    onCategoryDragEnded() {
+        this.isDraggingCategory = false;
+        this.draggedCategoryId = null;
+        this.activeDropTargetId = null;
+        this.cdr.detectChanges();
+    }
+
+    onItemMouseEnter(id: string) {
+        if (this.isDraggingCategory || this.isDraggingProducts) {
+            this.activeDropTargetId = id;
+        }
+    }
+
+    onItemMouseLeave() {
+        this.activeDropTargetId = null;
+    }
+
     onProductDragStarted(productId: string) {
         this.isDraggingProducts = true;
         // Si el producto arrastrado no está en la selección, lo agregamos (o limpiamos otros)
@@ -634,9 +677,25 @@ export class ProductManagementComponent implements OnInit {
     }
 
     async onDropToCategory(categoryId: string) {
-        if (this.selectedProductIds.size > 0) {
+        if (this.isDraggingProducts && this.selectedProductIds.size > 0) {
             const ids = Array.from(this.selectedProductIds);
             await this.moveProductsToCategory(ids, categoryId);
+        } else if (this.isDraggingCategory && this.draggedCategoryId) {
+            // Evitar que una categoría sea padre de sí misma
+            if (this.draggedCategoryId === categoryId) return;
+
+            try {
+                const { error } = await this.supabaseService.updateCategory(this.draggedCategoryId, { 
+                    parent_id: categoryId 
+                });
+                if (error) throw error;
+
+                this.notificationService.show('Categoría movida correctamente', 'success');
+                await this.loadData();
+            } catch (err: any) {
+                console.error('Error moving category:', err);
+                this.notificationService.show('Error al mover la categoría', 'error');
+            }
         }
     }
 }

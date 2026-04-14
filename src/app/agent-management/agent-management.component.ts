@@ -5,6 +5,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { SupabaseService } from '../supabase.service';
 import { NotificationService } from '../notification.service';
 import { ChatSimulatorComponent } from '../chat-simulator/chat-simulator.component';
+import { MobileService } from '../mobile.service';
 
 @Component({
     selector: 'app-agent-management',
@@ -18,6 +19,7 @@ export class AgentManagementComponent implements OnInit {
     private notificationService = inject(NotificationService);
     private sanitizer = inject(DomSanitizer);
     private cdr = inject(ChangeDetectorRef);
+    readonly mobileService = inject(MobileService);
 
     activeTab: 'general' | 'skills' | 'designer' | 'knowledge' = 'general';
     showWizard: boolean = false;
@@ -119,6 +121,7 @@ export class AgentManagementComponent implements OnInit {
     ];
 
     async ngOnInit() {
+        this.mobileService.setHeader('Agentes IA', false);
         await Promise.all([
             this.loadAgents(),
             this.loadSkillsCatalog(),

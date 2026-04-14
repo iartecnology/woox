@@ -1,5 +1,6 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MobileService } from '../mobile.service';
 
 interface DeliveryOrder {
     id: string;
@@ -18,12 +19,13 @@ interface DeliveryOrder {
     styleUrl: './delivery-portal.component.css'
 })
 export class DeliveryPortalComponent implements OnInit {
+    readonly mobileService = inject(MobileService);
     orders: DeliveryOrder[] = [
         { id: 'WOX-1003', customer_name: 'Daniela R.', address: 'Carrera 10 #5-20', total: 35.00, status: 'ready', items_count: 2 },
         { id: 'WOX-1004', customer_name: 'Mateo S.', address: 'Calle 80 #15-40', total: 12.50, status: 'ready', items_count: 1 }
     ];
 
-    ngOnInit(): void { }
+    ngOnInit(): void { this.mobileService.setHeader('Reparto', false); }
 
     startDelivery(order: DeliveryOrder) {
         order.status = 'shipped';

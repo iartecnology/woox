@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MobileService } from '../mobile.service';
 
 interface AuditLog {
     id: string;
@@ -65,9 +66,10 @@ export class AuditLogsComponent implements OnInit {
     itemsPerPage: number = 5;
     Math = Math;
 
-    constructor() { }
+    constructor(private mobileService: MobileService) { }
 
     ngOnInit(): void {
+        this.mobileService.setHeader('Auditoría', false);
         this.onFilterChange();
     }
 

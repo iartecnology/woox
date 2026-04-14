@@ -7,18 +7,27 @@ import { notifyMerchantAgents } from "./notifications.ts";
 function resolveVariables(text: string, variables: any, flowName?: string): string {
     if (!text) return '';
 
-    // Resolver {{cartSummary}}
-    if (text.includes('{{cartSummary}}')) {
+    // Resolver {{cartSummary}} o {{cart_summary}}
+    if (text.includes('{{cartSummary}}') || text.includes('{{cart_summary}}')) {
         const cart = variables['cart'] || [];
         if (cart.length === 0) {
-            text = text.replace(/{{cartSummary}}/g, '_El carrito está vacío_');
+            // Si el carrito está vacío, intentar usar la caché del último checkout
+            if (variables['checkout_summary_cache']) {
+                text = text.replace(/{{cartSummary}}/ig, variables['checkout_summary_cache']);
+                text = text.replace(/{{cart_summary}}/ig, variables['checkout_summary_cache']);
+            } else {
+                text = text.replace(/{{cartSummary}}/ig, '_El carrito está vacío_');
+                text = text.replace(/{{cart_summary}}/ig, '_El carrito está vacío_');
+            }
         } else {
             const summary = cart.map((it: any) => {
                 const notes = it.notes ? ` (${it.notes})` : '';
                 return `- ${it.name} x${it.qty}${notes} ($${it.price * it.qty})`;
             }).join('\n');
             const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
-            text = text.replace(/{{cartSummary}}/g, `${summary}\n\n💰 *Total: $${total}*`);
+            const finalSummary = `${summary}\n\n💰 *Total: $${total}*`;
+            text = text.replace(/{{cartSummary}}/ig, finalSummary);
+            text = text.replace(/{{cart_summary}}/ig, finalSummary);
         }
     }
 
@@ -65,6 +74,7 @@ async function createOrderSafe(supabase: any, orderData: any) {
             customer_id: orderData.customer_id,
             total: orderData.total,
             delivery_address: orderData.delivery_address,
+            notes: orderData.notes,
             status: orderData.status,
             customer_name: orderData.customer_name,
             customer_phone: orderData.customer_phone
@@ -162,6 +172,7 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
         const { data: order, error: orderErr } = await createOrderSafe(supabase, {
             merchant_id: merchantId, customer_id: customerId, total,
             delivery_address: variables['direccion_entrega'] || variables['direccion'] || 'No proporcionada',
+            notes: variables['notas_entrega'] || variables['nota_adicional'] || variables['notas'] || null,
             status: 'pending', conversation_id: conversationId, channel: finalChannel,
             customer_name: customerUpdate.full_name || variables['customer_name'],
             customer_phone: customerUpdate.phone || variables['customer_phone']
@@ -184,8 +195,15 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
                 await supabase.from('order_items').insert(items);
             }
             
-            // --- 3. LIMPIAR EL CARRITO DE LA SESIÓN ---
-            // Esto evita que enviar "hola" de nuevo duplique el mismo carrito
+            // --- 3. CACHEAR EL RESUMEN DEL CARRITO Y LIMPIAR LA SESIÓN ---
+            // Esto permite que el nodo de 'Mensaje de Éxito' pueda mostrar el resumen, pero evita duplicados
+            const summaryStrings = currentCart.map((it: any) => {
+                const notes = it.notes ? ` (${it.notes})` : '';
+                return `- ${it.name} x${it.qty}${notes} ($${it.price * it.qty})`;
+            }).join('\n');
+            const calculatedTotal = currentCart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
+            variables['checkout_summary_cache'] = `${summaryStrings}\n\n💰 *Total: $${calculatedTotal}*`;
+
             variables['cart'] = [];
         } else {
             console.error('[BOT-ENGINE] Error registrando pedido:', orderErr);
@@ -211,7 +229,17 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
     } else if (actionType === 'add_to_cart') {
         const productId = node.data.params?.product_id || variables['last_selected_product_id'];
         const qty = parseInt(variables['cantidad_actual'] || '1') || 1;
-        const notes = variables['last_product_notes_value'] || variables['last_product_notes'] || '';
+        
+        // Determinar notas dinámicamente si vienen en los params del nodo (evaluando variables como {{notas_preparacion}})
+        let notes = '';
+        if (node.data.params?.notes) {
+            notes = resolveVariables(node.data.params.notes, variables, '');
+        }
+        // Fallback a las variables legacy si el nodo no mapeó explícitamente
+        if (!notes || notes === node.data.params?.notes) {
+            notes = variables['last_product_notes_value'] || variables['last_product_notes'] || '';
+        }
+
         if (productId) {
             const { data: product } = await supabase.from('products').select('id, name, price').eq('id', productId).single();
             if (product) {

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { NotificationService } from '../notification.service';
+import { MobileService } from '../mobile.service';
 
 interface BioLinkButton {
   id: string;
@@ -45,6 +46,7 @@ interface Merchant {
 export class BiolinkAdminComponent implements OnInit {
   private notificationService = inject(NotificationService);
   private router = inject(Router);
+  readonly mobileService = inject(MobileService);
 
   merchant: Merchant = {
     id: '',
@@ -71,6 +73,7 @@ export class BiolinkAdminComponent implements OnInit {
   ];
 
   ngOnInit() {
+    this.mobileService.setHeader('BioLink', false);
     // Cargar datos del merchant desde localStorage
     const merchantId = localStorage.getItem('active_merchant_id');
     const merchantName = localStorage.getItem('merchant_name');

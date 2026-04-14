@@ -990,6 +990,32 @@ small {
     border-color: var(--border-color);
 }
 
+.channel-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.action-btn-danger-small {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fee2e2;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.action-btn-danger-small:hover {
+    background: #dc2626;
+    color: white;
+}
+
 /* WhatsApp Connector Selector & QR Styles */
 .connector-selector {
     display: flex;

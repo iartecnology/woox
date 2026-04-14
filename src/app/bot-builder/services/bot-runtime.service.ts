@@ -23,12 +23,18 @@ export class BotRuntimeService {
     async processMessage(
         conversationId: string,
         merchantId: string,
-        userMessage: string
+        userMessage: string,
+        overrideFlow?: any
     ): Promise<BotResponse | null> {
 
-        // 1. ¿El merchant tiene un flujo activo?
-        const { data: flow, error: flowErr } = await this.supabase.getActiveBotFlow(merchantId);
-        if (flowErr || !flow) return null;
+        let flow = overrideFlow;
+
+        // 1. Si no hay override, buscar el flujo activo del merchant
+        if (!flow) {
+            const { data: activeFlow, error: flowErr } = await this.supabase.getActiveBotFlow(merchantId);
+            if (flowErr || !activeFlow) return null;
+            flow = activeFlow;
+        }
 
         // 1.1 Cargar info del comercio (para variables como merchant_menu_pdf)
         const { data: merchant } = await this.supabase.getMerchantById(merchantId);

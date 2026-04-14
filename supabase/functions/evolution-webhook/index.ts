@@ -77,7 +77,25 @@ Deno.serve(async (req: Request) => {
         }
         await supabase.from("messages").insert({ conversation_id: conversation!.id, sender_type: "customer", content: messageText, metadata: { evolution_message_id: evolutionMessageId } });
         await supabase.from("conversations").update({ last_message: messageText, last_message_at: new Date().toISOString(), unread_count: (conversation!.unread_count || 0) + 1 }).eq("id", conversation!.id);
+        const { data: ps2 } = await supabase.from("platform_settings").select("evolution_api_url, evolution_api_key").eq("id", "global").maybeSingle();
+        const evoUrl = ps2?.evolution_api_url || (m as any).evolution_api_url || Deno.env.get("EVOLUTION_API_URL") || "";
+        const evoKey = ps2?.evolution_api_key || (m as any).evolution_api_key || Deno.env.get("EVOLUTION_API_KEY") || "";
+        const evoInstance = m.wa_session_id || instanceName || m.merchant_code || "";
+
         let aiResponse = "";
+        let typingInterval: any;
+
+        if (evoUrl && evoKey && evoInstance) {
+            const baseUrl = evoUrl.replace(/\/$/, '');
+            const sendTyping = () => fetch(`${baseUrl}/chat/sendPresence/${evoInstance}`, {
+                method: "POST", headers: { "Content-Type": "application/json", "apikey": evoKey },
+                body: JSON.stringify({ number: customerPhone, presence: "composing", delay: 4000 })
+            }).catch(() => {});
+            
+            sendTyping();
+            typingInterval = setInterval(sendTyping, 4000);
+        }
+
         try {
             console.log(`[Evolution] Processing message from ${customerPhone} for merchant ${m.name}`);
             if (conversation!.ai_active) {
@@ -87,22 +105,20 @@ Deno.serve(async (req: Request) => {
             if (!aiResponse) {
                 console.log(`[Evolution] No AI response generated or AI disabled. Notifying agents.`);
                 await notifyMerchantAgents(supabase, m.id, "Nuevo mensaje (WA)", `De: ${customer!.full_name || 'Cliente'}\nMensaje: ${messageText.slice(0, 50)}...`);
+                if (typingInterval) clearInterval(typingInterval);
                 return new Response("ok", { headers: corsHeaders });
             }
         } catch (e: any) { 
             console.error(`[Evolution] Error in bot engine:`, e);
             aiResponse = "Ups! Tuve un problema procesándolo. 🤖⚙️"; 
+        } finally {
+            if (typingInterval) clearInterval(typingInterval);
         }
 
         const cleanResponse = sanitizeMarkdown(aiResponse);
         const parts = cleanResponse.split('\n\n');
         
         try {
-            const { data: ps2 } = await supabase.from("platform_settings").select("evolution_api_url, evolution_api_key").eq("id", "global").maybeSingle();
-            const evoUrl = ps2?.evolution_api_url || (m as any).evolution_api_url || Deno.env.get("EVOLUTION_API_URL") || "";
-            const evoKey = ps2?.evolution_api_key || (m as any).evolution_api_key || Deno.env.get("EVOLUTION_API_KEY") || "";
-            const evoInstance = m.wa_session_id || instanceName || m.merchant_code || "";
-            
             if (evoUrl && evoKey && evoInstance) {
                 const baseUrl = evoUrl.replace(/\/$/, '');
                 console.log(`[Evolution] Sending response to WhatsApp via ${baseUrl} (Instance: ${evoInstance})`);

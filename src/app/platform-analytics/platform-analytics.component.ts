@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { SupabaseService } from '../supabase.service';
+import { MobileService } from '../mobile.service';
 
 interface MerchantStats {
     id: string;
@@ -127,10 +128,12 @@ export class PlatformAnalyticsComponent implements OnInit {
 
     private route = inject(ActivatedRoute);
     private supabaseService = inject(SupabaseService);
+    readonly mobileService = inject(MobileService);
 
     constructor() { }
 
     async ngOnInit(): Promise<void> {
+        this.mobileService.setHeader('Analytics Global', false);
         // Cargar lista de comercios reales
         const { data } = await this.supabaseService.getMerchants();
         if (data && data.length > 0) {

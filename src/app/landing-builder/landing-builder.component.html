@@ -7,10 +7,18 @@
         </div>
         <div class="step-indicator">
             <div class="step" [class.active]="currentStep >= 1" [class.completed]="currentStep > 1">1</div>
-            <div class="line"></div>
+            <div class="line" [class.completed]="currentStep > 1"></div>
             <div class="step" [class.active]="currentStep >= 2" [class.completed]="currentStep > 2">2</div>
-            <div class="line"></div>
+            <div class="line" [class.completed]="currentStep > 3"></div>
             <div class="step" [class.active]="currentStep >= 3" [class.completed]="currentStep > 3">3</div>
+            <div class="line" [class.completed]="currentStep > 4"></div>
+            <div class="step" [class.active]="currentStep >= 4" [class.completed]="currentStep > 4">4</div>
+        </div>
+        <div class="step-labels">
+            <span>ADN</span>
+            <span>Plantillas</span>
+            <span>Personalizar</span>
+            <span>Publicar</span>
         </div>
     </div>
 
@@ -23,10 +31,29 @@
                 redactar el contenido.</p>
 
             <div class="input-group">
+                <label class="field-label">Cuéntanos sobre tu negocio</label>
                 <textarea [(ngModel)]="businessInfo"
                     placeholder="Ej: Somos un Hotel Boutique en el centro histórico, con 12 habitaciones de lujo, piscina climatizada y restaurante de autor elogiado por críticos..."
-                    rows="8"></textarea>
+                    rows="6"></textarea>
                 <div class="char-count">{{ businessInfo.length }} caracteres</div>
+            </div>
+
+            <div class="input-group">
+                <label class="field-label">URL del Logo de tu empresa</label>
+                <div class="logo-input-wrapper">
+                    <span class="logo-icon">🖼️</span>
+                    <input type="url" [(ngModel)]="logoUrl" placeholder="https://mi-empresa.com/logo.png"
+                        class="logo-url-input">
+                    <button class="btn-preview-logo" *ngIf="logoUrl" (click)="previewLogo = !previewLogo">
+                        {{ previewLogo ? 'Ocultar' : 'Ver' }}
+                    </button>
+                </div>
+                <div class="logo-preview-box" *ngIf="logoUrl && previewLogo">
+                    <img [src]="logoUrl" alt="Logo preview" (error)="logoError = true" [class.hidden]="logoError">
+                    <div class="logo-error" *ngIf="logoError">⚠️ No se pudo cargar la imagen. Verifica la URL.</div>
+                </div>
+                <small class="field-hint">Pega la URL directa de tu logo (PNG/SVG recomendado, fondo transparente
+                    ideal)</small>
             </div>
 
             <div class="upload-zone">
@@ -36,13 +63,19 @@
                 </div>
             </div>
 
-            <button class="btn-primary" (click)="generateWithAI()" [disabled]="businessInfo.length < 20">
-                Generar Magia con IA ✨
-            </button>
+            <div class="action-buttons">
+                <button class="btn-primary" (click)="generateWithAI()" [disabled]="businessInfo.length < 20">
+                    Generar con IA ✨
+                </button>
+                <button class="btn-demo" (click)="generateDemoMode()" [disabled]="businessInfo.length < 20">
+                    🧪 Modo Demo
+                </button>
+            </div>
+            <small class="demo-hint">El modo Demo genera plantillas de ejemplo sin consumir API de IA</small>
         </div>
     </div>
 
-    <!-- PASO 2: Procesamiento (Magia) -->
+    <!-- PASO 2: Procesamiento (Loading) -->
     <div class="step-card glass loading-step" *ngIf="currentStep === 2">
         <div class="magic-loader">
             <div class="sparkle s1">✨</div>
@@ -54,11 +87,15 @@
         <div class="loading-stats">
             <div class="stat-row">
                 <span class="dot pulse"></span>
-                <span>Clasificando industria: <b>Buscando patrones...</b></span>
+                <span>Clasificando industria...</span>
             </div>
             <div class="stat-row">
                 <span class="dot"></span>
-                <span>Definiendo paleta de colores cromática...</span>
+                <span>Generando variantes de diseño...</span>
+            </div>
+            <div class="stat-row">
+                <span class="dot"></span>
+                <span>Definiendo paletas cromáticas...</span>
             </div>
             <div class="stat-row">
                 <span class="dot"></span>
@@ -67,20 +104,111 @@
         </div>
     </div>
 
-    <!-- PASO 3: Vista Previa y Publicación -->
-    <div class="step-card glass results-step" *ngIf="currentStep === 3 && blueprint">
+    <!-- PASO 3: Selección de Plantillas -->
+    <div class="step-card glass template-step" *ngIf="currentStep === 3 && blueprints.length > 0">
         <div class="results-header">
-            <div class="industry-badge">Sector: {{ blueprint.industry_type | uppercase }}</div>
-            <button class="btn-text" (click)="reset()">Reiniciar 🔄</button>
+            <div class="industry-badge">Sector: {{ blueprints[0].industry_type | uppercase }}</div>
+            <div class="header-actions">
+                <button class="btn-text" (click)="regenerateTemplates()"
+                    [disabled]="isGenerating || regenerateCount >= 3">
+                    🔄 Regenerar ({{ 3 - regenerateCount }} restantes)
+                </button>
+                <button class="btn-text" (click)="reset()">Reiniciar</button>
+            </div>
+        </div>
+
+        <div class="template-intro">
+            <h3>Elige el diseño que mejor represente tu marca</h3>
+            <p>La IA generó <strong>{{ blueprints.length }} variantes</strong> con layouts, paletas y estilos únicos.
+            </p>
+        </div>
+
+        <!-- Grid de Plantillas -->
+        <div class="template-grid">
+            <div class="template-card" *ngFor="let bp of blueprints; let i = index"
+                [class.selected]="selectedIndex === i" (click)="selectTemplate(i)">
+                <!-- Mockup Visual -->
+                <div class="template-mockup" [style.background]="bp.theme_suggestion.palette.background || '#f8fafc'">
+                    <div class="mockup-browser-bar">
+                        <div class="browser-dot" [style.background]="'#ff5f57'"></div>
+                        <div class="browser-dot" [style.background]="'#febc2e'"></div>
+                        <div class="browser-dot" [style.background]="'#28c840'"></div>
+                    </div>
+                    <div class="mockup-content"
+                        [style.font-family]="bp.theme_suggestion.typography ? bp.theme_suggestion.typography + ', sans-serif' : 'Inter, sans-serif'">
+                        <!-- Hero Block -->
+                        <div class="mock-hero" [style.background]="bp.theme_suggestion.palette.primary || '#6366f1'">
+                            <div class="mock-logo" *ngIf="logoUrl">
+                                <img [src]="logoUrl" alt="" (error)="onImgError($event)">
+                            </div>
+                            <div class="mock-logo" *ngIf="!logoUrl" [style.background]="'rgba(255,255,255,0.3)'"></div>
+                            <div class="mock-title" [style.color]="'#fff'">{{ bp.content?.hero?.title || 'Tu Título' |
+                                slice:0:25 }}</div>
+                            <div class="mock-subtitle" [style.color]="'rgba(255,255,255,0.8)'">{{
+                                bp.content?.hero?.subtitle || 'Subtítulo' | slice:0:40 }}...</div>
+                        </div>
+                        <!-- Features Block -->
+                        <div class="mock-features">
+                            <div class="mock-feat" *ngFor="let feat of (bp.content?.features || []).slice(0,3)"
+                                [style.background]="bp.theme_suggestion.palette.secondary || '#eef2ff'">
+                                <span class="mock-feat-icon">{{ feat.icon || '★' }}</span>
+                                <span class="mock-feat-text">{{ feat.title || 'Feature' | slice:0:15 }}</span>
+                            </div>
+                        </div>
+                        <!-- CTA Block -->
+                        <div class="mock-cta" [style.background]="bp.theme_suggestion.palette.accent || '#a855f7'">
+                            <div class="mock-cta-text" [style.color]="'#fff'">CTA Button</div>
+                        </div>
+                    </div>
+                    <!-- Layout Badge -->
+                    <div class="layout-badge" [class.layout-hero]="bp.layout_style === 'hero-first'"
+                        [class.layout-features]="bp.layout_style === 'features-first'"
+                        [class.layout-catalog]="bp.layout_style === 'catalog-first'">
+                        {{ getLayoutLabel(bp.layout_style) }}
+                    </div>
+                </div>
+                <!-- Card Footer -->
+                <div class="template-card-footer">
+                    <div class="template-info">
+                        <div class="template-name">{{ bp.template_name || 'Variante ' + (i + 1) }}</div>
+                        <div class="template-tags">
+                            <span class="tag-palette"
+                                *ngFor="let color of [bp.theme_suggestion.palette.primary, bp.theme_suggestion.palette.accent, bp.theme_suggestion.palette.secondary]">
+                                <span class="color-dot" [style.background]="color"></span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="template-check" *ngIf="selectedIndex === i">✓</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acciones del Paso 3 -->
+        <div class="step-actions">
+            <button class="btn-secondary" (click)="currentStep = 1">← Volver al inicio</button>
+            <button class="btn-primary" (click)="goToCustomization()" [disabled]="selectedIndex < 0">
+                Personalizar Diseño →
+            </button>
+        </div>
+    </div>
+
+    <!-- PASO 4: Personalización y Publicación -->
+    <div class="step-card glass results-step" *ngIf="currentStep === 4 && selectedBlueprint">
+        <div class="results-header">
+            <div class="industry-badge">Sector: {{ selectedBlueprint.industry_type | uppercase }}</div>
+            <div class="header-actions">
+                <button class="btn-text" (click)="currentStep = 3">← Cambiar diseño</button>
+                <button class="btn-text" (click)="reset()">Reiniciar 🔄</button>
+            </div>
         </div>
 
         <div class="preview-layout">
             <!-- Columna Izquierda: Configuración Rápida -->
             <div class="config-panel">
-                <h3>Identidad Detectada</h3>
+                <h3>Identidad de Marca</h3>
                 <div class="info-box">
                     <label>Nombre de Marca</label>
-                    <input type="text" [(ngModel)]="blueprint.brand_name">
+                    <input type="text" [(ngModel)]="selectedBlueprint.brand_name">
                 </div>
 
                 <div class="info-box">
@@ -91,17 +219,25 @@
                     </div>
                 </div>
 
+                <div class="info-box" *ngIf="logoUrl">
+                    <label>Logo</label>
+                    <div class="logo-preview-small">
+                        <img [src]="logoUrl" alt="Logo" (error)="onImgError($event)">
+                    </div>
+                </div>
+
                 <div class="theme-box">
-                    <label>Estética Sugerida</label>
+                    <label>Estética del Diseño</label>
                     <div class="palette-preview">
-                        <div class="color" [style.background]="blueprint.theme_suggestion.palette.primary"
+                        <div class="color" [style.background]="selectedBlueprint.theme_suggestion.palette.primary"
                             title="Primario"></div>
-                        <div class="color" [style.background]="blueprint.theme_suggestion.palette.secondary"
+                        <div class="color" [style.background]="selectedBlueprint.theme_suggestion.palette.secondary"
                             title="Secundario"></div>
-                        <div class="color" [style.background]="blueprint.theme_suggestion.palette.accent"
+                        <div class="color" [style.background]="selectedBlueprint.theme_suggestion.palette.accent"
                             title="Acento"></div>
                     </div>
-                    <div class="font-tag">{{ blueprint.theme_suggestion.typography }}</div>
+                    <div class="font-tag">{{ selectedBlueprint.theme_suggestion.typography }}</div>
+                    <div class="layout-tag">{{ getLayoutLabel(selectedBlueprint.layout_style) }}</div>
                 </div>
 
                 <button class="btn-success w-100 mt-4" (click)="publishLanding()" [disabled]="isPublishing">
@@ -112,12 +248,12 @@
             <!-- Columna Derecha: Resumen de Contenido -->
             <div class="content-preview">
                 <div class="hero-summary">
-                    <h4>{{ blueprint.content.hero.title }}</h4>
-                    <p>{{ blueprint.content.hero.subtitle }}</p>
+                    <h4>{{ selectedBlueprint.content.hero.title }}</h4>
+                    <p>{{ selectedBlueprint.content.hero.subtitle }}</p>
                 </div>
 
                 <div class="features-summary">
-                    <div class="feat-pill" *ngFor="let feat of blueprint.content.features">
+                    <div class="feat-pill" *ngFor="let feat of selectedBlueprint.content.features">
                         <span class="icon">{{ feat.icon }}</span>
                         <div class="text">
                             <strong>{{ feat.title }}</strong>
@@ -128,7 +264,7 @@
 
                 <div class="about-summary">
                     <label>Sobre nosotros (Extracto)</label>
-                    <p>{{ blueprint.content.about.text | slice:0:150 }}...</p>
+                    <p>{{ selectedBlueprint.content.about.text | slice:0:150 }}...</p>
                 </div>
             </div>
         </div>

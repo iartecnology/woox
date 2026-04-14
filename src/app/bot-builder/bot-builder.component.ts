@@ -6,6 +6,7 @@ import { NotificationService } from '../notification.service';
 import { FlowNode, FlowConnection, FlowData, BotFlow } from './models/bot-flow.model';
 import { BotRuntimeService } from './services/bot-runtime.service';
 import { ChatSimulatorComponent } from '../chat-simulator/chat-simulator.component';
+import { MobileService } from '../mobile.service';
 
 @Component({
   selector: 'app-bot-builder',
@@ -21,6 +22,7 @@ export class BotBuilderComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
   private zone = inject(NgZone);
   private appRef = inject(ApplicationRef);
+  readonly mobileService = inject(MobileService);
 
   @ViewChild('canvas') canvasRef!: ElementRef<SVGSVGElement>;
   @ViewChild('chatScroll') chatScrollRef!: ElementRef<HTMLDivElement>;
@@ -258,6 +260,7 @@ export class BotBuilderComponent implements OnInit {
   }
 
   async ngOnInit() {
+    this.mobileService.setHeader('ADN (Flujos)', false);
     this.merchantId = localStorage.getItem('active_merchant_id') || '';
     this.isSuperAdmin = localStorage.getItem('user_role') === 'superadmin';
 
@@ -722,20 +725,12 @@ REGLAS IMPORTANTES:
       label: 'Bienvenida', 
       message: '¡Hola! Bienvenido a {{merchantName}}. 👋\n¿En qué podemos ayudarte hoy?' 
     });
-    y += 180;
 
-    // 1.1 Enviar PDF Menú
-    const pdfNode = this.createSpecificNode('send_pdf', x, y, {
-      label: 'Enviar Menú PDF',
-      pdf_url: '{{merchant_menu_pdf}}',
-      pdf_caption: 'Aquí tienes nuestro menú completo en PDF 📄'
-    });
-    y += 180;
-    
-    this.connectNodes(startNode.id, 'output', pdfNode.id, 'input');
+    // Se eliminó el nodo PDF por solicitud del usuario
+
 
     // 2. Nodo de decisión central (Para después de añadir al carrito)
-    const decisionNode = this.createSpecificNode('menu', x + 1200, y + 200, { 
+    const decisionNode = this.createSpecificNode('menu', x + 1800, y + 200, { 
       label: '¿Qué sigue?', 
       message: '¿Cómo deseas continuar con tu pedido?',
       options: [
@@ -747,7 +742,7 @@ REGLAS IMPORTANTES:
     });
 
     // Nodo intermedio: Confirmación de adición
-    const addedConfirmNode = this.createSpecificNode('action', x + 1000, y + 350, {
+    const addedConfirmNode = this.createSpecificNode('action', x + 1500, y + 400, {
       label: 'Añadir al carrito',
       actionType: 'add_to_cart',
       params: { notes: '{{notas_preparacion}}' }
@@ -755,7 +750,7 @@ REGLAS IMPORTANTES:
     this.connectNodes(addedConfirmNode.id, 'output', decisionNode.id, 'input');
     
     // Nodo para Ver Pedido
-    const viewOrderNode = this.createSpecificNode('message', x + 1400, y + 50, {
+    const viewOrderNode = this.createSpecificNode('message', x + 2100, y + 50, {
       label: 'Resumen',
       message: '🛒 Tu Pedido Actual:\n{{cartSummary}}\n\n¿Qué deseas hacer ahora?'
     });
@@ -763,114 +758,117 @@ REGLAS IMPORTANTES:
     this.connectNodes(viewOrderNode.id, 'output', decisionNode.id, 'input');
 
     // Acción para vaciar carrito
-    const emptyActionNode = this.createSpecificNode('action', x + 1400, y + 200, {
+    const emptyActionNode = this.createSpecificNode('action', x + 2100, y + 300, {
       label: 'Vaciar Carrito',
       actionType: 'empty_cart'
     });
     this.connectNodes(decisionNode.id, 'opt_empty', emptyActionNode.id, 'input');
 
     // 3. Nodos de Captura de Datos Finales
-    const nameNode = this.createSpecificNode('question', x + 1600, y + 300, { label: 'Nombre', message: '¡Perfecto! Para agendar tu pedido, ¿cuál es tu nombre completo?', variable: 'customer_name' });
-    const phoneNode = this.createSpecificNode('question', x + 1600, y + 450, { label: 'Teléfono', message: 'Gracias {{customer_name}}, ¿a qué número telefónico podemos contactarte?', variable: 'phone', validation: 'phone' });
-    const addressNode = this.createSpecificNode('question', x + 1600, y + 600, { label: 'Dirección', message: 'Por último, ¿cuál es la dirección de entrega?', variable: 'direccion_entrega' });
-    const deliveryNoteNode = this.createSpecificNode('question', x + 1600, y + 750, { label: 'Instrucción Entrega', message: '¿Alguna instrucción adicional para la entrega o para nosotros? (Si no, escribe "no")', variable: 'notas_entrega' });
+    const nameNode = this.createSpecificNode('question', x + 2400, y + 300, { label: 'Nombre', message: '¡Perfecto! Para agendar tu pedido, ¿cuál es tu nombre completo?', variable: 'customer_name' });
+    const phoneNode = this.createSpecificNode('question', x + 2400, y + 500, { label: 'Teléfono', message: 'Gracias {{customer_name}}, ¿a qué número telefónico podemos contactarte?', variable: 'phone', validation: 'phone' });
+    const addressNode = this.createSpecificNode('question', x + 2400, y + 700, { label: 'Dirección', message: 'Por último, ¿cuál es la dirección de entrega?', variable: 'direccion_entrega' });
+    const deliveryNoteNode = this.createSpecificNode('question', x + 2400, y + 900, { label: 'Instrucción Entrega', message: '¿Alguna instrucción adicional para la entrega o para nosotros? (Si no, escribe "no")', variable: 'notas_entrega' });
     
     this.connectNodes(decisionNode.id, 'opt_finish', nameNode.id, 'input');
     this.connectNodes(nameNode.id, 'output', phoneNode.id, 'input');
     this.connectNodes(phoneNode.id, 'output', addressNode.id, 'input');
     this.connectNodes(addressNode.id, 'output', deliveryNoteNode.id, 'input');
     
-    const registerOrderNode = this.createSpecificNode('action', x + 1600, y + 900, { label: 'Registrar Pedido', actionType: 'register_order' });
+    const registerOrderNode = this.createSpecificNode('action', x + 2400, y + 1100, { label: 'Registrar Pedido', actionType: 'register_order' });
     this.connectNodes(deliveryNoteNode.id, 'output', registerOrderNode.id, 'input');
 
-    const endNode = this.createSpecificNode('end', x + 1600, y + 1050, { 
+    const endNode = this.createSpecificNode('end', x + 2400, y + 1300, { 
       label: 'Despedida', 
       message: '¡Listo! Tu pedido {{orderNumber}} ha sido registrado con éxito. 🚀\n\nResumen final:\n{{cartSummary}}\nEntrega en: {{direccion_entrega}}\nNotas: {{notas_entrega}}\n\n¡Gracias por tu compra!' 
     });
     this.connectNodes(registerOrderNode.id, 'output', endNode.id, 'input');
 
     // 4. Generación Jerárquica de Menús
+    // Nodo para capturar cantidad y notas (reutilizado por todos los productos)
+    const qtyNode = this.createSpecificNode('question', x + 1200, y + 500, { 
+      label: 'Cantidad', 
+      message: '¿Cuántas unidades deseas ordenar?', 
+      variable: 'cantidad_actual', 
+      validation: 'number' 
+    });
+    const prepNoteNode = this.createSpecificNode('question', x + 1200, y + 700, { 
+      label: 'Notas Especiales', 
+      message: '¿Alguna solicitud especial sobre el producto? Si no, escribe "no"', 
+      variable: 'notas_preparacion' 
+    });
+    this.connectNodes(qtyNode.id, 'output', prepNoteNode.id, 'input');
+    this.connectNodes(prepNoteNode.id, 'output', addedConfirmNode.id, 'input');
+
     const buildCategoryMenu = (parentId: string | null = null, depth: number = 0): FlowNode | null => {
-      if (depth > 5) return null; // Seguridad contra recursión infinita
+      if (depth > 10) return null; // Mayor profundidad admitida
 
       const subCats = categories.filter(c => c.parent_id === parentId);
       const catProducts = products.filter(p => p.category_id === (parentId || 'root')); 
       
-      if (parentId === null && subCats.length === 0) return null;
+      if (parentId === null && subCats.length === 0 && catProducts.length === 0) return null;
 
       let label = 'Categorías Principales';
-      let message = 'Contamos con las siguientes categorías. Por favor elige una:';
+      let message = 'Bienvenido a nuestra tienda digital. 🛍️\nTenemos las siguientes categorías para ti. Por favor elige una para ver los productos:';
       
       if (parentId) {
         const cat = categories.find(c => c.id === parentId);
         label = `Menú: ${cat?.name || 'Subcategoría'}`;
-        message = `Estás en ${cat?.name}. Elige una opción:`;
+        message = `Explorando *${cat?.name}*. Selecciona una subcategoría o un producto para añadir al carrito:`;
       }
 
       const options: any[] = [];
       
-      subCats.slice(0, 8).forEach(sc => {
-        options.push({ id: `cat_${sc.id}`, text: `📁 ${sc.name}`, value: sc.id });
+      // Añadir Subcategorías primero
+      subCats.forEach(sc => {
+        options.push({ id: `cat_${sc.id}`, text: `📁 ${sc.name.toUpperCase()}`, value: sc.id });
       });
 
-      catProducts.slice(0, 8).forEach(p => {
-        options.push({ id: `prod_${p.id}`, text: `${p.name} ($${p.price})`, value: `${p.id}|${p.price}` });
+      // Añadir Productos después
+      catProducts.forEach(p => {
+        const availability = p.is_available === false ? ' [AGOTADO]' : '';
+        options.push({ id: `prod_${p.id}`, text: `${p.name} ($${p.price.toLocaleString()})${availability}`, value: `${p.id}|${p.price}` });
       });
 
       if (parentId) {
-        options.push({ id: `back_${parentId}`, text: '⬅️ Volver', value: 'back' });
+        options.push({ id: `back_${parentId}`, text: '⬅️ VOLVER AL MENÚ ANTERIOR', value: 'back' });
       }
 
-      const menuNode = this.createSpecificNode('menu', x + (depth * 300), y + (parentId ? 200 : 0), { 
+      const menuNode = this.createSpecificNode('menu', x + 400 + (depth * 350), y + (parentId ? 300 : 0), { 
         label, 
         message, 
         options 
       });
 
-      subCats.slice(0, 8).forEach(sc => {
+      // Conectar subcategorías recursivamente
+      subCats.forEach(sc => {
         const subMenu = buildCategoryMenu(sc.id, depth + 1);
         if (subMenu) {
           this.connectNodes(menuNode.id, `cat_${sc.id}`, subMenu.id, 'input');
-          const backConn = this.botFlow.flow_data.connections.find(c => c.from === subMenu.id && c.fromPort === `back_${sc.id}`);
-          if (backConn) backConn.to = menuNode.id;
-          else {
-             this.connectNodes(subMenu.id, `back_${sc.id}`, menuNode.id, 'input');
-          }
+          // Conectar el "Volver" del submenú al menú actual
+          this.connectNodes(subMenu.id, `back_${sc.id}`, menuNode.id, 'input');
         }
       });
 
-      if (catProducts.length > 0) {
-        const qtyNode = this.createSpecificNode('question', menuNode.position.x + 250, menuNode.position.y + 150, { 
-          label: 'Cantidad', 
-          message: '¿Cuántas unidades deseas ordenar?', 
-          variable: 'cantidad_actual', 
-          validation: 'number' 
-        });
-        const prepNoteNode = this.createSpecificNode('question', qtyNode.position.x + 250, qtyNode.position.y, { 
-          label: 'Notas Especiales', 
-          message: '¿Alguna instrucción especial? (ej: Sin cebolla, extra queso). Si no, escribe "no"', 
-          variable: 'notas_preparacion' 
-        });
-        
-        this.connectNodes(qtyNode.id, 'output', prepNoteNode.id, 'input');
-        this.connectNodes(prepNoteNode.id, 'output', addedConfirmNode.id, 'input');
-
-        catProducts.slice(0, 8).forEach(p => {
+      // Conectar productos al flujo de compra
+      catProducts.forEach(p => {
+        if (p.is_available !== false) {
           this.connectNodes(menuNode.id, `prod_${p.id}`, qtyNode.id, 'input');
-        });
-      }
+        }
+      });
 
       return menuNode;
     };
 
     const rootMenu = buildCategoryMenu(null, 0);
     if (rootMenu) {
-      this.connectNodes(pdfNode.id, 'output', rootMenu.id, 'input');
+      this.connectNodes(startNode.id, 'output', rootMenu.id, 'input');
+
       this.connectNodes(decisionNode.id, 'opt_continue', rootMenu.id, 'input');
       this.connectNodes(emptyActionNode.id, 'output', rootMenu.id, 'input');
     }
 
-    setTimeout(() => this.organizeFlow(), 200);
+    setTimeout(() => this.organizeFlow(), 300);
   }
 
   private async generateServiceFlow() {

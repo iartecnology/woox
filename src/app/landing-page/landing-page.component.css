@@ -35,6 +35,18 @@
     align-items: center;
 }
 
+.l-brand-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.l-nav-logo {
+    max-height: 40px;
+    max-width: 120px;
+    object-fit: contain;
+}
+
 .l-brand {
     font-size: 1.5rem;
     font-weight: 800;

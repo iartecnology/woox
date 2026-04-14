@@ -325,6 +325,8 @@
           [merchantId]="merchantId"
           [allNodes]="botFlow.flow_data.nodes"
           [allConnections]="botFlow.flow_data.connections"
+          [botFlow]="this.botFlow"
+          [botMode]="true"
           [inline]="true"
           (onNodeExecuted)="onSimNodeExecuted($event)">
       </app-chat-simulator>

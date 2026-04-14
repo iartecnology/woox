@@ -5,16 +5,26 @@
             <button class="add-btn-small" (click)="openCategoryModal()">+</button>
         </div>
         <ul class="category-list" cdkDropList (cdkDropListDropped)="onCategoryDrop($event)">
-            <li [class.active]="selectedCategoryId === ''" (click)="selectCategory('')">
+            <li [class.active]="selectedCategoryId === ''" 
+                [class.drop-target]="activeDropTargetId === ''"
+                (click)="selectCategory('')"
+                (mouseenter)="onItemMouseEnter('')"
+                (mouseleave)="onItemMouseLeave()"
+                (dragover)="$event.preventDefault()"
+                (drop)="onDropToCategory('')">
                 🌍 Todas las Categorías
             </li>
             <li *ngFor="let cat of displayCategories" [class.active]="selectedCategoryId === cat.id"
-                [class.drop-target]="isDraggingProducts && selectedCategoryId !== cat.id"
+                [class.drop-target]="activeDropTargetId === cat.id && draggedCategoryId !== cat.id"
                 (click)="selectCategory(cat.id)" class="category-item-li"
                 [style.padding-left.px]="cat.parent_id ? 24 : 12"
+                (mouseenter)="onItemMouseEnter(cat.id)"
+                (mouseleave)="onItemMouseLeave()"
                 (dragover)="$event.preventDefault()"
                 (drop)="onDropToCategory(cat.id)"
-                cdkDrag>
+                cdkDrag
+                (cdkDragStarted)="onCategoryDragStarted(cat.id)"
+                (cdkDragEnded)="onCategoryDragEnded()">
                 <span class="drag-handle" cdkDragHandle title="Mover categoría">⠿</span>
                 <span class="category-name">
                     {{ cat.parent_id ? '↳ ' : '' }}{{ cat.name }}
@@ -113,7 +123,7 @@
 
                     <div *ngIf="products.length > 0 && selectedCategoryId !== ''" style="margin-top: 20px;">
                         <button (click)="selectCategory('')"
-                            style="background: none; border: none; color: #4f46e5; cursor: pointer; text-decoration: underline; font-weight: 600;">
+                            style="background: none; border: none; color: #4f46e5; cursor: pointer; text-decoration: underline; font-weight: 600; pointer-events: auto;">
                             Ver todos los productos ({{ products.length }})
                         </button>
                     </div>
