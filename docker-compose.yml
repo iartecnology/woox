@@ -12,7 +12,7 @@ services:
       - NEXT_PUBLIC_SUPABASE_URL
       - NEXT_PUBLIC_SUPABASE_ANON_KEY
     networks:
-      - easypanel
+      - iartecnoloy
     restart: always
     deploy:
       resources:
@@ -20,7 +20,8 @@ services:
           memory: 512M
 
 networks:
-  easypanel:
+  iartecnoloy:
+    name: easypanel-iartecnoloy
     external: true
 
 # Nota: El motor de IA (woox-ai-engine) ahora funciona vía Supabase Edge Functions.
