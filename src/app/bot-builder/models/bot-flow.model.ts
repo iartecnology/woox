@@ -98,4 +98,5 @@ export interface BotFlow {
   flow_data: FlowData;
   variables?: any[];
   stats?: any;
+  version?: number;
 }

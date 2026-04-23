@@ -1269,3 +1269,116 @@
 .chat-input-area {
   z-index: 10; /* Para quedar por encima del historial si es necesario */
 }
+
+/* --- VERSIONING STYLES --- */
+.version-selector-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 24px;
+  padding-left: 24px;
+  border-left: 1px solid #e2e8f0;
+}
+
+.version-select {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.version-select:hover {
+  border-color: #4f46e5;
+}
+
+.btn-activate {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-activate:hover {
+  background: #10b981;
+  color: white;
+}
+
+/* Floating Save Actions (Bottom-Right) */
+.floating-save-actions {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  gap: 12px;
+  z-index: 100;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.btn-save-version {
+  background: #4f46e5;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  transition: all 0.2s;
+}
+
+.btn-save-version:hover {
+  background: #4338ca;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+}
+
+.btn-delete-version {
+  background: #fef2f2;
+  color: #ef4444;
+  border: 1px solid #fee2e2;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-delete-version:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.version-info-box {
+  background: #f1f5f9;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 10px;
+  margin: 15px 0;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.version-info-box strong {
+  color: #4f46e5;
+}

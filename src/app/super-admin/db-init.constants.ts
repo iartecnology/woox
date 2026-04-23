@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS merchants (
     ai_schedule_message TEXT,
     ollama_base_url TEXT DEFAULT 'http://localhost:11434',
     lmstudio_base_url TEXT DEFAULT 'http://localhost:1234/v1',
+    wa_connector_type TEXT DEFAULT 'meta',
+    wa_status TEXT DEFAULT 'disconnected',
+    wa_qr_code TEXT,
+    wa_last_connection TIMESTAMP WITH TIME ZONE,
+    wa_session_id TEXT,
+    bot_mode BOOLEAN DEFAULT false,
     agent_id UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

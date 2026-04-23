@@ -5,16 +5,24 @@
       <span class="merchant-badge">🏢 {{ merchantName }}</span>
       <input type="text" class="flow-name-input" [(ngModel)]="botFlow.name" placeholder="Nombre del flujo">
     </div>
-    <span class="status-badge" [class.active]="botFlow.is_active">
-      {{ botFlow.is_active ? 'PUBLICADO' : 'BORRADOR' }}
-    </span>
+
+    <!-- Version Selector -->
+    <div class="version-selector-group">
+      <select class="version-select" [ngModel]="botFlow.id" (ngModelChange)="selectVersionById($event)">
+        <option *ngFor="let f of allFlows" [value]="f.id">
+          v{{ f.version || 1 }} {{ f.is_active ? '● Activa' : '' }}
+        </option>
+      </select>
+      <button class="btn-activate" *ngIf="!botFlow.is_active" (click)="activateVersion(botFlow.id!)">
+        🚀 Activar esta Versión
+      </button>
+      <span class="status-badge" [class.active]="botFlow.is_active">
+        {{ botFlow.is_active ? 'PRODUCCIÓN' : 'BORRADOR' }}
+      </span>
+    </div>
   </div>
 
   <div class="header-actions">
-    <div class="form-check form-switch d-flex align-items-center gap-2">
-      <input class="form-check-input" type="checkbox" [(ngModel)]="botFlow.is_active">
-      <label>Publicar</label>
-    </div>
     <button id="btn-plantillas" class="btn-icon" (click)="openTemplateModal()">
       🔥 Plantillas Pro
     </button>
@@ -24,7 +32,6 @@
     <button class="btn-icon" (click)="toggleChat()" [class.active]="showTestChat">
       {{ showTestChat ? '🚫 Cerrar Pruebas' : '▶ Probar Flujo' }}
     </button>
-    <button class="btn-icon btn-primary" (click)="saveFlow()">💾 Guardar Cambios</button>
   </div>
 </div>
 
@@ -300,6 +307,39 @@
         </g>
       </g>
     </svg>
+
+    <!-- Floating Actions (Bottom-Right) -->
+    <div class="floating-save-actions">
+      <button class="btn-delete-version" title="Eliminar esta versión" (click)="deleteSelectedFlow()">
+        🗑️ Borrar
+      </button>
+      <button class="btn-save-version" (click)="saveFlow()">
+        💾 Guardar
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal de Confirmación de Guardado (Versiones) -->
+  <div *ngIf="showSaveConfirm" class="delete-confirmation-overlay" style="display: flex !important;">
+    <div class="delete-confirmation-dialog" (click)="$event.stopPropagation()">
+      <div class="dialog-icon">💾</div>
+      <h3>Guardar Flujo</h3>
+      <p>¿Deseas sobreescribir la versión actual o crear una nueva versión?</p>
+      
+      <div class="version-info-box" *ngIf="botFlow">
+        Actualmente editando: <strong>v{{ botFlow.version || 1 }}</strong>
+      </div>
+
+      <div class="delete-dialog-actions" style="flex-direction: column; gap: 0.8rem;">
+        <button class="dialog-confirm-btn w-100" style="background: #4f46e5;" (click)="executeSave('overwrite')">
+          🔄 Sobreescribir v{{ botFlow.version || 1 }}
+        </button>
+        <button class="dialog-confirm-btn w-100" style="background: #10b981;" (click)="executeSave('new')">
+          ✨ Guardar como Nueva Versión (v{{ (botFlow.version || 1) + 1 }})
+        </button>
+        <button class="dialog-cancel-btn w-100" (click)="showSaveConfirm = false">Cancelar</button>
+      </div>
+    </div>
   </div>
 
   <!-- Simulador de Chat (Panel Derecho Mejorado con Tabs) -->

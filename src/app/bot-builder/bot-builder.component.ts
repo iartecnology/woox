@@ -41,6 +41,11 @@ export class BotBuilderComponent implements OnInit {
   selectedNode: FlowNode | null = null;
   editingNode: FlowNode | null = null;
   activeNodeTab: 'general' | 'instructions' | 'memory' | 'tools' = 'general';
+  
+  // Versioning state
+  allFlows: BotFlow[] = [];
+  showSaveConfirm = false;
+  saveMode: 'new' | 'overwrite' = 'overwrite';
 
   // Knowledge Base State for Skill Configuration
   knowledgeDocuments: any[] = [];
@@ -402,23 +407,25 @@ export class BotBuilderComponent implements OnInit {
 
   // --- LOADING / SAVING ---
   async loadFlow() {
-    // Info del merchant ya cargada en ngOnInit o recargamos si es necesario
-    if (this.merchantName === 'Cargando...') {
-      const { data: m } = await this.supabase.getMerchantById(this.merchantId);
-      if (m) this.merchantName = m.name;
-    }
-
-    const { data, error } = await this.supabase.getBotFlows(this.merchantId);
-    if (data && data.length > 0) {
-      this.botFlow = data[0];
+    // Info del merchant ya cargada en ngOnInit
+    await this.loadFlows();
+    
+    if (this.allFlows && this.allFlows.length > 0) {
+      // Intentar encontrar el activo, sino el último guardado (v más alta o más reciente)
+      const active = this.allFlows.find(f => f.is_active);
+      this.botFlow = active ? JSON.parse(JSON.stringify(active)) : JSON.parse(JSON.stringify(this.allFlows[0]));
+      
       // Asegurar que existan nodos y conexiones
       if (!this.botFlow.flow_data.nodes) this.botFlow.flow_data.nodes = [];
       if (!this.botFlow.flow_data.connections) this.botFlow.flow_data.connections = [];
     } else {
-      // Crear uno por defecto
+      // Crear uno por defecto (v1)
       this.botFlow.merchant_id = this.merchantId;
       this.botFlow.name = 'Flujo de Bienvenida';
+      this.botFlow.version = 1;
       this.addNode('start', 100, 250);
+      await this.supabase.saveBotFlow(this.botFlow);
+      await this.loadFlows();
     }
   }
 
@@ -808,20 +815,20 @@ REGLAS IMPORTANTES:
       
       if (parentId === null && subCats.length === 0 && catProducts.length === 0) return null;
 
-      let label = 'Categorías Principales';
-      let message = 'Bienvenido a nuestra tienda digital. 🛍️\nTenemos las siguientes categorías para ti. Por favor elige una para ver los productos:';
+      let label = 'Menú Principal';
+      let message = 'Por favor, selecciona una categoría para ver los productos disponibles:';
       
       if (parentId) {
         const cat = categories.find(c => c.id === parentId);
-        label = `Menú: ${cat?.name || 'Subcategoría'}`;
-        message = `Explorando *${cat?.name}*. Selecciona una subcategoría o un producto para añadir al carrito:`;
+        label = `${cat?.name || 'Subcategoría'}`;
+        message = `Explorando *${cat?.name}*. Selecciona lo que buscas:`;
       }
 
       const options: any[] = [];
       
       // Añadir Subcategorías primero
       subCats.forEach(sc => {
-        options.push({ id: `cat_${sc.id}`, text: `📁 ${sc.name.toUpperCase()}`, value: sc.id });
+        options.push({ id: `cat_${sc.id}`, text: `📁 ${sc.name}`, value: sc.id });
       });
 
       // Añadir Productos después
@@ -940,13 +947,114 @@ REGLAS IMPORTANTES:
 
   async saveFlow() {
     this.validateFlow();
+    this.showSaveConfirm = true;
+  }
+
+  async executeSave(mode: 'new' | 'overwrite') {
+    this.showSaveConfirm = false;
+    this.saveMode = mode;
+    
     try {
-      const { data, error } = await this.supabase.saveBotFlow(this.botFlow);
-      if (error) throw error;
-      this.notification.show('¡Flujo guardado con éxito! ✅', 'success');
+      if (mode === 'new') {
+        // Clonar para nueva versión: quitar ID para que inserte nuevo, incrementar versión
+        const newVersion = { ...this.botFlow };
+        delete newVersion.id;
+        
+        // Determinar siguiente número de versión basado en allFlows
+        const maxVer = this.allFlows.reduce((max, f) => (f.version || 1) > max ? (f.version || 1) : max, 0);
+        newVersion.version = maxVer + 1;
+        newVersion.is_active = false; // Nueva versión por defecto no es la producción
+
+        const { data, error } = await this.supabase.saveBotFlow(newVersion);
+        if (error) throw error;
+        
+        this.botFlow = data;
+        this.notification.show(`✨ Nueva versión v${data.version} guardada con éxito!`, 'success');
+      } else {
+        // Sobreescribir actual
+        const { data, error } = await this.supabase.saveBotFlow(this.botFlow);
+        if (error) throw error;
+        this.botFlow = data;
+        this.notification.show('¡Versión actualizada con éxito! ✅', 'success');
+      }
+      
+      // Refrescar lista de versiones
+      await this.loadFlows();
+      
     } catch (e: any) {
       this.notification.show('Error al guardar: ' + e.message, 'error');
     }
+  }
+
+  async activateVersion(id: string) {
+    try {
+      // 1. Desactivar todos los flujos de este merchant
+      const { error: err1 } = await this.supabase.rpc('deactivate_all_bot_flows', { p_merchant_id: this.merchantId });
+      if (err1) throw err1;
+
+      // 2. Activar el seleccionado
+      const flowToActivate = this.allFlows.find(f => f.id === id);
+      if (flowToActivate) {
+        flowToActivate.is_active = true;
+        const { error: err2 } = await this.supabase.saveBotFlow(flowToActivate);
+        if (err2) throw err2;
+        
+        this.notification.show('🚀 Versión activada en producción con éxito!', 'success');
+        await this.loadFlows(); // Refrescar para ver los estados
+        // Si estamos viendo este mismo flujo, actualizar localmente
+        if (this.botFlow.id === id) {
+           this.botFlow.is_active = true;
+        }
+      }
+    } catch (e: any) {
+      this.notification.show('Error al activar: ' + e.message, 'error');
+    }
+  }
+
+  async loadFlows() {
+    const { data } = await this.supabase.getBotFlows(this.merchantId);
+    if (data) {
+      this.allFlows = data;
+    }
+  }
+
+  async selectVersionById(id: string) {
+    const flow = this.allFlows.find(f => f.id === id);
+    if (flow) {
+      await this.selectVersion(flow);
+    }
+  }
+
+  async selectVersion(flow: BotFlow) {
+    if (this.botFlow.id === flow.id) return;
+    this.botFlow = JSON.parse(JSON.stringify(flow));
+    // Resetear transformaciones visuales o mantenerlas? Mantendremos por ahora.
+    this.showSuccess(`Cargada versión v${flow.version || '?'}`);
+  }
+
+  async deleteSelectedFlow() {
+    if (!this.botFlow.id) return;
+
+    this.modalConfig = {
+      title: '¿Eliminar esta versión?',
+      message: 'Esta acción borrará este diseño permanentemente. Si es el flujo activo, el chatbot dejará de funcionar.',
+      icon: '🗑️',
+      confirmLabel: 'Sí, Eliminar Versión',
+      isProcessing: false,
+      action: async () => {
+        this.showConfirmModal = false;
+        try {
+          const { error } = await this.supabase.deleteBotFlow(this.botFlow.id!);
+          if (error) throw error;
+          
+          this.notification.show('🗑️ Versión eliminada', 'success');
+          await this.loadFlow(); // Recargar el flujo por defecto
+        } catch (e: any) {
+          this.notification.show('Error al eliminar: ' + e.message, 'error');
+        }
+      }
+    };
+    this.showConfirmModal = true;
   }
 
   // --- NODE MANAGEMENT ---

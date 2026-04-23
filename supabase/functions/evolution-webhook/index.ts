@@ -34,8 +34,14 @@ Deno.serve(async (req: Request) => {
         const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
         let m: any = null;
         if (merchantId) {
-            const { data: mById } = await supabase.from("merchants").select("*").eq("id", merchantId).maybeSingle();
-            m = mById;
+            // Verificar si el merchantId es un UUID válido
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(merchantId);
+            
+            if (isUUID) {
+                const { data: mById } = await supabase.from("merchants").select("*").eq("id", merchantId).maybeSingle();
+                m = mById;
+            }
+            
             if (!m) {
                 const { data: mByCode } = await supabase.from("merchants").select("*").eq("merchant_code", merchantId).maybeSingle();
                 m = mByCode;

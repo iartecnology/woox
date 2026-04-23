@@ -106,6 +106,7 @@ interface Merchant {
     wa_status?: string;
     wa_qr_code?: string;
     wa_last_connection?: string;
+    wa_session_id?: string;
     bot_mode?: boolean;
 }
 
@@ -1938,7 +1939,7 @@ export class SuperAdminComponent implements OnInit {
         merchant.wa_status = 'pairing';
         this.notificationService.show('Iniciando instancia en Evolution API...', 'info');
 
-        const instanceName = (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+        const instanceName = (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9-]/g, '_');
 
         try {
             // 0. LIMPIEZA: Intentar eliminar la instancia si ya existe para evitar conflictos de "ghost sessions"
@@ -2063,7 +2064,7 @@ export class SuperAdminComponent implements OnInit {
 
     async syncEvolutionWebhook(merchant: Partial<Merchant>) {
         if (!merchant) return;
-        const instanceName = (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+        const instanceName = merchant.wa_session_id || (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9-]/g, '_');
         this.notificationService.show('Sincronizando webhook...', 'info');
         await this.setupEvolutionWebhook(merchant, instanceName);
         this.notificationService.show('Webhook sincronizado correctamente', 'success');
@@ -2073,10 +2074,11 @@ export class SuperAdminComponent implements OnInit {
         const apiUrl = this.platformConfig.evolution_api_url;
         const apiKey = this.platformConfig.evolution_api_key;
         const supabaseUrl = this.platformConfig.supabase_url;
+        const supabaseKey = this.platformConfig.supabase_key;
         const merchantId = merchant.id;
 
-        if (!apiUrl || !apiKey || !supabaseUrl || !merchantId) {
-            console.error('Missing config for webhook setup');
+        if (!apiUrl || !apiKey || !supabaseUrl || !supabaseKey || !merchantId) {
+            console.error('Missing config for webhook setup (URL/Key missing)');
             return;
         }
 
@@ -2091,16 +2093,33 @@ export class SuperAdminComponent implements OnInit {
                     'apikey': apiKey as string
                 },
                 body: JSON.stringify({
-                    enabled: true,
-                    url: webhookUrl,
-                    webhook_by_events: false,
-                    events: [
-                        "MESSAGES_UPSERT",
-                        "CONNECTION_UPDATE",
-                        "MESSAGES_UPDATE",
-                        "SEND_MESSAGE",
-                        "MESSAGES_SET"
-                    ]
+                    webhook: {
+                        enabled: true,
+                        url: webhookUrl,
+                        webhook_by_events: false,
+                        webhook_base64: true,
+                        events: [
+                            "APPLICATION_STARTUP",
+                            "QRCODE_UPDATED",
+                            "MESSAGES_UPSERT",
+                            "MESSAGES_UPDATE",
+                            "MESSAGES_DELETE",
+                            "SEND_MESSAGE",
+                            "CONNECTION_UPDATE",
+                            "CHATS_SET",
+                            "CHATS_UPSERT",
+                            "CHATS_UPDATE",
+                            "CHATS_DELETE",
+                            "PRESENCE_UPDATE",
+                            "CONTACTS_UPSERT",
+                            "CONTACTS_UPDATE",
+                            "GROUP_PARTICIPANTS_UPDATE",
+                            "GROUPS_UPSERT"
+                        ],
+                        headers: {
+                            "Authorization": `Bearer ${supabaseKey}`
+                        }
+                    }
                 })
             });
             const data = await res.json();
@@ -2160,34 +2179,35 @@ export class SuperAdminComponent implements OnInit {
                 this.deleteModalConfig.isProcessing = true;
                 const apiUrl = this.platformConfig.evolution_api_url;
                 const apiKey = this.platformConfig.evolution_api_key;
-                const instanceName = (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+                const instanceName = (merchant.merchant_code || merchant.slug || merchant.id || 'unknown').replace(/[^a-zA-Z0-9-]/g, '_');
 
                 merchant.wa_status = 'disconnected';
                 merchant.wa_qr_code = '';
                 merchant.wa_last_connection = undefined;
 
                 try {
-                    // Cerrar sesión real en la API
+                    // 1. Intentar limpiar en el servidor (opcional, no debe bloquear el flujo local)
                     if (apiUrl && apiKey) {
-                        this.notificationService.show('Cerrando sesión en servidor...', 'info');
-                        await fetch(`${apiUrl}/instance/logout/${instanceName}`, {
-                            method: 'DELETE',
-                            headers: { 'apikey': apiKey }
-                        });
-                        await fetch(`${apiUrl}/instance/delete/${instanceName}`, {
-                            method: 'DELETE',
-                            headers: { 'apikey': apiKey }
-                        });
+                        this.notificationService.show('Limpiando sesión en servidor...', 'info');
+                        // Usamos Promise.allSettled para que no importe si falla o da 404
+                        await Promise.allSettled([
+                            fetch(`${apiUrl}/instance/logout/${instanceName}`, { method: 'DELETE', headers: { 'apikey': apiKey } }),
+                            fetch(`${apiUrl}/instance/delete/${instanceName}`, { method: 'DELETE', headers: { 'apikey': apiKey } })
+                        ]);
                     }
 
-                    // Actualizar en DB
+                    // 2. ACTUALIZAR DB Y UI SIEMPRE (Paso crítico)
+                    merchant.wa_status = 'disconnected';
+                    merchant.wa_qr_code = '';
+                    merchant.wa_last_connection = undefined;
+
                     await this.supabaseService.updateMerchant(merchant.id!, {
                         wa_status: 'disconnected',
                         wa_qr_code: '',
                         wa_last_connection: undefined
                     });
 
-                    this.notificationService.show('Sesión de WhatsApp cerrada correctamente', 'warning');
+                    this.notificationService.show('Sesión de WhatsApp desconectada localmente', 'warning');
                     this.showDeleteConfirmModal = false;
                 } catch (error: any) {
                     console.error('Error disconnecting WA:', error);
