@@ -1069,8 +1069,9 @@ REGLAS IMPORTANTES:
     }
 
     const now = Date.now();
+    const randomSuffix = Math.floor(Math.random() * 10000);
     const newNode: FlowNode = {
-      id: `node_${now}`,
+      id: `node_${now}_${randomSuffix}`,
       type: type,
       position: { x, y },
       data: {

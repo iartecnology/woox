@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { processBotFlow } from "../_shared/bot-engine.ts";
 import { notifyMerchantAgents } from "../_shared/notifications.ts";
+// Force Deploy: 2026-04-24 11:36
+
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -65,20 +67,39 @@ Deno.serve(async (req: Request) => {
         const customerName = data.pushName || "Cliente Evolution";
         let messageText = data.message.conversation || data.message.extendedTextMessage?.text || data.message.imageMessage?.caption || data.message.videoMessage?.caption || "";
         if (!messageText) return new Response("ok", { headers: corsHeaders });
-        const { data: existing } = await supabase.from("messages").select("id").eq("metadata->>evolution_message_id", evolutionMessageId).maybeSingle();
-        if (existing) return new Response("ok", { headers: corsHeaders });
-        let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", m.id).eq("phone", customerPhone).maybeSingle();
+        const { data: existingMsgs } = await supabase.from("messages").select("id").eq("metadata->>evolution_message_id", evolutionMessageId).limit(1);
+        if (existingMsgs && existingMsgs.length > 0) return new Response("ok", { headers: corsHeaders });
+
+        let { data: customers } = await supabase.from("customers").select("*").eq("merchant_id", m.id).eq("phone", customerPhone).order('created_at', { ascending: false }).limit(1);
+        let customer = customers && customers.length > 0 ? customers[0] : null;
+
         if (!customer) {
             const { data: nc } = await supabase.from("customers").insert({ merchant_id: m.id, full_name: customerName, phone: customerPhone }).select().single();
             customer = nc;
         } else if ((customer.full_name === "Cliente Evolution" || !customer.full_name) && data.pushName && data.pushName !== "Cliente Evolution") {
-            // Actualizar nombre si era genérico y ahora tenemos uno mejor
             const { data: uc } = await supabase.from("customers").update({ full_name: data.pushName }).eq("id", customer.id).select().single();
             customer = uc;
         }
-        let { data: conversation } = await supabase.from("conversations").select("*").eq("merchant_id", m.id).eq("customer_id", customer!.id).eq("status", "open").maybeSingle();
+
+        let { data: convs } = await supabase.from("conversations")
+            .select("*")
+            .eq("merchant_id", m.id)
+            .eq("customer_id", customer!.id)
+            .eq("channel", "whatsapp_evolution")
+            .eq("status", "open")
+            .order('created_at', { ascending: false })
+            .limit(1);
+        
+        let conversation = convs && convs.length > 0 ? convs[0] : null;
+
         if (!conversation) {
-            const { data: nconv } = await supabase.from("conversations").insert({ merchant_id: m.id, customer_id: customer!.id, channel: "whatsapp_evolution", status: "open" }).select().single();
+            const { data: nconv } = await supabase.from("conversations").insert({ 
+                merchant_id: m.id, 
+                customer_id: customer!.id, 
+                channel: "whatsapp_evolution", 
+                status: "open",
+                ai_active: true
+            }).select().single();
             conversation = nconv;
         }
         await supabase.from("messages").insert({ conversation_id: conversation!.id, sender_type: "customer", content: messageText, metadata: { evolution_message_id: evolutionMessageId } });

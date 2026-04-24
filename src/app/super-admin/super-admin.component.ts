@@ -2006,8 +2006,9 @@ export class SuperAdminComponent implements OnInit {
             // 3. Iniciar Polling de Estado para detectar el escaneo
             this.startWAStatusPolling(merchant, instanceName);
 
-            // 4. Configurar Webhook automáticamente
+            // 4. Configurar Webhook y Ajustes automáticamente
             this.setupEvolutionWebhook(merchant, instanceName);
+            this.setupEvolutionSettings(instanceName);
 
         } catch (error: any) {
             console.error('Evolution API Error:', error);
@@ -2051,8 +2052,9 @@ export class SuperAdminComponent implements OnInit {
                     this.notificationService.show('¡WhatsApp conectado correctamente!', 'success');
                     this.cdr.detectChanges();
 
-                    // 6. Configurar Webhook una vez conectado (asegurar persistencia)
+                    // 6. Configurar Webhook y Ajustes una vez conectado (asegurar persistencia)
                     await this.setupEvolutionWebhook(merchant, instanceName);
+                    await this.setupEvolutionSettings(instanceName);
 
                     clearInterval(this.waStatusInterval);
                 }
@@ -2133,6 +2135,35 @@ export class SuperAdminComponent implements OnInit {
             }
         } catch (e) {
             console.error('Error configurando webhook:', e);
+        }
+    }
+
+    private async setupEvolutionSettings(instanceName: string) {
+        const apiUrl = this.platformConfig.evolution_api_url;
+        const apiKey = this.platformConfig.evolution_api_key;
+
+        if (!apiUrl || !apiKey) return;
+
+        try {
+            console.log(`[Evolution] Configurando ajustes para instancia: ${instanceName}`);
+            await fetch(`${apiUrl}/settings/set/${instanceName}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': apiKey as string
+                },
+                body: JSON.stringify({
+                    reject_call: true,
+                    msg_call: "Lo siento, no puedo recibir llamadas por este medio. Por favor escribe un mensaje. 🙏",
+                    groups_ignore: true,
+                    always_online: true,
+                    read_messages: true,
+                    read_status: true
+                })
+            });
+            console.log(`[Evolution] Ajustes aplicados con éxito para ${instanceName}`);
+        } catch (error) {
+            console.error('Error in setupEvolutionSettings:', error);
         }
     }
 
@@ -2395,9 +2426,9 @@ export class SuperAdminComponent implements OnInit {
                         if (error) throw error;
                     }
                     if (opts.chats) {
-                        const { error: err1 } = await supabase.from('messages').delete().eq('merchant_id', merchant.id);
-                        if (err1) throw err1;
-                        const { error: err2 } = await supabase.from('chats').delete().eq('merchant_id', merchant.id);
+                        // Al eliminar conversaciones, los mensajes se eliminan en cascada si la DB está bien configurada.
+                        // Si no, lo hacemos manualmente vía RPC o subquery.
+                        const { error: err2 } = await supabase.from('conversations').delete().eq('merchant_id', merchant.id);
                         if (err2) throw err2;
                     }
                     if (opts.products) {

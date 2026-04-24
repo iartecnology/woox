@@ -5,7 +5,9 @@
       <span class="merchant-badge">🏢 {{ merchantName }}</span>
       <input type="text" class="flow-name-input" [(ngModel)]="botFlow.name" placeholder="Nombre del flujo">
     </div>
+  </div>
 
+  <div class="header-actions">
     <!-- Version Selector -->
     <div class="version-selector-group">
       <select class="version-select" [ngModel]="botFlow.id" (ngModelChange)="selectVersionById($event)">
@@ -14,15 +16,13 @@
         </option>
       </select>
       <button class="btn-activate" *ngIf="!botFlow.is_active" (click)="activateVersion(botFlow.id!)">
-        🚀 Activar esta Versión
+        🚀 Activar
       </button>
       <span class="status-badge" [class.active]="botFlow.is_active">
         {{ botFlow.is_active ? 'PRODUCCIÓN' : 'BORRADOR' }}
       </span>
     </div>
-  </div>
 
-  <div class="header-actions">
     <button id="btn-plantillas" class="btn-icon" (click)="openTemplateModal()">
       🔥 Plantillas Pro
     </button>

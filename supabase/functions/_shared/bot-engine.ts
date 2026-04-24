@@ -791,7 +791,6 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
         variables['merchant_menu_pdf'] = merchantData.menu_pdf_url || '';
         variables['menu_pdf'] = merchantData.menu_pdf_url || '';
     }
-
     // 3. Procesar la respuesta del usuario según el estado anterior
     if (waitingFor === 'menu_selection') {
         const currentNode = nodes.find((n: any) => n.id === currentNodeId);
@@ -840,13 +839,17 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
             }
 
             // AUTO-UPDATE CUSTOMER PROFILE IF CAPTURING IDENTITY DATA
+            // IMPORTANTE: NO sobreescribir 'phone' porque es el identificador canónico
+            // que usa el webhook de WhatsApp (remoteJid) para encontrar al cliente.
+            // Si lo cambiamos, el webhook no lo encontrará y creará una conversación nueva.
             if (customerId) {
                 const nameVars = ['customer_name', 'nombre_cliente', 'nombre', 'name'];
                 const phoneVars = ['customer_phone', 'telefono_cliente', 'telefono', 'phone'];
                 const identityUpdate: any = {};
                 
                 if (nameVars.includes(varName)) identityUpdate.full_name = messageText.trim();
-                if (phoneVars.includes(varName)) identityUpdate.phone = messageText.trim();
+                // Guardar teléfono de contacto en metadata, NO en el campo 'phone' principal
+                if (phoneVars.includes(varName)) identityUpdate.metadata = { ...(variables['_customer_metadata'] || {}), contact_phone: messageText.trim() };
                 
                 if (Object.keys(identityUpdate).length > 0) {
                     await supabase.from('customers').update(identityUpdate).eq('id', customerId);
@@ -879,10 +882,12 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
     let loopCount = 0;
     const MAX_LOOPS = 20;
 
+    const debugLogs: string[] = [];
     while (currentNodeId && loopCount < MAX_LOOPS) {
         loopCount++;
         const node = nodes.find((n: any) => n.id === currentNodeId);
         if (!node) {
+            debugLogs.push(`[ERROR] Nodo no encontrado: ${currentNodeId}`);
             console.error(`[BOT-ENGINE] ERROR: No se encontró el nodo con ID: ${currentNodeId}. Reiniciando al inicio.`);
             const startNode = nodes.find((n: any) => n.type === 'start');
             if (startNode) {
@@ -891,6 +896,7 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
             }
             break;
         }
+        debugLogs.push(`[LOOP ${loopCount}] Node: ${node.data?.label || node.type} (${node.id})`);
         console.log(`[BOT-ENGINE] LOOP ${loopCount} | Nodo: ${node.data?.label || node.type} (${node.id})`);
 
         // ── ACCIÓN ──────────────────────────────────
@@ -1510,10 +1516,13 @@ ${customNodeInstructions}
 
         // ── PAUSAR O SEGUIR ──────────────────────────
         if (node.type === 'question') {
+            debugLogs.push(`[WAIT] Question: ${node.data?.label || node.type}. Waiting for input.`);
             waitingFor = 'input'; break;
         } else if (node.type === 'menu') {
+            debugLogs.push(`[WAIT] Menu: ${node.data?.label || node.type}. Waiting for selection.`);
             waitingFor = 'menu_selection'; break;
         } else if (node.type === 'end') {
+            debugLogs.push(`[END] Flujo finalizado en nodo: ${node.data?.label || node.type}`);
             waitingFor = null; currentNodeId = null; break;
         }
 
@@ -1527,8 +1536,17 @@ ${customNodeInstructions}
         variables,
         waiting_for: waitingFor,
         updated_at: new Date().toISOString(),
-        status: currentNodeId === null ? 'completed' : 'active'
+        status: 'active' // Mantenemos siempre activo para evitar reinicios accidentales
     }).eq('id', session.id);
+
+    // Guardar logs de depuración en la conversación
+    const { data: currentConv } = await supabase.from('conversations').select('metadata').eq('id', conversationId).single();
+    await supabase.from('conversations').update({
+        metadata: { 
+            ...(currentConv?.metadata || {}), 
+            bot_debug: debugLogs.slice(-10) 
+        }
+    }).eq('id', conversationId);
 
     return messagesToReturn.join('\n\n') || null;
 }
