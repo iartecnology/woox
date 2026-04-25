@@ -305,7 +305,7 @@ async function executeAgentTool(
             }
 
             // 2. Buscar productos (Por nombre, descripción o categoría/subcategoría)
-            let q = supabase.from('products').select('name, price, description, stock').eq('merchant_id', merchantId).gt('stock', 0);
+            let q = supabase.from('products').select('name, price, description, is_available').eq('merchant_id', merchantId).eq('is_available', true);
             
             if (allCatIds.length > 0) {
                 q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%,category_id.in.(${allCatIds.join(',')})`);
@@ -325,7 +325,7 @@ async function executeAgentTool(
                 }
                 
                 // Sugerencia genérica: si no hay nada, mostrar los primeros 3
-                const { data: others } = await supabase.from('products').select('name, price').eq('merchant_id', merchantId).gt('stock', 0).limit(3);
+                const { data: others } = await supabase.from('products').select('name, price').eq('merchant_id', merchantId).eq('is_available', true).limit(3);
                 if (others && others.length > 0) {
                    return `No encontré productos exactos para "${queryRaw}", pero te sugiero estos destacados:\n${others.map((p: any) => `• ${p.name} - $${p.price}`).join('\n')}`;
                 }
@@ -340,16 +340,15 @@ async function executeAgentTool(
             const query = toolArgs?.query || '';
             const { data: prod } = await supabase
                 .from('products')
-                .select('name, stock, price')
+                .select('name, is_available, price')
                 .eq('merchant_id', merchantId)
                 .ilike('name', `%${query}%`)
-                .order('stock', { ascending: false })
                 .limit(1)
                 .maybeSingle();
-            if (!prod) return `No encontré información de stock para "${query}".`;
-            return prod.stock > 0
-                ? `✅ ${prod.name}: ${prod.stock} unidades disponibles a $${prod.price}`
-                : `❌ ${prod.name}: Sin stock disponible actualmente.`;
+            if (!prod) return `No encontré información de disponibilidad para "${query}".`;
+            return prod.is_available
+                ? `✅ ${prod.name}: Disponible a $${prod.price}`
+                : `❌ ${prod.name}: No disponible actualmente.`;
         }
 
         case 'add_to_cart': {
@@ -359,14 +358,14 @@ async function executeAgentTool(
             
             const { data: prod } = await supabase
                 .from('products')
-                .select('id, name, price, stock')
+                .select('id, name, price, is_available')
                 .eq('merchant_id', merchantId)
                 .ilike('name', `%${productName}%`)
-                .gt('stock', 0)
+                .eq('is_available', true)
                 .limit(1)
                 .maybeSingle();
             
-            if (!prod) return `No encontré el producto "${productName}" en nuestro catálogo o no hay stock disponible.`;
+            if (!prod) return `No encontré el producto "${productName}" en nuestro catálogo o no está disponible.`;
             
             const cart = variables['cart'] || [];
             const existing = cart.find((i: any) => i.id === prod.id);
@@ -571,7 +570,7 @@ const TOOL_DEFINITIONS: Record<string, any> = {
     },
     inventory_check: {
         name: 'inventory_check',
-        description: 'Consulta si hay stock disponible de un producto específico.',
+        description: 'Consulta si un producto específico está disponible actualmente.',
         parameters: {
             type: 'object',
             properties: {
