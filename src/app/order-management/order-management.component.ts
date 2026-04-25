@@ -274,8 +274,8 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
     selectOrder(order: Order) {
         this.selectedOrder = order;
         if (this.isMobile()) {
-            this.mobileService.setImmersive(true);
             this.mobileService.setHeader('Detalle Pedido', true, () => this.backToList());
+            this.mobileService.setImmersive(true);
         }
     }
 

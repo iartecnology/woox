@@ -635,8 +635,8 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
         }
 
         this.selectedConversation = conv;
-        this.mobileService.setImmersive(true);
         this.mobileService.setHeader(conv.customer_name, true, () => this.backToList());
+        this.mobileService.setImmersive(true);
         this.isLoadingDetails = true;
         this.cdr.detectChanges();
 

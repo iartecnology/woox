@@ -253,14 +253,7 @@
             <span class="icon">📅</span>
             <span class="label">Agenda</span>
         </a>
-        <a routerLink="/crm" routerLinkActive="active" *ngIf="!isSuperAdmin || activeMerchantId" class="nav-item" (click)="showProfileModal = false">
-            <span class="icon">👥</span>
-            <span class="label">Clientes</span>
-        </a>
-        <a routerLink="/metrics" routerLinkActive="active" *ngIf="!isSuperAdmin || activeMerchantId" class="nav-item" (click)="showProfileModal = false">
-            <span class="icon">📊</span>
-            <span class="label">Stats</span>
-        </a>
+
         <a (click)="showProfileModal = true" class="nav-item">
             <span class="icon">👤</span>
             <span class="label">Perfil</span>
@@ -353,8 +346,15 @@
                         style="width: 100%; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e5e7eb; font-size: 0.95rem; background: #f9fafb; outline: none; box-sizing: border-box;">
                 </div>
             </div>
+            
+            <!-- Mobile Logout Button -->
+            <div style="margin-top: 24px;">
+                <button (click)="logout()" style="width: 100%; padding: 14px; border-radius: 12px; border: 1.5px solid #fecaca; background: #fef2f2; color: #ef4444; font-weight: 700; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span style="font-size: 1.1rem;">🚪</span> Cerrar Sesión
+                </button>
+            </div>
 
-            <div class="modal-footer" style="margin-top: 32px; display: flex; gap: 12px;">
+            <div class="modal-footer" style="margin-top: 24px; display: flex; gap: 12px;">
                 <button (click)="showProfileModal = false" style="flex: 1; padding: 14px; border-radius: 12px; border: 1.5px solid #e5e7eb; background: white; font-weight: 700; color: #6b7280; cursor: pointer; font-size: 0.95rem;">
                     Cancelar
                 </button>
