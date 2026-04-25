@@ -153,6 +153,39 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             console.warn('Mensaje muy largo truncado para visualización:', content.length);
             content = content.substring(0, 200000) + '... [Mensaje truncado]';
         }
+
+        // Custom Parsing for [PDF:url:caption]
+        content = content.replace(/\[PDF:(.*?)\]/g, (match, inner) => {
+            let safeUrl = '';
+            let safeCaption = 'Documento PDF';
+            
+            const urlEndIdx = inner.lastIndexOf('.pdf:');
+            if (urlEndIdx !== -1) {
+                safeUrl = encodeURI(inner.substring(0, urlEndIdx + 4).trim());
+                safeCaption = inner.substring(urlEndIdx + 5).trim() || 'Documento PDF';
+            } else {
+                const firstColonIdx = inner.indexOf(':');
+                const secondColonIdx = inner.indexOf(':', firstColonIdx + 1);
+                if (secondColonIdx !== -1) {
+                    safeUrl = encodeURI(inner.substring(0, secondColonIdx).trim());
+                    safeCaption = inner.substring(secondColonIdx + 1).trim() || 'Documento PDF';
+                } else {
+                    safeUrl = encodeURI(inner.trim());
+                }
+            }
+
+            return `
+                <div class="pdf-attachment" style="background: #f1f5f9; padding: 12px; border-radius: 8px; margin: 10px 0; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px;">
+                    <div style="background: #ef4444; color: white; border-radius: 6px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                        📄
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 0.95rem; color: #1e293b;">${safeCaption}</div>
+                        <a href="${safeUrl}" target="_blank" style="font-size: 0.85rem; color: #3b82f6; text-decoration: none; font-weight: 500;">Abrir Documento →</a>
+                    </div>
+                </div>
+            `;
+        });
         
         try {
             const html = marked.parse(content, { breaks: true }) as string;

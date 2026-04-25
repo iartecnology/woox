@@ -371,7 +371,7 @@ export class SuperAdminComponent implements OnInit {
         if (!file) return;
 
         if (!this.selectedMerchant.id) {
-            this.notificationService.show('Primero guarda el comercio antes de subir archivos.', 'warn');
+            this.notificationService.show('Primero guarda el comercio antes de subir archivos.', 'warning');
             return;
         }
 

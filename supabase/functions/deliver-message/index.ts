@@ -70,25 +70,62 @@ Deno.serve(async (req) => {
 
         console.log(`[Anti-Ban] Mensaje de ${content.length} chars. Esperando ${typingSpeedMs + randomDelay}ms para simular humano...`);
 
+        // --- EXTRACCIÓN DE PDF ---
+        const pdfMatch = content.match(/\[PDF:(.*?)\]/);
+        const hasPdf = !!pdfMatch;
+        let pdfUrl = '';
+        let pdfCaption = '';
+        let textContent = content;
+
+        if (hasPdf) {
+            const inner = pdfMatch[1];
+            const urlEndIdx = inner.lastIndexOf('.pdf:');
+            if (urlEndIdx !== -1) {
+                pdfUrl = inner.substring(0, urlEndIdx + 4).trim();
+                pdfCaption = inner.substring(urlEndIdx + 5).trim();
+            } else {
+                const firstColonIdx = inner.indexOf(':');
+                const secondColonIdx = inner.indexOf(':', firstColonIdx + 1);
+                if (secondColonIdx !== -1) {
+                    pdfUrl = inner.substring(0, secondColonIdx).trim();
+                    pdfCaption = inner.substring(secondColonIdx + 1).trim();
+                } else {
+                    pdfUrl = inner.trim();
+                }
+            }
+            textContent = content.replace(pdfMatch[0], '').trim();
+        }
+
         if (channel === 'telegram') {
             const botToken = merchant?.telegram_bot_token;
             const chatId = customer?.telegram_chat_id;
             if (!botToken || !chatId) throw new Error("Telegram config missing");
 
-            // Simular "Escribiendo..." en Telegram
+            // Simular "Escribiendo..." o "Enviando documento..."
             await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chat_id: chatId, action: "typing" })
+                body: JSON.stringify({ chat_id: chatId, action: hasPdf ? "upload_document" : "typing" })
             });
 
             await new Promise(r => setTimeout(r, typingSpeedMs + randomDelay));
 
-            const telRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chat_id: chatId, text: content, parse_mode: "Markdown" })
-            });
+            let telRes;
+            if (hasPdf) {
+                telRes = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: chatId, document: pdfUrl, caption: pdfCaption })
+                });
+            }
+
+            if (textContent) {
+                telRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: chatId, text: textContent, parse_mode: "Markdown" })
+                });
+            }
 
             const telData = await telRes.json();
             return new Response(JSON.stringify({ ok: true, provider_response: telData }), {
@@ -119,28 +156,38 @@ Deno.serve(async (req) => {
 
                 await new Promise(r => setTimeout(r, typingSpeedMs + randomDelay));
 
-                console.log(`[Deliver] Enviando vía EVOLUTION (${waCustomerPhone}) -> Instance: ${instanceName}`);
+                console.log(`[Deliver] Enviando vía EVOLUTION (${waCustomerPhone}) -> Instance: ${instanceName} (PDF: ${hasPdf})`);
 
-                const evoRes = await fetch(`${evolutionUrl.replace(/\/$/, '')}/message/sendText/${instanceName}`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "apikey": evolutionKey
-                    },
-                    body: JSON.stringify({
-                        number: waCustomerPhone,
-                        text: content,
-                        delay: 1200,
-                        linkPreview: true
-                    })
-                });
-
-                const evoData = await evoRes.json();
-
-                if (!evoRes.ok) {
-                    throw new Error(`Evolution API Error: ${JSON.stringify(evoData)}`);
+                let evoRes;
+                if (hasPdf) {
+                    evoRes = await fetch(`${evolutionUrl.replace(/\/$/, '')}/message/sendMedia/${instanceName}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "apikey": evolutionKey },
+                        body: JSON.stringify({
+                            number: waCustomerPhone,
+                            mediatype: "document",
+                            mimetype: "application/pdf",
+                            caption: pdfCaption,
+                            media: pdfUrl,
+                            fileName: "documento.pdf"
+                        })
+                    });
                 }
 
+                if (textContent) {
+                    evoRes = await fetch(`${evolutionUrl.replace(/\/$/, '')}/message/sendText/${instanceName}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "apikey": evolutionKey },
+                        body: JSON.stringify({
+                            number: waCustomerPhone,
+                            text: textContent,
+                            delay: 1200,
+                            linkPreview: true
+                        })
+                    });
+                }
+
+                const evoData = await evoRes?.json() || {};
                 return new Response(JSON.stringify({ ok: true, method: 'evolution', status: 'delivered', provider_response: evoData }), {
                     headers: { ...corsHeaders, "Content-Type": "application/json" }
                 });
@@ -153,18 +200,34 @@ Deno.serve(async (req) => {
 
                 await new Promise(r => setTimeout(r, typingSpeedMs + randomDelay));
 
-                const waRes = await fetch(`https://graph.facebook.com/v22.0/${waPhoneId}/messages`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${waToken}` },
-                    body: JSON.stringify({
-                        messaging_product: "whatsapp",
-                        to: waCustomerPhone,
-                        type: "text",
-                        text: { body: content }
-                    })
-                });
+                let waRes;
+                if (hasPdf) {
+                    waRes = await fetch(`https://graph.facebook.com/v22.0/${waPhoneId}/messages`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${waToken}` },
+                        body: JSON.stringify({
+                            messaging_product: "whatsapp",
+                            to: waCustomerPhone,
+                            type: "document",
+                            document: { link: pdfUrl, caption: pdfCaption }
+                        })
+                    });
+                }
 
-                const waData = await waRes.json();
+                if (textContent) {
+                    waRes = await fetch(`https://graph.facebook.com/v22.0/${waPhoneId}/messages`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${waToken}` },
+                        body: JSON.stringify({
+                            messaging_product: "whatsapp",
+                            to: waCustomerPhone,
+                            type: "text",
+                            text: { body: textContent }
+                        })
+                    });
+                }
+
+                const waData = await waRes?.json() || {};
                 return new Response(JSON.stringify({ ok: true, provider_response: waData }), {
                     headers: { ...corsHeaders, "Content-Type": "application/json" }
                 });

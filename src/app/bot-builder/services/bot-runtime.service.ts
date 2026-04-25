@@ -205,13 +205,12 @@ export class BotRuntimeService {
             // Simulación básica de respuesta de IA para el runtime client-side
             const response = `🤖 [IA]: He recibido tu mensaje: "${userInput}". Usando mis habilidades integradas, estoy procesando tu solicitud para asistirte mejor. ¿En qué más puedo ayudarte?`;
             
-            const nextNodeId = this.getNextNodeId(flowData, currentNode.id, 'output');
-            const nextNode = nodes.find((n: any) => n.id === nextNodeId);
-            const nextResponse = await this.advanceAndCollect(flowData, nextNode, session, flow);
+            // En el simulador, mantenemos la sesión en el agente IA (no avanza automáticamente a la salida)
+            await this.updateSession(session, currentNode.id, 'ai_input');
             
             return {
-                messages: [response, ...nextResponse.messages],
-                session: nextResponse.session
+                messages: [response],
+                session
             };
         }
 
