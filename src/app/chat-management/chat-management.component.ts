@@ -756,6 +756,38 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
         this.cdr.detectChanges();
     }
 
+    async optimizeCustomerWithIA() {
+        if (!this.selectedConversation || this.isAILoading) return;
+        this.isAILoading = true;
+        try {
+            const context = `
+                CLIENTE: ${this.customerCRM.full_name || 'Desconocido'}
+                NOTAS: ${this.internalNotes.map(n => n.content).join(' | ')}
+                PEDIDOS: ${this.customerCRM.orders_count || 0}
+                GASTO: $${this.customerCRM.total_spent || 0}
+            `;
+            
+            const prompt = `Analiza estos datos de un cliente en Woox y genera un resumen "VIP" de máximo 2 líneas resaltando su perfil de compra, preferencias detectadas y cómo tratarlo (ej: "Cliente recurrente, prefiere productos de lujo, ser muy formal"). Datos: ${context}`;
+            
+            // Usamos el servicio de Supabase para llamar a la IA
+            const { data, error } = await this.supabaseService.rpc('generate_ai_response', { 
+                p_prompt: prompt,
+                p_merchant_id: this.merchantId
+            });
+
+            if (data) {
+                this.customerCRM.ai_summary = data;
+                // Guardar en la DB
+                await this.supabaseService.from('customers').update({ notes: (this.customerCRM.notes || '') + '\n[AI SUMMARY]: ' + data }).eq('id', this.customerCRM.id);
+                this.notificationService.show('✨ Perfil optimizado con éxito', 'success');
+            }
+        } catch (e) {
+            console.error('Error optimizing IA:', e);
+        } finally {
+            this.isAILoading = false;
+        }
+    }
+
     async saveCRM() {
         if (!this.customerCRM.id) return;
         await this.supabaseService.updateCustomerCRM(this.customerCRM.id, {

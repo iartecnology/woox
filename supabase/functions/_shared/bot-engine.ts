@@ -337,35 +337,42 @@ async function executeAgentTool(
         }
 
         case 'inventory_check': {
-            const query = toolArgs?.query || '';
+            const queryRaw = (toolArgs?.query || toolArgs?.product_name || '').toLowerCase().trim();
+            // Limpieza de palabras comunes para búsqueda más flexible
+            const query = queryRaw.replace(/^(papas|una|un|el|la|los|las|quiero|ver|busca)\s+/i, '').replace(/s$/, '');
+
             const { data: prod } = await supabase
                 .from('products')
                 .select('name, is_available, price')
                 .eq('merchant_id', merchantId)
-                .ilike('name', `%${query}%`)
+                .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
                 .limit(1)
                 .maybeSingle();
-            if (!prod) return `No encontré información de disponibilidad para "${query}".`;
+
+            if (!prod) return `No encontré información de disponibilidad para "${queryRaw}".`;
             return prod.is_available
-                ? `✅ ${prod.name}: Disponible a $${prod.price}`
+                ? `✅ ${prod.name}: Disponible a $${formatPrice(prod.price)}`
                 : `❌ ${prod.name}: No disponible actualmente.`;
         }
 
         case 'add_to_cart': {
-            const productName = toolArgs?.product_name || toolArgs?.query || '';
+            const queryRaw = (toolArgs?.product_name || toolArgs?.query || '').toLowerCase().trim();
             const quantity = parseInt(toolArgs?.quantity) || 1;
             const notes = toolArgs?.notes || '';
             
+            // Limpieza de palabras comunes para búsqueda más flexible
+            const query = queryRaw.replace(/^(papas|una|un|el|la|los|las|quiero|ver|busca)\s+/i, '').replace(/s$/, '');
+
             const { data: prod } = await supabase
                 .from('products')
                 .select('id, name, price, is_available')
                 .eq('merchant_id', merchantId)
-                .ilike('name', `%${productName}%`)
+                .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
                 .eq('is_available', true)
                 .limit(1)
                 .maybeSingle();
             
-            if (!prod) return `No encontré el producto "${productName}" en nuestro catálogo o no está disponible.`;
+            if (!prod) return `No encontré el producto "${queryRaw}" en nuestro catálogo o no está disponible.`;
             
             const cart = variables['cart'] || [];
             const existing = cart.find((i: any) => i.id === prod.id);
@@ -379,14 +386,14 @@ async function executeAgentTool(
             
             variables['cart'] = cart;
             const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
-            return `✅ ${prod.name} x${quantity} añadido al carrito${notes ? ` con notas: "${notes}"` : ''}. Total actual del carrito: $${total}`;
+            return `✅ ${prod.name} x${quantity} añadido al carrito${notes ? ` con notas: "${notes}"` : ''}. Total actual del carrito: $${formatPrice(total)}`;
         }
 
         case 'get_cart': {
             const cart = variables['cart'] || [];
             if (cart.length === 0) return 'Tu carrito está vacío. ¿Te gustaría ver nuestro menú?';
             const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
-            return `🛒 Tu carrito:\n${cart.map((it: any) => `• ${it.name} x${it.qty} = $${(it.price * it.qty).toFixed(2)}`).join('\n')}\n\n💰 Total: $${total.toFixed(2)}`;
+            return `🛒 Tu carrito:\n${cart.map((it: any) => `• ${it.name} x${it.qty} = $${formatPrice(it.price * it.qty)}`).join('\n')}\n\n💰 Total: $${formatPrice(total)}`;
         }
 
         case 'remove_from_cart': {
@@ -1070,47 +1077,50 @@ ${customNodeInstructions}
                     waitingFor = 'ai_input'; break;
                 }
 
-                // ── FUNCIÓN CALL: El LLM quiere usar una herramienta ──
-                const functionCallPart = candidate.parts?.find((p: any) => p.functionCall);
-                if (functionCallPart) {
-                    const call = functionCallPart.functionCall;
-                    console.log(`[BOT-ENGINE] Gemini solicita tool: ${call.name}`, call.args);
+                // ── FUNCIÓN CALL: El LLM quiere usar una o varias herramientas ──
+                const functionCallParts = candidate.parts?.filter((p: any) => p.functionCall);
+                
+                if (functionCallParts && functionCallParts.length > 0) {
+                    console.log(`[BOT-ENGINE] Gemini solicita ${functionCallParts.length} tools`);
+                    
+                    const toolContents = [...contents];
+                    toolContents.push(candidate); // La respuesta del LLM con los functionCalls
 
-                    // Ejecutar la tool real
-                    const toolResult = await executeAgentTool(
-                        supabase, call.name, call.args, variables,
-                        merchantId, conversationId, customerId
-                    );
-                    console.log(`[BOT-ENGINE] Resultado de tool "${call.name}":`, toolResult);
+                    // Procesar CADA tool solicitada
+                    for (const part of functionCallParts) {
+                        const call = part.functionCall;
+                        console.log(`[BOT-ENGINE] Ejecutando tool: ${call.name}`, call.args);
 
-                    // ── LLAMADA 2: Enviar resultado al LLM para que redacte respuesta natural ──
-                    const contentsWithTool = [
-                        ...contents,
-                        candidate,  // La respuesta del LLM con el functionCall
-                        {
-                            role: 'user',  // ← CRÍTICO: debe ser 'user', NO 'function'
+                        const toolResult = await executeAgentTool(
+                            supabase, call.name, call.args, variables,
+                            merchantId, conversationId, customerId
+                        );
+                        
+                        toolContents.push({
+                            role: 'user', 
                             parts: [{
                                 functionResponse: {
                                     name: call.name,
                                     response: { content: toolResult }
                                 }
                             }]
-                        }
-                    ];
+                        });
+                    }
 
+                    // ── LLAMADA 2: Enviar todos los resultados al LLM para la respuesta final ──
                     const secondRes = await fetch(geminiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             system_instruction: { parts: [{ text: systemPrompt }] },
-                            contents: contentsWithTool,
+                            contents: toolContents,
                             generationConfig: { temperature: temp, maxOutputTokens: 1024 }
                         })
                     });
 
                     const secondData = await secondRes.json();
                     const finalText = secondData.candidates?.[0]?.content?.parts?.[0]?.text;
-                    messagesToReturn.push(finalText || toolResult); // Fallback al resultado crudo si falla
+                    messagesToReturn.push(finalText || 'He procesado tus solicitudes.');
                 } else {
                     // Respuesta directa del LLM sin herramientas
                     const directText = candidate.parts?.find((p: any) => p.text)?.text;

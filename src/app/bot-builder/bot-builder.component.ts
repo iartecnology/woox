@@ -638,9 +638,8 @@ REGLAS:
     let y = 100;
 
     // 1. Inicio
-    const startNode = this.createSpecificNode('start', x, y, { 
-      label: 'Bienvenida IA', 
-      message: '¡Hola! Bienvenido a {{merchantName}}. 👋\nSoy tu asistente de ventas inteligente. Puedo mostrarte nuestros productos, añadirlos a tu carrito y tomar tu pedido. ¿En qué te puedo ayudar?' 
+    const startNode = this.createSpecificNode('start', x, y - 250, { 
+      label: 'Bienvenida'
     });
     y += 180;
 
