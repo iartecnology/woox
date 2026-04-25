@@ -216,6 +216,7 @@ export class BotBuilderComponent implements OnInit {
 
   // PDF Upload state
   isUploadingPdf = false;
+  availableMenus: any[] = [];
 
   constructor() {}
 
@@ -246,6 +247,17 @@ export class BotBuilderComponent implements OnInit {
       this.notification.show('Error al subir el PDF: ' + err.message, 'error');
     } finally {
       this.isUploadingPdf = false;
+    }
+  }
+
+  async loadAvailableMenus() {
+    if (!this.merchantId) return;
+    try {
+      const { data, error } = await this.supabase.listFiles('merchant-data', `${this.merchantId}/menus`);
+      if (error) throw error;
+      this.availableMenus = data || [];
+    } catch (err) {
+      console.error('Error loading menus:', err);
     }
   }
 
@@ -1477,6 +1489,9 @@ REGLAS IMPORTANTES:
     event.stopPropagation();
     this.selectedNode = node;
     this.editingNode = node;
+    if (node.type === 'send_pdf') {
+      this.loadAvailableMenus();
+    }
   }
 
   onPortMouseDown(event: MouseEvent, node: FlowNode, port: string) {

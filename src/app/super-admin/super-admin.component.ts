@@ -366,6 +366,38 @@ export class SuperAdminComponent implements OnInit {
         }
     }
 
+    async uploadMerchantFile(event: any, folder: string) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!this.selectedMerchant.id) {
+            this.notificationService.show('Primero guarda el comercio antes de subir archivos.', 'warn');
+            return;
+        }
+
+        this.isLoading = true;
+        try {
+            const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+            const fullPath = `${this.selectedMerchant.id}/${folder}/${fileName}`;
+            const { data, error } = await this.supabaseService.uploadFile('merchant-data', fullPath, file);
+            
+            if (error) throw error;
+
+            if (data) {
+                if (folder === 'logos') {
+                    this.selectedMerchant.logo_url = data.publicUrl;
+                }
+                this.notificationService.show('Archivo subido correctamente.', 'success');
+                this.cdr.detectChanges();
+            }
+        } catch (err: any) {
+            console.error('Error uploading merchant file:', err);
+            this.notificationService.show('Error al subir el archivo: ' + err.message, 'error');
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
     async initializeMerchantFolder(merchant: Merchant) {
         if (!confirm(`¿Deseas crear las carpetas de almacenamiento para ${merchant.name}?`)) return;
         
@@ -410,6 +442,105 @@ export class SuperAdminComponent implements OnInit {
             const detail = error.message || error.error_description || 'Desconocido';
             this.notificationService.show(`Error de base de datos: ${detail}. Usando datos locales.`, 'warning');
             this.loadFallbacks();
+        } finally {
+            this.isLoading = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    async cloneMerchant(merchant: Merchant) {
+        const confirmMsg = `¿Deseas clonar el comercio "${merchant.name}"?\nSe copiarán:\n- Configuración General e IA\n- Catálogo (Categorías y Productos)\n- Flujos de Chat (Bot Flows)\n\nEl nuevo comercio se creará como desactivado por seguridad.`;
+        if (!confirm(confirmMsg)) return;
+
+        this.isLoading = true;
+        this.notificationService.show('⏳ Clonando comercio, por favor espera...', 'info');
+
+        try {
+            // 1. Clonar registro de merchant
+            const { id: oldId, stats, ...merchantData } = merchant;
+            const newMerchantData = { 
+                ...merchantData,
+                name: `${merchant.name} (Copia)`,
+                slug: `${merchant.slug}-copy-${Date.now()}`,
+                is_active: false,
+                wa_status: 'none',
+                wa_qr_code: null,
+                wa_session_id: null
+            };
+            
+            const { data: newMerchant, error: mErr } = await supabase
+                .from('merchants')
+                .insert(newMerchantData)
+                .select()
+                .single();
+            
+            if (mErr) throw mErr;
+            const newId = newMerchant.id;
+
+            // 2. Clonar Categorías (Mapeando IDs)
+            const { data: categories } = await supabase.from('categories').select('*').eq('merchant_id', oldId);
+            const catIdMap: Record<string, string> = {};
+            
+            if (categories && categories.length > 0) {
+                // Paso A: Insertar categorías base
+                for (const cat of categories) {
+                    const { id: oldCatId, parent_id, created_at, updated_at, ...catData } = cat;
+                    const { data: newCat, error: catErr } = await supabase
+                        .from('categories')
+                        .insert({ ...catData, merchant_id: newId })
+                        .select()
+                        .single();
+                    
+                    if (catErr) console.warn('Error clonando categoría:', cat.name, catErr);
+                    if (newCat) catIdMap[oldCatId] = newCat.id;
+                }
+                
+                // Paso B: Restaurar jerarquía (parent_id)
+                for (const cat of categories) {
+                    if (cat.parent_id && catIdMap[cat.parent_id]) {
+                        await supabase
+                            .from('categories')
+                            .update({ parent_id: catIdMap[cat.parent_id] })
+                            .eq('id', catIdMap[cat.id]);
+                    }
+                }
+            }
+
+            // 3. Clonar Productos
+            const { data: products } = await supabase.from('products').select('*').eq('merchant_id', oldId);
+            if (products && products.length > 0) {
+                const newProducts = products.map(p => {
+                    const { id, created_at, updated_at, ...pData } = p;
+                    return {
+                        ...pData,
+                        merchant_id: newId,
+                        category_id: p.category_id ? catIdMap[p.category_id] : null
+                    };
+                });
+                const { error: pErr } = await supabase.from('products').insert(newProducts);
+                if (pErr) throw pErr;
+            }
+
+            // 4. Clonar Flujos (Bot Flows)
+            const { data: flows } = await supabase.from('bot_flows').select('*').eq('merchant_id', oldId);
+            if (flows && flows.length > 0) {
+                const newFlows = flows.map(f => {
+                    const { id, created_at, updated_at, is_active, ...fData } = f;
+                    return {
+                        ...fData,
+                        merchant_id: newId,
+                        is_active: false // Empezar como borrador
+                    };
+                });
+                const { error: fErr } = await supabase.from('bot_flows').insert(newFlows);
+                if (fErr) throw fErr;
+            }
+
+            this.notificationService.show('✨ ¡Comercio clonado con éxito!', 'success');
+            await this.loadInitialData();
+        } catch (err: any) {
+            console.error('Error in cloneMerchant:', err);
+            this.notificationService.show('❌ Error al clonar: ' + err.message, 'error');
         } finally {
             this.isLoading = false;
             this.cdr.detectChanges();

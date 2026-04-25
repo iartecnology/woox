@@ -34,6 +34,7 @@ export class ProductManagementComponent implements OnInit {
     productToDeleteId: string | null = null;
     categoryToDelete: Category | null = null;
     isLoading: boolean = true;
+    searchTerm: string = '';
 
     filteredCategories: Category[] = [];
     products: Product[] = [];
@@ -210,8 +211,18 @@ export class ProductManagementComponent implements OnInit {
     }
 
     get filteredProducts() {
-        if (!this.selectedCategoryId) return this.products;
-        return this.products.filter(p => p.category_id === this.selectedCategoryId);
+        let list = this.products;
+        if (this.selectedCategoryId) {
+            list = list.filter(p => p.category_id === this.selectedCategoryId);
+        }
+        if (this.searchTerm) {
+            const term = this.searchTerm.toLowerCase();
+            list = list.filter(p => 
+                p.name.toLowerCase().includes(term) || 
+                p.description?.toLowerCase().includes(term)
+            );
+        }
+        return list;
     }
 
     selectCategory(id: string) {
@@ -256,6 +267,36 @@ export class ProductManagementComponent implements OnInit {
             };
         }
         this.showProductModal = true;
+    }
+
+    async uploadProductImage(event: any) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!this.merchantId) {
+            this.notificationService.show('Error: No se encontró ID de comercio.', 'error');
+            return;
+        }
+
+        this.isLoading = true;
+        try {
+            const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+            const fullPath = `${this.merchantId}/productos/${fileName}`;
+            const { data, error } = await this.supabaseService.uploadFile('merchant-data', fullPath, file);
+            
+            if (error) throw error;
+
+            if (data) {
+                this.newProduct.image_url = data.publicUrl;
+                this.notificationService.show('Imagen de producto subida.', 'success');
+                this.cdr.detectChanges();
+            }
+        } catch (err: any) {
+            console.error('Error uploading product image:', err);
+            this.notificationService.show('Error al subir imagen: ' + err.message, 'error');
+        } finally {
+            this.isLoading = false;
+        }
     }
 
     async saveProduct() {

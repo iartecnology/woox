@@ -155,6 +155,8 @@
                                                 (click)="openTeamManager(m)">👥</button>
                                             <button class="config-icon-btn stats" title="Analíticas"
                                                 (click)="viewMerchantStats(m)">📊</button>
+                                            <button class="config-icon-btn clone" title="Clonar Comercio"
+                                                (click)="cloneMerchant(m)">📋</button>
                                         </div>
                                         <div class="group-separator"></div>
                                         <div class="action-group highlighted">
@@ -245,6 +247,7 @@
                             <button class="action-btn purge" (click)="openClearDataModal(m)" title="Limpiar Datos">🧹</button>
                             <button class="action-btn folders" (click)="initializeMerchantFolder(m)" title="Init Carpetas">📁</button>
                             <button class="action-btn login" (click)="enterAsMerchant(m)" title="Entrar">🚪</button>
+                            <button class="action-btn clone" (click)="cloneMerchant(m)" title="Clonar">📋</button>
                             <button class="action-btn delete" (click)="confirmDeleteMerchant(m)" title="Borrar">🗑️</button>
                         </div>
                     </div>
@@ -356,8 +359,14 @@
                 </div>
 
                 <div class="form-group full-width">
-                    <label>URL del Logo</label>
-                    <input type="text" [(ngModel)]="selectedMerchant.logo_url" placeholder="https://...">
+                    <label>Logo de la Empresa</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <img *ngIf="selectedMerchant.logo_url" [src]="selectedMerchant.logo_url" alt="Logo preview" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; border: 1px solid #ddd;">
+                        <input type="text" [(ngModel)]="selectedMerchant.logo_url" placeholder="https://..." style="flex: 1;">
+                        <button class="secondary-btn" (click)="logoInput.click()" style="white-space: nowrap; padding: 8px 16px;">📁 Subir</button>
+                        <input type="file" #logoInput (change)="uploadMerchantFile($event, 'logos')" accept="image/*" style="display: none">
+                    </div>
+                    <small>Se guardará en: merchant-data/{{selectedMerchant.id || 'ID'}}/logos/</small>
                 </div>
 
 

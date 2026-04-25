@@ -778,7 +778,11 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             if (data) {
                 this.customerCRM.ai_summary = data;
                 // Guardar en la DB
-                await this.supabaseService.from('customers').update({ notes: (this.customerCRM.notes || '') + '\n[AI SUMMARY]: ' + data }).eq('id', this.customerCRM.id);
+                if (this.customerCRM.id) {
+                    await this.supabaseService.updateCustomerCRM(this.customerCRM.id, { 
+                        notes: (this.customerCRM.notes || '') + '\n[AI SUMMARY]: ' + data 
+                    });
+                }
                 this.notificationService.show('✨ Perfil optimizado con éxito', 'success');
             }
         } catch (e) {

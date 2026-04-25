@@ -870,20 +870,33 @@
         📄 Envía un documento PDF al cliente. Puedes subirlo o colocar una URL externa.
       </div>
       
+      <div class="pdf-selection-container p-3 border rounded mb-3" style="background: #f0fdf4;">
+        <label class="fw-bold d-block mb-2">Opción 1: Seleccionar PDF Existente</label>
+        <select class="form-control mb-2" [(ngModel)]="editingNode.data.pdf_url">
+          <option value="">-- Seleccionar un menú subido --</option>
+          <option *ngFor="let menu of availableMenus" [value]="menu.publicUrl">
+            {{ menu.name }}
+          </option>
+        </select>
+        <button class="btn btn-outline-success btn-sm w-100" (click)="loadAvailableMenus()">
+          🔄 Actualizar Lista
+        </button>
+      </div>
+
       <div class="pdf-upload-container p-3 border rounded mb-3" style="background: #f8fafc;">
-        <label class="fw-bold d-block mb-2">Opción 1: Subir Archivo PDF</label>
+        <label class="fw-bold d-block mb-2">Opción 2: Subir Nuevo Archivo PDF</label>
         <div class="d-flex align-items-center gap-2">
           <input type="file" #pdfInput (change)="onPdfFileSelected($event)" accept=".pdf" style="display:none">
           <button class="btn btn-primary btn-sm flex-grow-1" (click)="pdfInput.click()" [disabled]="isUploadingPdf">
-            <span *ngIf="!isUploadingPdf">📁 Seleccionar y Subir PDF</span>
+            <span *ngIf="!isUploadingPdf">📁 Subir Nuevo PDF</span>
             <span *ngIf="isUploadingPdf">⏳ Subiendo...</span>
           </button>
         </div>
-        <div class="label-hint mt-2">El archivo se guardará de forma segura en Woox Storage.</div>
+        <div class="label-hint mt-2">El archivo se guardará en: merchant-data/{{merchantId}}/menus/</div>
       </div>
 
       <div class="pdf-url-container">
-        <label class="fw-bold d-block mb-1">Opción 2: URL Manual</label>
+        <label class="fw-bold d-block mb-1">Opción 3: URL Manual</label>
         <div class="d-flex gap-2">
           <input type="text" class="form-control mb-1" [(ngModel)]="editingNode.data.pdf_url" placeholder="https://ejemplo.com/menu.pdf" />
           <a *ngIf="editingNode.data.pdf_url" [href]="editingNode.data.pdf_url" target="_blank" class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center" style="min-width: 45px;" title="Ver PDF">

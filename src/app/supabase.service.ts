@@ -28,6 +28,20 @@ export class SupabaseService {
         return { data: { ...data, publicUrl }, error: null };
     }
 
+    async listFiles(bucket: string, folder: string) {
+        const { data, error } = await supabase.storage.from(bucket).list(folder);
+        if (error) return { data: null, error };
+        
+        const filesWithUrls = data
+            .filter(f => f.name !== '.placeholder')
+            .map(file => {
+                const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(`${folder}/${file.name}`);
+                return { ...file, publicUrl };
+            });
+        
+        return { data: filesWithUrls, error: null };
+    }
+
     isValidUUID(uuid: string): boolean {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         return uuidRegex.test(uuid);

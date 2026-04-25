@@ -864,6 +864,8 @@ small {
 
 .config-icon-btn.bot { background: #fff1f2; color: #e11d48; }
 .config-icon-btn.catalog { background: #fff7ed; color: #ea580c; }
+.config-icon-btn.clone { background: #f0f9ff; color: #0ea5e9; }
+.config-icon-btn.clone:hover { background: #e0f2fe; color: #0284c7; border-color: #0ea5e9; }
 
 .btn-divider {
     width: 1px;
@@ -4693,6 +4695,11 @@ input:checked + .bot-pill-slider {
 
     .action-btn.delete {
         color: #ef4444;
+    }
+
+    .action-btn.clone {
+        background: #f0f9ff;
+        color: #0ea5e9;
     }
 
     /* Modales full screen en móvil */
