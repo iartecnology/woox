@@ -49,6 +49,7 @@ export class App {
   sidebarOpen = false;
   profileMenuOpen = false;
   showProfileModal = false;
+  darkMode = signal(false);
 
   userData = {
     full_name: '',
@@ -70,6 +71,25 @@ export class App {
     }, 1500);
 
     this.checkMobile();
+
+    // Theme setup
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        this.darkMode.set(true);
+        document.body.setAttribute('data-theme', 'dark');
+    }
+  }
+
+  toggleDarkMode() {
+      const isDark = !this.darkMode();
+      this.darkMode.set(isDark);
+      if (isDark) {
+          document.body.setAttribute('data-theme', 'dark');
+          localStorage.setItem('theme', 'dark');
+      } else {
+          document.body.removeAttribute('data-theme');
+          localStorage.setItem('theme', 'light');
+      }
   }
 
 
