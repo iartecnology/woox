@@ -153,6 +153,8 @@
                     Viendo: {{ merchantName }}
                 </div>
 
+                <!-- Elementos ocultos temporalmente por petición -->
+                <!--
                 <a *ngIf="merchantIndustryType === 'reservations'" routerLink="/reservations" routerLinkActive="active"
                     (click)="closeSidebar()">
                     <span class="icon">📅</span>
@@ -186,14 +188,6 @@
                     <span class="icon">🚚</span>
                     <span>Reparto</span>
                 </a>
-                <!-- Catálogo: Solo para comercios de Ventas/Retail -->
-                <a *ngIf="merchantIndustryType === 'retail'" routerLink="/products" routerLinkActive="active"
-                    (click)="closeSidebar()">
-                    <span class="icon">🍱</span>
-                    <span>Catálogo</span>
-                </a>
-
-                <!-- Cerebro de Empresa: Ahora disponible para todos (RAG para todos) -->
                 <a routerLink="/merchant-brain" routerLinkActive="active"
                     (click)="closeSidebar()" class="brain-btn-highlight">
                     <span class="icon">🧠</span>
@@ -203,6 +197,15 @@
                     <span class="icon">⚙️</span>
                     <span>Automatización & IA</span>
                 </a>
+                -->
+
+                <!-- Catálogo: Solo para comercios de Ventas/Retail -->
+                <a *ngIf="merchantIndustryType === 'retail'" routerLink="/products" routerLinkActive="active"
+                    (click)="closeSidebar()">
+                    <span class="icon">🍱</span>
+                    <span>Catálogo</span>
+                </a>
+
                 <a routerLink="/biolink-admin" routerLinkActive="active" (click)="closeSidebar()">
                     <span class="icon">🔗</span>
                     <span>BioLink</span>
@@ -216,6 +219,11 @@
                     class="bot-btn-highlight" style="margin-top: 4px;">
                     <span class="icon">🧬</span>
                     <span>ADN (Flujos)</span>
+                </a>
+                
+                <a (click)="openProfileModal(); closeSidebar()" style="cursor: pointer; margin-top: 4px;">
+                    <span class="icon">👤</span>
+                    <span>Perfil</span>
                 </a>
             </ng-container>
         </div>
@@ -259,8 +267,8 @@
             <span class="label">Perfil</span>
         </a>
         <a (click)="toggleSidebar(); showProfileModal = false" class="nav-item">
-            <span class="icon">≡</span>
-            <span class="label">Menú</span>
+            <span class="icon">⚙️</span>
+            <span class="label">Config.</span>
         </a>
     </nav>
 </div>
