@@ -45,7 +45,7 @@ export class OmnichannelComponent implements OnInit, OnDestroy {
                 this.merchantId = profileRes.data.merchant_id;
                 
                 // Cargar datos del comercio
-                const merchantRes = await this.supabase.getMerchant(this.merchantId);
+                const merchantRes = await this.supabase.getMerchantById(this.merchantId);
                 if (merchantRes.data) {
                     this.merchant = merchantRes.data;
                     this.merchant.wa_connector_type = this.merchant.wa_connector_type || 'web_qr';
