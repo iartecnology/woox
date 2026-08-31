@@ -36,13 +36,9 @@ export class OmnichannelComponent implements OnInit, OnDestroy {
 
     async loadMerchantAndConfig() {
         try {
-            // Obtener el usuario actual y su comercio
-            const { data: { user } } = await this.supabase.getUser();
-            if (!user) return;
-
-            const profileRes = await this.supabase.getProfile(user.id);
-            if (profileRes.data && profileRes.data.merchant_id) {
-                this.merchantId = profileRes.data.merchant_id;
+            const activeId = localStorage.getItem('active_merchant_id');
+            if (activeId) {
+                this.merchantId = activeId;
                 
                 // Cargar datos del comercio
                 const merchantRes = await this.supabase.getMerchantById(this.merchantId);
