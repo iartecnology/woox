@@ -162,9 +162,8 @@
                     Viendo: {{ merchantName }}
                 </div>
 
-                <!-- Elementos ocultos temporalmente por petición -->
-                <!--
-                <a *ngIf="merchantIndustryType === 'reservations'" routerLink="/reservations" routerLinkActive="active"
+                <!-- Elementos de navegación -->
+                <a *ngIf="merchantIndustryType === 'reservations' || merchantIndustryType === 'restaurant'" routerLink="/reservations" routerLinkActive="active"
                     (click)="closeSidebar()">
                     <span class="icon">📅</span>
                     <span>Reservas</span>
@@ -206,10 +205,9 @@
                     <span class="icon">⚙️</span>
                     <span>Automatización & IA</span>
                 </a>
-                -->
 
-                <!-- Catálogo: Solo para comercios de Ventas/Retail -->
-                <a *ngIf="merchantIndustryType === 'retail'" routerLink="/products" routerLinkActive="active"
+                <!-- Catálogo: Para comercios de Ventas/Retail o Restaurantes -->
+                <a *ngIf="merchantIndustryType === 'retail' || merchantIndustryType === 'restaurant'" routerLink="/products" routerLinkActive="active"
                     (click)="closeSidebar()">
                     <span class="icon">🍱</span>
                     <span>Catálogo</span>
