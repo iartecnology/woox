@@ -205,6 +205,10 @@
                     <span class="icon">⚙️</span>
                     <span>Automatización & IA</span>
                 </a>
+                <a routerLink="/omnichannel" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">🔌</span>
+                    <span>Canales Omnicanal</span>
+                </a>
 
                 <!-- Catálogo: Para comercios de Ventas/Retail o Restaurantes -->
                 <a *ngIf="merchantIndustryType === 'retail' || merchantIndustryType === 'restaurant'" routerLink="/products" routerLinkActive="active"

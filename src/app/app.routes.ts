@@ -80,6 +80,11 @@ export const routes: Routes = [
         canActivate: [authGuard] 
     },
     { 
+        path: 'omnichannel', 
+        loadComponent: () => import('./omnichannel/omnichannel.component').then(m => m.OmnichannelComponent),
+        canActivate: [authGuard] 
+    },
+    { 
         path: 'biolink-admin', 
         loadComponent: () => import('./biolink-admin/biolink-admin').then(m => m.BiolinkAdminComponent),
         canActivate: [authGuard] 

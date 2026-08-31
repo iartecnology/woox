@@ -1,0 +1,144 @@
+<div class="omni-container" *ngIf="merchant">
+    <header class="omni-header">
+        <div class="header-text">
+            <h1>🔌 Canales de Conectividad</h1>
+            <p>Conecta tu negocio a WhatsApp, Telegram y redes sociales para centralizar tus chats y automatizar la atención.</p>
+        </div>
+        <div class="header-actions">
+            <button class="save-btn" (click)="saveConfig()">
+                💾 Guardar Canales
+            </button>
+        </div>
+    </header>
+
+    <!-- Pestañas de Canales -->
+    <nav class="omni-tabs">
+        <button [class.active]="activeTab === 'whatsapp'" (click)="activeTab = 'whatsapp'">🟢 WhatsApp</button>
+        <button [class.active]="activeTab === 'telegram'" (click)="activeTab = 'telegram'">🔵 Telegram</button>
+        <button [class.active]="activeTab === 'facebook'" (click)="activeTab = 'facebook'">🔵 Messenger / Instagram</button>
+    </nav>
+
+    <div class="omni-content" *ngIf="merchant">
+        <!-- 🟢 SECCIÓN WHATSAPP -->
+        <div *ngIf="activeTab === 'whatsapp'" class="tab-pane">
+            <div class="channel-card">
+                <div class="card-header">
+                    <span class="icon">💬</span>
+                    <div>
+                        <h3>Conexión de WhatsApp</h3>
+                        <p class="desc">Vincular tu cuenta de WhatsApp para recibir mensajes de clientes y permitir al bot IA responderles.</p>
+                    </div>
+                </div>
+
+                <div class="form-group mt-20">
+                    <label>Tipo de Conexión</label>
+                    <select [(ngModel)]="merchant.wa_connector_type" (ngModelChange)="saveConfig()">
+                        <option value="web_qr">Escaneo de Código QR (Evolution API - Recomendado)</option>
+                        <option value="whatsapp">API Oficial de Meta (Cloud API)</option>
+                    </select>
+                </div>
+
+                <!-- Web QR / Evolution Connection -->
+                <div class="qr-box-container mt-20" *ngIf="merchant.wa_connector_type === 'web_qr'">
+                    <div class="status-indicator">
+                        <span class="status-dot" [class.connected]="merchant.wa_status === 'connected'"></span>
+                        <strong>Estado: {{ merchant.wa_status === 'connected' ? 'VINCULADO' : (merchant.wa_status === 'pairing' ? 'ESPERANDO ESCANEO...' : 'DESCONECTADO') }}</strong>
+                    </div>
+
+                    <!-- Not Connected: Show QR Generator -->
+                    <div class="qr-actions mt-20" *ngIf="merchant.wa_status !== 'connected'">
+                        <button class="connect-action-btn" (click)="generateWAQR()">
+                            {{ merchant.wa_status === 'pairing' ? '🔄 Regenerar Código QR' : '✨ Generar Código QR' }}
+                        </button>
+                    </div>
+
+                    <!-- QR Display -->
+                    <div class="qr-display-wrapper mt-20" *ngIf="merchant.wa_qr_code && merchant.wa_status !== 'connected'">
+                        <img [src]="merchant.wa_qr_code" alt="WhatsApp QR">
+                        <p class="qr-help">Escanea este código desde la app de WhatsApp de tu celular en: <strong>Dispositivos vinculados > Vincular un dispositivo</strong>.</p>
+                    </div>
+
+                    <!-- Connected View -->
+                    <div class="connected-view mt-20" *ngIf="merchant.wa_status === 'connected'">
+                        <div class="success-banner">
+                            <span class="banner-icon">✅</span>
+                            <div>
+                                <strong>¡WhatsApp conectado exitosamente!</strong>
+                                <p>El bot responderá a los mensajes entrantes según las reglas de tu ADN configurado.</p>
+                            </div>
+                        </div>
+
+                        <div class="action-buttons-group mt-20">
+                            <button class="sync-webhook-btn" (click)="syncEvolutionWebhook()">🔗 Forzar Sincronización de Webhook</button>
+                            <button class="disconnect-action-btn" (click)="disconnectWA()">🚫 Desconectar Dispositivo</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Meta Cloud API Connection -->
+                <div class="meta-api-container mt-20" *ngIf="merchant.wa_connector_type === 'whatsapp'">
+                    <div class="form-group">
+                        <label>Token de Acceso Temporal/Permanente de Meta</label>
+                        <input type="password" [(ngModel)]="merchant.whatsapp_token" placeholder="EAAW...">
+                    </div>
+                    <div class="form-group">
+                        <label>ID del Número de Teléfono (Phone Number ID)</label>
+                        <input type="text" [(ngModel)]="merchant.whatsapp_phone_number_id" placeholder="1098...">
+                    </div>
+                    <div class="form-group">
+                        <label>Token de Verificación del Webhook (Verify Token)</label>
+                        <input type="text" [(ngModel)]="merchant.whatsapp_verify_token" placeholder="Tu token personalizado para configurar el Webhook en Facebook Developers">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🔵 SECCIÓN TELEGRAM -->
+        <div *ngIf="activeTab === 'telegram'" class="tab-pane">
+            <div class="channel-card">
+                <div class="card-header">
+                    <span class="icon">🤖</span>
+                    <div>
+                        <h3>Conexión de Telegram Bot</h3>
+                        <p class="desc">Vincular tu bot de Telegram creado mediante @BotFather para atender a tus clientes por chat de Telegram.</p>
+                    </div>
+                </div>
+
+                <div class="form-group mt-20">
+                    <label>Token del Bot de Telegram</label>
+                    <input type="password" [(ngModel)]="merchant.telegram_bot_token" placeholder="123456789:ABCdefGhIJKlmNoPQRsT...">
+                    <small>Obtén este token escribiendo `/newbot` al bot oficial de Telegram <strong>@BotFather</strong>.</small>
+                </div>
+
+                <div class="status-indicator mt-20" *ngIf="merchant.telegram_bot_token">
+                    <span class="status-dot connected"></span>
+                    <strong>Canal listo para recibir peticiones</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🔵 SECCIÓN FACEBOOK / INSTAGRAM -->
+        <div *ngIf="activeTab === 'facebook'" class="tab-pane">
+            <div class="channel-card">
+                <div class="card-header">
+                    <span class="icon">👥</span>
+                    <div>
+                        <h3>Conexión de Messenger e Instagram</h3>
+                        <p class="desc">Atiende los mensajes y comentarios directos de tu página de Facebook e Instagram Business.</p>
+                    </div>
+                </div>
+
+                <div class="form-group mt-20">
+                    <label>Token de Acceso de Página (Page Access Token)</label>
+                    <input type="password" [(ngModel)]="merchant.facebook_page_token" placeholder="EAAZ...">
+                    <small>Este token se obtiene al registrar una App en Meta for Developers con permisos de Webhooks y Messenger.</small>
+                </div>
+
+                <div class="status-indicator mt-20" *ngIf="merchant.facebook_page_token">
+                    <span class="status-dot connected"></span>
+                    <strong>Canal Messenger enlazado</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
