@@ -18,6 +18,7 @@ function sanitizeMarkdown(text: string): string {
     sanitized = sanitized.replace(/\[AGOTADO\]/gi, "");
     sanitized = sanitized.replace(/\[UPDATE_CART:.*?\]/gi, "");
     sanitized = sanitized.replace(/\[IMAGE_URL:.*?\]/gi, "");
+    sanitized = sanitized.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*?\}\s*\]/gi, "");
     sanitized = sanitized.replace(/^\s*[}\]]+\s*$/gm, "");
     sanitized = sanitized.replace(/\*\*(.*?)\*\*/g, "*$1*");
     return sanitized.trim();

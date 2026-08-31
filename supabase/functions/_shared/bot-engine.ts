@@ -412,7 +412,12 @@ async function executeAgentTool(
             
             const clientName = toolArgs?.customer_name || variables['customer_name'] || variables['nombre_cliente'];
             const clientPhone = toolArgs?.customer_phone || variables['customer_phone'] || variables['telefono_cliente'];
-            const address = toolArgs?.address || variables['direccion_entrega'] || 'Por confirmar';
+            const address = toolArgs?.address || variables['direccion_entrega'];
+
+            const isInvalidField = (v: any) => !v || typeof v !== 'string' || v.trim() === '' || /^(\.{2,}|no\s*(disponible|aplica|s[ée])|n\/a|por confirmar)$/i.test(v.trim());
+            if (isInvalidField(clientName) || isInvalidField(clientPhone) || isInvalidField(address)) {
+                return 'Aún me falta un dato real para poder registrar tu pedido (nombre completo, teléfono o dirección de entrega). ¿Me lo confirmas?';
+            }
 
             // Actualizar tabla de clientes si tenemos nuevos datos
             if (clientName || clientPhone) {
