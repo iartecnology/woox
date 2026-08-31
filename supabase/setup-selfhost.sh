@@ -9,8 +9,17 @@ echo "🚀 Iniciando preparación del entorno de Supabase Self-Hosted..."
 # Directorio de instalación en el VPS
 TARGET_DIR="$HOME/supabase-vps"
 
+if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/.env" ]; then
+    echo "⚠️ El entorno en $TARGET_DIR ya está configurado (.env existente). Omitiendo regeneración de credenciales."
+    echo "========================================================================"
+    echo "🎉 ¡Supabase ya está listo!"
+    echo "📍 Ubicación del entorno: $TARGET_DIR"
+    echo "========================================================================"
+    exit 0
+fi
+
 if [ -d "$TARGET_DIR" ]; then
-    echo "⚠️ El directorio $TARGET_DIR ya existe. Se procederá a actualizar/reconfigurar."
+    echo "⚠️ El directorio $TARGET_DIR ya existe pero no tiene .env. Reconfigurando..."
 else
     echo "📥 Clonando repositorio oficial de Supabase Docker..."
     git clone --depth 1 https://github.com/supabase/supabase.git "$TARGET_DIR-temp"
