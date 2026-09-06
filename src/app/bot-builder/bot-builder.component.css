@@ -447,7 +447,7 @@
 .delete-icon-wrapper {
   width: 64px;
   height: 64px;
-  background: var(--bg-secondary)beb;
+  background: #fef3c7;
   color: #f59e0b;
   border-radius: 16px;
   display: flex;
@@ -1630,8 +1630,8 @@
 .model-quick-badge {
   display: flex;
   align-items: center;
-  background: rgba(139, 92, 246, 0.12);
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 4px 10px;
   gap: 6px;
@@ -1639,14 +1639,14 @@
 }
 
 .model-quick-badge:hover {
-  background: rgba(139, 92, 246, 0.2);
-  border-color: #8b5cf6;
+  background: #f1f5f9;
+  border-color: #6366f1;
 }
 
 .model-select {
   background: transparent;
   border: none;
-  color: #f1f5f9;
+  color: #0f172a;
   font-size: 0.8rem;
   font-weight: 600;
   outline: none;
@@ -1654,8 +1654,8 @@
 }
 
 .model-select option {
-  background: #1e293b;
-  color: #f1f5f9;
+  background: #ffffff;
+  color: #0f172a;
 }
 
 .health-container {
@@ -1682,7 +1682,7 @@
 
 .btn-repair:hover {
   transform: scale(1.05);
-  box-shadow: 0 0 12px rgba(236, 72, 153, 0.6);
+  box-shadow: 0 0 12px rgba(236, 72, 153, 0.4);
 }
 
 @keyframes pulse-repair {
@@ -1699,8 +1699,8 @@
 }
 
 .archetype-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 12px;
   cursor: pointer;
@@ -1713,10 +1713,10 @@
 }
 
 .archetype-card:hover {
-  background: rgba(139, 92, 246, 0.15);
-  border-color: #a855f7;
+  background: #ffffff;
+  border-color: #6366f1;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.12);
 }
 
 .arch-top {
@@ -1733,22 +1733,22 @@
   font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
-  background: rgba(139, 92, 246, 0.25);
-  color: #c084fc;
+  background: #ede9fe;
+  color: #6d28d9;
   padding: 2px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(139, 92, 246, 0.4);
+  border: 1px solid #ddd6fe;
 }
 
 .arch-title {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #f8fafc;
+  color: #0f172a;
 }
 
 .arch-summary {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: #475569;
   line-height: 1.35;
   flex: 1;
 }
@@ -1759,9 +1759,9 @@
   justify-content: space-between;
   font-size: 0.72rem;
   font-weight: 600;
-  color: #38bdf8;
+  color: #4f46e5;
   margin-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid #e2e8f0;
   padding-top: 6px;
 }
 
@@ -1777,16 +1777,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 10px 14px;
   transition: all 0.2s ease;
 }
 
 .skill-toggle-row:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
 }
 
 .skill-info {
@@ -1810,12 +1811,12 @@
 .skill-title {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #f1f5f9;
+  color: #0f172a;
 }
 
 .skill-desc {
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: #475569;
   line-height: 1.25;
 }
 

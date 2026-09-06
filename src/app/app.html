@@ -46,15 +46,6 @@
             <div class="header-actions-global"
                 style="display: flex; align-items: center; gap: 16px; margin-right: 16px;">
 
-                <!-- Modo Noche -->
-                <button (click)="toggleDarkMode()" class="icon-btn"
-                    [style.background]="darkMode() ? '#1e293b' : '#f1f5f9'"
-                    [style.color]="darkMode() ? '#fbbf24' : '#64748b'"
-                    style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.05); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
-                    [title]="darkMode() ? 'Modo Día' : 'Modo Noche'">
-                    {{ darkMode() ? '☀️' : '🌙' }}
-                </button>
-
                 <!-- Control de Sonido -->
                 <button *ngIf="!isMobile()" (click)="toggleSound()" class="icon-btn"
                     [style.background]="isSoundEnabled() ? '#e0e7ff' : '#f1f5f9'"

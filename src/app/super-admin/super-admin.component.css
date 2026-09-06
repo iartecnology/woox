@@ -821,7 +821,7 @@ small {
 
 .config-icon-btn.catalog:hover,
 .config-icon-btn.brain:hover {
-    background: var(--bg-secondary)beb;
+    background: #fef3c7;
     border-color: #f59e0b;
     color: #b45309;
 }
@@ -842,28 +842,18 @@ small {
     border-color: #64748b;
 }
 
-[data-theme="dark"] .action-row {
-    background: #1e293b;
-    border-color: #334155;
+.action-row {
+    background: #ffffff;
+    border-color: #e2e8f0;
 }
 
-[data-theme="dark"] .action-group.highlighted {
-    background: #0f172a;
-    border-color: #334155;
+.action-group.highlighted {
+    background: #f0f4ff;
+    border-color: #dbeafe;
 }
 
-[data-theme="dark"] .config-icon-btn {
-    background: #334155;
-    color: #cbd5e1;
-}
-
-[data-theme="dark"] .config-icon-btn:hover {
-    background: #475569;
-    color: #f8fafc;
-}
-
-.config-icon-btn.bot { background: var(--bg-secondary)1f2; color: #e11d48; }
-.config-icon-btn.catalog { background: var(--bg-secondary)7ed; color: #ea580c; }
+.config-icon-btn.bot { background: #fff1f2; color: #e11d48; }
+.config-icon-btn.catalog { background: #fff7ed; color: #ea580c; }
 .config-icon-btn.clone { background: #f0f9ff; color: #0ea5e9; }
 .config-icon-btn.clone:hover { background: #e0f2fe; color: #0284c7; border-color: #0ea5e9; }
 
@@ -3019,24 +3009,15 @@ select {
 /* Highlight para secciones críticas */
 .config-section.highlight {
     border-left: 5px solid #ef4444;
-    background: var(--bg-secondary)afa;
-}
-
-[data-theme="dark"] .config-section.highlight {
-    background: rgba(239, 68, 68, 0.05);
+    background: #fef2f2;
 }
 
 .form-group.highlight-restrictions {
-    background: var(--bg-secondary)1f2;
+    background: #fff1f2;
     padding: 16px;
     border-radius: 12px;
     border: 1px solid #fecaca;
     margin-top: 10px;
-}
-
-[data-theme="dark"] .form-group.highlight-restrictions {
-    background: rgba(153, 27, 27, 0.1);
-    border-color: #991b1b;
 }
 
 /* Checkbox Moderno */

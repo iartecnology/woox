@@ -7,43 +7,44 @@
     --bg-secondary: #ffffff;
     --bg-card: #ffffff;
     --bg-elevated: #ffffff;
-    --text-primary: #1f2937;
-    --text-secondary: #64748b;
-    --text-muted: #94a3b8;
-    --text-dark: #111827;
-    --border-color: #e2e8f0;
-    --border-subtle: #f1f5f9;
-    --border-focus: #818cf8;
-    --accent-color: #6366f1;
-    --accent-hover: #4f46e5;
-    --accent-subtle: rgba(99, 102, 241, 0.1);
-    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-    --card-shadow-hover: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+    --text-primary: #0f172a;       /* Slate 900: Máximo contraste y legibilidad */
+    --text-secondary: #334155;     /* Slate 700: Subtítulos claros y definidos */
+    --text-muted: #64748b;         /* Slate 500: Textos secundarios legibles */
+    --text-dark: #020617;          /* Slate 950: Títulos destacados */
+    --border-color: #cbd5e1;       /* Slate 300: Bordes nítidos para tarjetas e inputs */
+    --border-subtle: #e2e8f0;      /* Slate 200: Separadores sutiles */
+    --border-focus: #6366f1;
+    --accent-color: #4f46e5;       /* Indigo 600: Color de acento vibrante */
+    --accent-hover: #4338ca;
+    --accent-subtle: rgba(79, 70, 229, 0.08);
+    --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+    --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
     --modal-bg: #ffffff;
     --input-bg: #ffffff;
     --section-bg: #f8fafc;
 }
 
+/* Solo Light Mode - Se fuerzan variables limpias para evitar contaminación */
 [data-theme="dark"] {
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-card: #1e293b;
-    --bg-elevated: #243047;
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --bg-elevated: #ffffff;
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
     --text-muted: #64748b;
-    --text-dark: #f8fafc;
-    --border-color: #334155;
-    --border-subtle: #1e293b;
-    --border-focus: #a5b4fc;
-    --accent-color: #818cf8;
-    --accent-hover: #6366f1;
-    --accent-subtle: rgba(129, 140, 248, 0.15);
-    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
-    --card-shadow-hover: 0 10px 25px -5px rgba(0, 0, 0, 0.7);
-    --modal-bg: #1e293b;
-    --input-bg: #0f172a;
-    --section-bg: #0f172a;
+    --text-dark: #020617;
+    --border-color: #cbd5e1;
+    --border-subtle: #e2e8f0;
+    --border-focus: #6366f1;
+    --accent-color: #4f46e5;
+    --accent-hover: #4338ca;
+    --accent-subtle: rgba(79, 70, 229, 0.08);
+    --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+    --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+    --modal-bg: #ffffff;
+    --input-bg: #ffffff;
+    --section-bg: #f8fafc;
 }
 
 

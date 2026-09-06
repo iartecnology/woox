@@ -72,24 +72,17 @@ export class App {
 
     this.checkMobile();
 
-    // Theme setup
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        this.darkMode.set(true);
-        document.body.setAttribute('data-theme', 'dark');
-    }
+    // Solo Light Mode: remover cualquier atributo o rastro de modo oscuro
+    this.darkMode.set(false);
+    document.body.removeAttribute('data-theme');
+    localStorage.setItem('theme', 'light');
   }
 
   toggleDarkMode() {
-      const isDark = !this.darkMode();
-      this.darkMode.set(isDark);
-      if (isDark) {
-          document.body.setAttribute('data-theme', 'dark');
-          localStorage.setItem('theme', 'dark');
-      } else {
-          document.body.removeAttribute('data-theme');
-          localStorage.setItem('theme', 'light');
-      }
+    // Forzar modo claro permanente
+    this.darkMode.set(false);
+    document.body.removeAttribute('data-theme');
+    localStorage.setItem('theme', 'light');
   }
 
 
