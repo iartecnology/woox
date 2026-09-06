@@ -23,7 +23,9 @@ interface Order {
     uuid: string; // El ID real de Supabase
     id: string; // El ID corto para mostrar
     customer_name: string;
+    customer_phone?: string;
     channel: 'whatsapp' | 'telegram' | 'instagram' | 'web';
+    closing_agent_type?: 'ai' | 'human_agent' | 'manual';
     items: OrderItem[];
     total: number;
     status: 'pending' | 'cooking' | 'ready' | 'delivered' | 'cancelled';
@@ -231,7 +233,9 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
                         uuid: o.id,
                         id: o.order_number ? '#' + String(o.order_number).padStart(3, '0') : o.id.substring(0, 8).toUpperCase(),
                         customer_name: o.customers?.full_name || o.customer_name || 'Cliente sin nombre',
+                        customer_phone: o.customers?.phone || o.phone || '',
                         channel: o.channel || 'web',
+                        closing_agent_type: o.closing_agent_type || 'manual',
                         total: Number(o.total || 0),
                         status: o.status || 'pending',
                         created_at: new Date(o.created_at),
@@ -421,6 +425,92 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
             'cancelled': 'Cancelado'
         };
         return labels[status] || status;
+    }
+
+    getOrderElapsedMinutes(order: Order): number {
+        const diffMs = new Date().getTime() - new Date(order.created_at).getTime();
+        return Math.floor(diffMs / (1000 * 60));
+    }
+
+    getSlaClass(order: Order): string {
+        if (order.status === 'delivered' || order.status === 'cancelled') return 'sla-delivered';
+        const mins = this.getOrderElapsedMinutes(order);
+        if (mins < 15) return 'sla-fresh'; // Verde
+        if (mins <= 30) return 'sla-warning'; // Amarillo
+        return 'sla-delayed'; // Rojo urgente
+    }
+
+    getKanbanColumnTotal(status: 'pending' | 'cooking' | 'ready'): number {
+        return (this.ordersByStatus as any)[status]
+            ?.reduce((acc: number, curr: Order) => acc + curr.total, 0) || 0;
+    }
+
+    printOrderTicket(order: Order) {
+        const printWindow = window.open('', '_blank', 'width=350,height=600');
+        if (!printWindow) {
+            this.notificationService.show('Permite ventanas emergentes para imprimir', 'warning');
+            return;
+        }
+
+        const itemsHtml = order.items.map(i => `
+            <tr>
+                <td style="padding: 4px 0;">${i.quantity}x ${i.product_name}</td>
+                <td style="text-align: right;">$${(i.unit_price * i.quantity).toFixed(2)}</td>
+            </tr>
+            ${i.extras ? `<tr><td colspan="2" style="font-size: 10px; color: #555; padding-left: 8px;">+ ${i.extras}</td></tr>` : ''}
+            ${i.notes ? `<tr><td colspan="2" style="font-size: 10px; font-style: italic; color: #777; padding-left: 8px;">Nota: ${i.notes}</td></tr>` : ''}
+        `).join('');
+
+        const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Comanda ${order.id}</title>
+            <style>
+                body { font-family: monospace; font-size: 12px; margin: 0; padding: 10px; }
+                .center { text-align: center; }
+                hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
+                table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            </style>
+        </head>
+        <body onload="window.print(); window.close();">
+            <div class="center">
+                <h3 style="margin: 0;">COMANDA DE PEDIDO</h3>
+                <h2 style="margin: 4px 0;">${order.id}</h2>
+                <p style="margin: 2px 0;">${new Date(order.created_at).toLocaleString()}</p>
+            </div>
+            <hr>
+            <p style="margin: 4px 0;"><strong>Cliente:</strong> ${order.customer_name}</p>
+            <p style="margin: 4px 0;"><strong>Dirección:</strong> ${order.delivery_address}</p>
+            <p style="margin: 4px 0;"><strong>Canal:</strong> ${order.channel.toUpperCase()}</p>
+            ${order.notes ? `<p style="margin: 4px 0; background: #eee; padding: 4px;"><strong>Nota:</strong> ${order.notes}</p>` : ''}
+            <hr>
+            <table>${itemsHtml}</table>
+            <hr>
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                <span>TOTAL:</span>
+                <span>$${order.total.toFixed(2)}</span>
+            </div>
+            <hr>
+            <div class="center" style="font-size: 10px; margin-top: 10px;">
+                ¡Gracias por su compra!
+            </div>
+        </body>
+        </html>
+        `;
+
+        printWindow.document.write(html);
+        printWindow.document.close();
+    }
+
+    openWhatsAppToCustomer(order: Order) {
+        if (!order.customer_phone) {
+            this.notificationService.show('El pedido no tiene teléfono registrado', 'warning');
+            return;
+        }
+        let cleanPhone = order.customer_phone.replace(/[^0-9]/g, '');
+        const message = encodeURIComponent(`¡Hola ${order.customer_name}! Te escribimos de nuestro comercio con respecto a tu pedido ${order.id}.`);
+        window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
     }
 
     toggleView(mode: 'kanban' | 'list') {

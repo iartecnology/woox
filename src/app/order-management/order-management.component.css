@@ -5,7 +5,29 @@
     font-family: 'Inter', sans-serif;
     position: relative;
     padding: 24px;
-    background: #f9fafb;
+    background: var(--bg-primary);
+}
+
+/* SLA badges */
+.sla-fresh {
+    background: #dcfce7 !important;
+    color: #15803d !important;
+}
+
+.sla-warning {
+    background: #fef3c7 !important;
+    color: #b45309 !important;
+}
+
+.sla-delayed {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    animation: pulseSla 1.8s infinite;
+}
+
+@keyframes pulseSla {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.85; transform: scale(1.05); }
 }
 
 /* Kanban Layout Wrapper */

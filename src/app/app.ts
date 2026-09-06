@@ -171,8 +171,19 @@ export class App {
     }
   }
 
+  get isPublicPage() {
+    const url = this.router.url;
+    return url === '/login' || 
+           url === '/register' || 
+           url === '/' || 
+           url.startsWith('/login') || 
+           url.startsWith('/register') || 
+           url.startsWith('/p/') || 
+           url.startsWith('/bio/');
+  }
+
   get isLoginPage() {
-    return this.router.url === '/login' || this.router.url === '/';
+    return this.isPublicPage;
   }
 
   get isBioLinkPage() {

@@ -1,6 +1,6 @@
-<div class="app-container" [class.is-mobile]="isMobile()" *ngIf="!isLoginPage && !isBioLinkPage">
+<div class="app-container" [class.is-mobile]="isMobile()" *ngIf="!isPublicPage">
     <!-- Top Bar (Show on desktop, AND always on mobile but adapted) -->
-    <header class="top-bar" *ngIf="!isLoginPage && !isBioLinkPage">
+    <header class="top-bar" *ngIf="!isPublicPage">
         <!-- Hamburger / Back Button -->
         <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
             <!-- Mobile Back Button -->
@@ -162,61 +162,51 @@
                     Viendo: {{ merchantName }}
                 </div>
 
-                <!-- Elementos de navegación -->
-                <a *ngIf="merchantIndustryType === 'reservations' || merchantIndustryType === 'restaurant'" routerLink="/reservations" routerLinkActive="active"
-                    (click)="closeSidebar()">
-                    <span class="icon">📅</span>
-                    <span>Reservas</span>
-                </a>
+                <!-- SECCIÓN 1: OPERACIÓN DIARIA -->
+                <div class="sidebar-section-title">Operación Diaria</div>
+
                 <a routerLink="/chats" routerLinkActive="active" (click)="closeSidebar()" style="position: relative;">
                     <span class="icon">💬</span>
-                    <span>Chats</span>
+                    <span>Chats en Vivo</span>
                     <span *ngIf="unreadCount() > 0" class="badge-sidebar">{{ unreadCount() }}</span>
                 </a>
                 <a *ngIf="merchantIndustryType !== 'reservations'" routerLink="/orders" routerLinkActive="active"
                     (click)="closeSidebar()" style="position: relative;">
                     <span class="icon">🛵</span>
-                    <span>Pedidos</span>
+                    <span>Pedidos & Despachos</span>
                     <span *ngIf="unreadOrdersCount() > 0" class="badge-sidebar badge-orders">{{ unreadOrdersCount() }}</span>
                 </a>
-                <a routerLink="/metrics" routerLinkActive="active" (click)="closeSidebar()">
-                    <span class="icon">📊</span>
-                    <span>Estadísticas</span>
+                <a *ngIf="merchantIndustryType === 'reservations' || merchantIndustryType === 'restaurant'" routerLink="/reservations" routerLinkActive="active"
+                    (click)="closeSidebar()">
+                    <span class="icon">📅</span>
+                    <span>Agenda / Reservas</span>
                 </a>
                 <a routerLink="/crm" routerLinkActive="active" (click)="closeSidebar()">
                     <span class="icon">👥</span>
                     <span>Clientes (CRM)</span>
-                </a>
-                <a routerLink="/marketing" routerLinkActive="active" (click)="closeSidebar()">
-                    <span class="icon">📢</span>
-                    <span>Campañas</span>
                 </a>
                 <a *ngIf="merchantIndustryType !== 'reservations'" routerLink="/delivery" routerLinkActive="active"
                     (click)="closeSidebar()">
                     <span class="icon">🚚</span>
                     <span>Reparto</span>
                 </a>
-                <a routerLink="/merchant-brain" routerLinkActive="active"
-                    (click)="closeSidebar()" class="brain-btn-highlight">
-                    <span class="icon">🧠</span>
-                    <span>Cerebro de Empresa</span>
-                </a>
-                <a routerLink="/ai-config" routerLinkActive="active" (click)="closeSidebar()">
-                    <span class="icon">⚙️</span>
-                    <span>Automatización & IA</span>
-                </a>
-                <a routerLink="/omnichannel" routerLinkActive="active" (click)="closeSidebar()">
-                    <span class="icon">🔌</span>
-                    <span>Canales Omnicanal</span>
-                </a>
 
-                <!-- Catálogo: Para comercios de Ventas/Retail o Restaurantes -->
+                <!-- SECCIÓN 2: CRECIMIENTO & VENTAS -->
+                <div class="sidebar-section-title">Crecimiento & Marketing</div>
+
+                <a routerLink="/metrics" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">📊</span>
+                    <span>Estadísticas & ROI</span>
+                </a>
                 <a *ngIf="merchantIndustryType === 'retail' || merchantIndustryType === 'restaurant'" routerLink="/products" routerLinkActive="active"
                     (click)="closeSidebar()">
                     <span class="icon">🍱</span>
-                    <span>Catálogo</span>
+                    <span>Catálogo de Productos</span>
                 </a>
-
+                <a routerLink="/marketing" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">📢</span>
+                    <span>Campañas Remarketing</span>
+                </a>
                 <a routerLink="/biolink-admin" routerLinkActive="active" (click)="closeSidebar()">
                     <span class="icon">🔗</span>
                     <span>BioLink</span>
@@ -226,15 +216,32 @@
                     <span class="icon">🪄</span>
                     <span>AI Landing</span>
                 </a>
+
+                <!-- SECCIÓN 3: INTELIGENCIA & AJUSTES -->
+                <div class="sidebar-section-title">Inteligencia & Agentes</div>
+
                 <a routerLink="/bot-builder" routerLinkActive="active" (click)="closeSidebar()"
-                    class="bot-btn-highlight" style="margin-top: 4px;">
+                    class="bot-btn-highlight">
                     <span class="icon">🧬</span>
-                    <span>ADN (Flujos)</span>
+                    <span>ADN (Flujos IA)</span>
+                </a>
+                <a routerLink="/merchant-brain" routerLinkActive="active"
+                    (click)="closeSidebar()" class="brain-btn-highlight">
+                    <span class="icon">🧠</span>
+                    <span>Cerebro de Empresa</span>
+                </a>
+                <a routerLink="/omnichannel" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">🔌</span>
+                    <span>Canales WhatsApp & Redes</span>
+                </a>
+                <a routerLink="/ai-config" routerLinkActive="active" (click)="closeSidebar()">
+                    <span class="icon">⚙️</span>
+                    <span>Automatización & LLMs</span>
                 </a>
                 
-                <a (click)="openProfileModal(); closeSidebar()" style="cursor: pointer; margin-top: 4px;">
+                <a (click)="openProfileModal(); closeSidebar()" style="cursor: pointer; margin-top: 8px;">
                     <span class="icon">👤</span>
-                    <span>Perfil</span>
+                    <span>Mi Perfil</span>
                 </a>
             </ng-container>
         </div>
@@ -284,8 +291,8 @@
     </nav>
 </div>
 
-<main class="content-area" [class.no-nav]="isLoginPage || isBioLinkPage"
-    [class.sidebar-mode]="!isLoginPage && !isBioLinkPage"
+<main class="content-area" [class.no-nav]="isPublicPage"
+    [class.sidebar-mode]="!isPublicPage"
     [class.immersive-mode]="isMobile() && isImmersivePage"
     [class.chat-visible]="isMobile() && router.url.includes('/chats')">
     <div class="update-banner" *ngIf="updateService.updateAvailable()">

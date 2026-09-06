@@ -317,8 +317,18 @@ body {
 
 .sidebar-content {
     flex: 1;
-    padding: 20px 0;
+    padding: 12px 0;
     overflow-y: auto;
+}
+
+.sidebar-section-title {
+    padding: 16px 24px 6px 24px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    opacity: 0.8;
 }
 
 .sidebar-content a {

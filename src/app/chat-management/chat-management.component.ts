@@ -112,7 +112,24 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     private router = inject(Router);
     private ngZone = inject(NgZone);
 
-    showCrmPanel: boolean = false;
+    showCrmPanel: boolean = true;
+    showSnippetsMenu: boolean = false;
+
+    quickSnippets = [
+        { title: '🏦 Datos Bancarios', text: 'Para transferencias: Bancolombia Ahorros #123-456789-00 a nombre de nuestro comercio.' },
+        { title: '⏰ Horarios de Atención', text: 'Nuestro horario de atención es de Lunes a Sábado de 8:00 AM a 8:00 PM.' },
+        { title: '📍 Ubicación y Envíos', text: 'Estamos ubicados en Calle Principal #10-20. Hacemos envíos express a toda la ciudad.' },
+        { title: '🛍️ Catálogo Web', text: 'Puedes consultar todo nuestro catálogo de productos y ordenar en línea desde nuestro enlace oficial.' }
+    ];
+
+    toggleCrmPanel() {
+        this.showCrmPanel = !this.showCrmPanel;
+    }
+
+    insertSnippet(text: string) {
+        this.newMessage = (this.newMessage ? this.newMessage + ' ' : '') + text;
+        this.showSnippetsMenu = false;
+    }
 
     backToList() {
         this.selectedConversation = null;

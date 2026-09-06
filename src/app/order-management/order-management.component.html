@@ -90,7 +90,10 @@
                     <h3 style="color: #92400e; display: flex; align-items: center; gap: 8px;">
                       <i class="fa-solid fa-clock"></i> Confirmar Pago
                     </h3>
-                    <span class="count" style="background: #fef3c7; color: #92400e;">{{ ordersByStatus.pending.length }}</span>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <span style="font-size: 0.75rem; font-weight: 800; color: #92400e;">${{ getKanbanColumnTotal('pending').toFixed(2) }}</span>
+                        <span class="count" style="background: #fef3c7; color: #92400e;">{{ ordersByStatus.pending.length }}</span>
+                    </div>
                 </div>
                 <div class="order-cards">
                     <div *ngFor="let order of ordersByStatus.pending" class="order-card" cdkDrag
@@ -98,13 +101,18 @@
                         (click)="selectOrder(order)">
                         <div class="card-top">
                             <span class="order-id">{{ order.id }}</span>
-                            <span class="channel-icon" [class]="order.channel">{{ order.channel }}</span>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <span *ngIf="order.closing_agent_type === 'ai'" style="font-size: 0.65rem; background: #ede9fe; color: #6d28d9; padding: 2px 6px; border-radius: 4px; font-weight: 800;">🤖 IA</span>
+                                <span class="channel-icon" [class]="order.channel">{{ order.channel }}</span>
+                            </div>
                         </div>
                         <p class="customer">{{ order.customer_name }}</p>
                         <div class="card-bottom" style="flex-direction: column; align-items: flex-start; gap: 4px;">
                             <div style="display: flex; justify-content: space-between; width: 100%;">
                                 <span class="total">${{ order.total }}</span>
-                                <span class="time">{{ order.created_at | date:'shortTime' }}</span>
+                                <span class="time" [class]="getSlaClass(order)" style="padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700;">
+                                    ⏱️ {{ getOrderElapsedMinutes(order) }}m
+                                </span>
                             </div>
                             <span style="font-size: 0.7rem; color: #9ca3af;">{{ order.created_at | date:'dd/MM/yyyy'
                                 }}</span>
@@ -240,6 +248,25 @@
                 </tbody>
             </table>
 
+            <!-- Zero State Proactivo para Pedidos Vacíos -->
+            <div *ngIf="filteredOrders.length === 0 && !isLoading" class="empty-state-box">
+                <div class="empty-state-icon">🛵</div>
+                <h3 class="empty-state-title">No hay pedidos en este momento</h3>
+                <p class="empty-state-desc">
+                    Tus pedidos aparecerán aquí automáticamente cuando los clientes ordenen por WhatsApp o desde tu menú en línea.
+                </p>
+                <div class="empty-state-actions">
+                    <button class="btn-cta-primary" (click)="loadOrders()">
+                        <span>🔄</span>
+                        <span>Verificar Nuevos Pedidos</span>
+                    </button>
+                    <a routerLink="/omnichannel" class="btn-cta-secondary" style="text-decoration: none;">
+                        <span>📲</span>
+                        <span>Conectar WhatsApp</span>
+                    </a>
+                </div>
+            </div>
+
             <!-- Pagination Footer Mejorado -->
             <div class="pagination-footer-styled"
                 style="padding: 16px 24px; border-top: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; background: white; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
@@ -340,6 +367,18 @@
     </div>
 
     <div class="action-buttons" *ngIf="selectedOrder">
+        <!-- Acciones Operativas Rápidas (Imprimir & WhatsApp) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+            <button class="secondary-btn" (click)="printOrderTicket(selectedOrder)" style="padding: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span>🖨️</span>
+                <span>Imprimir Comanda</span>
+            </button>
+            <button class="secondary-btn" (click)="openWhatsAppToCustomer(selectedOrder)" style="padding: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; color: #16a34a; border-color: #bbf7d0; background: #f0fdf4;">
+                <span>💬</span>
+                <span>WhatsApp Cliente</span>
+            </button>
+        </div>
+
         <button *ngIf="selectedOrder.status === 'pending'" class="success-btn pulse"
             [disabled]="selectedOrder.processing" (click)="updateStatus(selectedOrder, 'cooking')">
             <span *ngIf="!selectedOrder.processing">💳 Confirmar Pago y Cocinar</span>

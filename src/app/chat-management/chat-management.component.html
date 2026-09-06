@@ -166,7 +166,11 @@
           </div>
         </div>
 
-        <div class="chat-actions">
+        <div class="chat-actions" style="display: flex; align-items: center; gap: 10px;">
+          <button (click)="toggleCrmPanel()" class="icon-btn" [style.background]="showCrmPanel ? '#ede9fe' : '#f1f5f9'" [style.color]="showCrmPanel ? '#7c3aed' : '#64748b'" title="Mostrar / Ocultar Ficha CRM" style="border: 1px solid var(--border-color); padding: 8px 12px; width: auto; height: 36px; border-radius: 10px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <span>ℹ️</span>
+            <span>{{ showCrmPanel ? 'Ocultar CRM' : 'Ficha CRM' }}</span>
+          </button>
           <div class="ai-banner" [style.background]="selectedConversation.ai_active !== false ? 'rgba(99, 102, 241, 0.15)' : 'rgba(245, 158, 11, 0.15)'" style="padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px;">
             <span class="ai-label" style="font-size: 0.8rem; font-weight: 700;">
               {{ selectedConversation.ai_active !== false ? '🤖 IA Activa' : '👤 Humano al Mando' }}
@@ -200,24 +204,55 @@
         <div #scrollAnchor style="height: 1px; width: 100%;"></div>
       </div>
 
-      <footer class="chat-footer" [class.internal-mode]="isInternalNote">
-        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-          <button (click)="isInternalNote = false" [style.background]="!isInternalNote ? '#e8f5e9' : 'none'"
-            [style.color]="!isInternalNote ? '#2e7d32' : '#64748b'"
-            style="border: none; padding: 4px 12px; border-radius: 100px; font-size: 0.7rem; font-weight: 800; cursor: pointer;">
-            MENSAJE
-          </button>
-          <button (click)="isInternalNote = true" [style.background]="isInternalNote ? '#fff3e0' : 'none'"
-            [style.color]="isInternalNote ? '#ef6c00' : '#64748b'"
-            style="border: none; padding: 4px 12px; border-radius: 100px; font-size: 0.7rem; font-weight: 800; cursor: pointer;">
-            NOTA INTERNA 🔒
-          </button>
+      <footer class="chat-footer" [class.internal-mode]="isInternalNote" [style.background]="isInternalNote ? '#fffbeb' : ''" [style.border-top]="isInternalNote ? '2px solid #f59e0b' : '1px solid var(--border-color)'">
+        <!-- Banner de Advertencia Modo Nota Privada -->
+        <div *ngIf="isInternalNote" style="background: #fef3c7; color: #92400e; padding: 6px 14px; border-radius: 8px; margin-bottom: 10px; font-size: 0.75rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+          <span>🔒 NOTA PRIVADA: Solo visible para ti y tu equipo. El cliente NO recibirá este texto.</span>
+          <span style="font-size: 0.7rem; opacity: 0.8;">Equipo</span>
         </div>
-        <div class="input-box">
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="display: flex; gap: 8px;">
+            <button (click)="isInternalNote = false" [style.background]="!isInternalNote ? '#e8f5e9' : 'none'"
+              [style.color]="!isInternalNote ? '#2e7d32' : '#64748b'"
+              style="border: none; padding: 4px 14px; border-radius: 100px; font-size: 0.7rem; font-weight: 800; cursor: pointer; transition: all 0.2s;">
+              💬 MENSAJE AL CLIENTE
+            </button>
+            <button (click)="isInternalNote = true" [style.background]="isInternalNote ? '#f59e0b' : 'none'"
+              [style.color]="isInternalNote ? 'white' : '#64748b'"
+              style="border: none; padding: 4px 14px; border-radius: 100px; font-size: 0.7rem; font-weight: 800; cursor: pointer; transition: all 0.2s;">
+              🔒 NOTA INTERNA
+            </button>
+          </div>
+
+          <!-- Snippets Button -->
+          <div style="position: relative;">
+            <button (click)="showSnippetsMenu = !showSnippetsMenu" 
+              style="background: #f1f5f9; border: 1px solid var(--border-color); color: #4338ca; border-radius: 8px; padding: 4px 10px; font-size: 0.72rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              ⚡ Respuestas Rápidas
+            </button>
+
+            <!-- Popup de Snippets -->
+            <div *ngIf="showSnippetsMenu" 
+              style="position: absolute; bottom: calc(100% + 8px); right: 0; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border: 1px solid var(--border-color); width: 280px; z-index: 100; overflow: hidden; animation: fadeIn 0.2s ease-out;">
+              <div style="padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid var(--border-color); font-size: 0.75rem; font-weight: 800; color: #475569;">
+                Plantillas Rápidas
+              </div>
+              <div *ngFor="let s of quickSnippets" (click)="insertSnippet(s.text)" 
+                style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" 
+                onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
+                <div style="font-size: 0.8rem; font-weight: 700; color: #1e293b;">{{ s.title }}</div>
+                <div style="font-size: 0.7rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.text }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="input-box" [style.background]="isInternalNote ? '#fff' : ''" [style.border]="isInternalNote ? '1px solid #f59e0b' : ''">
           <button style="background: transparent; border: none; font-size: 1.2rem; cursor: pointer;">📎</button>
           <input type="text" [(ngModel)]="newMessage" (keyup.enter)="sendMessage()" (input)="onInputChange()"
-            [placeholder]="isInternalNote ? 'Escribir nota privada (solo equipo)...' : 'Escribe un mensaje aquí...'">
-          <button class="send-btn" (click)="sendMessage()">
+            [placeholder]="isInternalNote ? 'Escribir nota privada confidencial...' : 'Escribe un mensaje aquí...'">
+          <button class="send-btn" (click)="sendMessage()" [style.background]="isInternalNote ? '#f59e0b' : ''">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
               <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
@@ -240,7 +275,7 @@
   </main>
 
   <!-- PANEL 3: CRM / INFO -->
-  <aside class="panel-crm" [class.mobile-active]="showCrmPanel" *ngIf="selectedConversation && (!isMobile() || showCrmPanel)">
+  <aside class="panel-crm" [class.mobile-active]="showCrmPanel" *ngIf="selectedConversation && showCrmPanel">
     
     <!-- Mobile CRM Close -->
     <div class="mobile-crm-close" *ngIf="isMobile()">
