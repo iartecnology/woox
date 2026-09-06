@@ -53,7 +53,7 @@ interface CartItem {
         </header>
 
         <!-- Barra de Estadísticas Unificada -->
-        <div class="sim-stats-bar" *ngIf="botMode && totalSessionExecutions > 0 && showStats">
+        <div class="sim-stats-bar" *ngIf="botMode && showStats">
           <div class="stat-pill">
             <span class="stat-pill-icon">⚡</span>
             <span class="stat-pill-val">{{ totalSessionExecutions }}</span>
@@ -244,46 +244,60 @@ interface CartItem {
     }
     .close-btn:hover { background: rgba(255,255,255,0.3); }
     
-    /* Stats Bar Styles */
+    /* Stats Bar Styles (Light Mode) */
     .sim-stats-bar {
       display: flex; gap: 6px; padding: 8px 12px;
-      background: #1e293b; border-bottom: 1px solid #334155;
+      background: #f8fafc; border-bottom: 1px solid #e2e8f0;
       flex-wrap: wrap; align-items: center;
     }
     .stat-pill {
       display: flex; align-items: center; gap: 4px;
-      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 20px; padding: 2px 8px; font-size: 0.7rem; color: #e2e8f0;
+      background: #ffffff; border: 1px solid #e2e8f0;
+      border-radius: 20px; padding: 2px 8px; font-size: 0.7rem; color: #334155;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     }
-    .stat-pill-val { font-weight: 800; color: #10b981; }
+    .stat-pill-val { font-weight: 800; color: #059669; }
     .stat-pill-val--sm { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .stat-pill-label { color: #64748b; font-size: 0.65rem; }
     .reset-pill-btn {
-      background: transparent; border: none; color: #94a3b8; font-size: 0.8rem;
-      cursor: pointer; margin-left: auto; padding: 2px 6px; border-radius: 4px;
+      background: #ffffff; border: 1px solid #e2e8f0; color: #64748b; font-size: 0.8rem;
+      cursor: pointer; margin-left: 2px; padding: 3px 6px; border-radius: 6px;
+      transition: all 0.2s;
     }
-    .reset-pill-btn:hover { background: rgba(255,255,255,0.1); color: #ef4444; }
+    .reset-pill-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #ef4444; }
 
+    .copilot-controls {
+      display: flex; align-items: center; gap: 6px; margin-left: auto;
+    }
     .speed-selector {
-      display: flex; gap: 2px; background: rgba(0,0,0,0.2); border-radius: 4px; padding: 2px;
-      margin-left: 10px;
+      display: flex; gap: 2px; background: #e2e8f0; border-radius: 6px; padding: 2px;
     }
     .speed-selector button {
-      background: transparent; border: none; cursor: pointer; padding: 2px 4px;
-      border-radius: 3px; font-size: 0.8rem; filter: grayscale(1); opacity: 0.6;
+      background: transparent; border: none; cursor: pointer; padding: 2px 5px;
+      border-radius: 4px; font-size: 0.8rem; filter: grayscale(1); opacity: 0.6;
+      transition: all 0.2s;
     }
-    .speed-selector button.active { filter: grayscale(0); opacity: 1; background: rgba(255,255,255,0.1); }
+    .speed-selector button.active { filter: grayscale(0); opacity: 1; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+
+    .mode-select {
+      background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px;
+      font-size: 0.72rem; padding: 3px 6px; color: #1e293b; font-weight: 600; outline: none;
+    }
+    .mode-select:focus { border-color: #7c3aed; }
 
     .copilot-btn {
       display: flex; align-items: center; gap: 6px;
-      background: #334155; border: 1px solid #475569;
-      border-radius: 20px; padding: 2px 10px; font-size: 0.7rem; color: #94a3b8;
-      cursor: pointer; transition: all 0.3s ease;
-      margin-left: 8px;
+      background: #ffffff; border: 1px solid #cbd5e1;
+      border-radius: 20px; padding: 3px 10px; font-size: 0.72rem; color: #475569;
+      cursor: pointer; transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .copilot-btn:hover {
+      background: #f1f5f9; border-color: #94a3b8; color: #0f172a;
     }
     .copilot-btn.active {
-      background: #7c3aed; border-color: #a78bfa; color: white;
-      box-shadow: 0 0 10px rgba(124, 58, 237, 0.4);
+      background: #7c3aed; border-color: #6d28d9; color: #ffffff;
+      box-shadow: 0 0 12px rgba(124, 58, 237, 0.35);
       animation: pulseCopilot 2s infinite;
     }
     .bot-icon { font-size: 0.9rem; }
@@ -635,19 +649,21 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, OnChanges, Aft
       return;
     }
 
-    // 2. Encontrar nodos de checkout
+    // 2. Encontrar nodos de checkout o finalización
     const checkoutNodes = this.allNodes.filter(n => 
-      (n.type === 'action' && n.data?.actionType === 'order_checkout') || 
-      n.type === 'order_checkout'
+      (n.type === 'action' && (n.data?.actionType === 'order_checkout' || n.data?.actionType === 'register_order')) || 
+      (n.type === 'ai_skill' && (n.data?.actionType === 'checkout_trigger' || n.data?.actionType === 'register_order')) ||
+      n.type === 'order_checkout' ||
+      n.type === 'end'
     );
 
     if (checkoutNodes.length === 0) {
-      this.notificationService.show('Flujo incompleto: No hay nodo de Pagar/Checkout.', 'error');
+      this.notificationService.show('Flujo sin nodo de cierre (checkout/fin). Copiloto explorará en modo reactivo.', 'warning');
       this.copilotMode = 'reactive';
       return;
     }
 
-    // 3. BFS básico para encontrar el camino más corto al checkout
+    // 3. BFS para encontrar el camino más corto al checkout o cierre
     const queue: { nodeId: string, path: any[] }[] = [{ nodeId: startNode.id, path: [] }];
     const visited = new Set<string>();
     let finalPath: any[] | null = null;
@@ -660,30 +676,33 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, OnChanges, Aft
       const node = this.allNodes.find(n => n.id === nodeId);
       if (!node) continue;
 
-      // ¿Es un nodo de checkout?
+      // ¿Es un nodo de checkout o meta alcanzada?
       if (checkoutNodes.some(cn => cn.id === nodeId)) {
         finalPath = path;
         break;
       }
 
-      // Siguientes conexiones
-      const connections = this.allConnections.filter(c => c.from === nodeId);
+      // Siguientes conexiones salientes
+      const connections = this.allConnections.filter(c => c.from === nodeId && c.toPort !== 'skills_in');
       for (const conn of connections) {
         // Determinar qué entrada satisface esta conexión
         let input = '';
         if (node.type === 'menu') {
           const optIndex = node.data?.options?.findIndex((o: any) => o.id === conn.fromPort || conn.fromPort?.includes(o.id));
-          input = (optIndex !== -1) ? (optIndex + 1).toString() : '1';
+          input = (optIndex !== -1 && optIndex !== undefined) ? (optIndex + 1).toString() : '1';
         } else if (node.type === 'condition') {
-          input = 'si'; // Asumimos 'si' para avanzar
+          input = conn.fromPort === 'false' || conn.fromPort === 'no' ? 'no' : 'si';
         } else if (node.type === 'question') {
-           // Determinar input por tipo de pregunta
-           const varName = node.data?.variable?.toLowerCase() || '';
-           if (varName.includes('cant') || varName.includes('unid')) input = '1';
-           else if (varName.includes('phone') || varName.includes('tel') || varName.includes('cel')) input = '3151234567';
-           else if (varName.includes('nom')) input = 'Daniel';
-           else if (varName.includes('dir')) input = 'Calle 123';
-           else input = 'Respuesta';
+          const varName = (node.data?.variable || '').toLowerCase();
+          if (varName.includes('cant') || varName.includes('unid')) input = '1';
+          else if (varName.includes('phone') || varName.includes('tel') || varName.includes('cel')) input = '3151234567';
+          else if (varName.includes('nom')) input = 'Daniel';
+          else if (varName.includes('dir')) input = 'Calle 123 #45-67';
+          else if (varName.includes('email') || varName.includes('correo')) input = 'cliente@woox.ai';
+          else input = '1';
+        } else if (node.type === 'ai_agent') {
+          // Para nodo de agente IA, enviar intención de compra directa para avanzar
+          input = 'Quiero hacer un pedido y pagar';
         }
 
         queue.push({ 
@@ -886,7 +905,34 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, OnChanges, Aft
                         testInput = 'no'; // fallback seguro
                     }
                 } else if (waitingFor === 'ai_input') {
-                    testInput = '¿Qué productos tienes disponibles?';
+                    const lmsg = (lastBotMsg || '').toLowerCase();
+                    if (lmsg.includes('dirección') || lmsg.includes('direccion') || lmsg.includes('donde') || lmsg.includes('calle')) {
+                        testInput = 'Calle 100 #15-20, Apto 301';
+                    } else if (lmsg.includes('teléfono') || lmsg.includes('telefono') || lmsg.includes('celular') || lmsg.includes('numero')) {
+                        testInput = '3101234567';
+                    } else if (lmsg.includes('nombre') || lmsg.includes('con quién') || lmsg.includes('con quien')) {
+                        testInput = 'Daniel Woox';
+                    } else if (lmsg.includes('pago') || lmsg.includes('transferencia') || lmsg.includes('efectivo') || lmsg.includes('pagar')) {
+                        testInput = 'Efectivo contra entrega';
+                    } else if (lmsg.includes('confirmar') || lmsg.includes('correcto') || lmsg.includes('deseas agregar algo más') || lmsg.includes('algo más')) {
+                        testInput = 'No gracias, eso es todo. Confirmar pedido por favor';
+                    } else if (lmsg.includes('$') || lmsg.includes('orden') || lmsg.includes('carrito') || lmsg.includes('total')) {
+                        testInput = 'Perfecto, deseo cerrar el pedido y pagar ya';
+                    } else if (lmsg.includes('recomiendas') || lmsg.includes('opción') || lmsg.includes('opciones') || lmsg.includes('menú') || lmsg.includes('menu') || lmsg.includes('plato') || lmsg.includes('producto')) {
+                        testInput = 'Me gustaría pedir la primera opción que mencionaste por favor';
+                    } else {
+                        // Secuencia adaptativa según historial para no repetir la misma pregunta
+                        const aiMsgCount = this.messages.filter(m => m.sender === 'ai').length;
+                        if (aiMsgCount <= 1) {
+                            testInput = '¡Hola! ¿Qué productos o promociones tienes disponibles hoy?';
+                        } else if (aiMsgCount === 2) {
+                            testInput = 'Me interesa uno de tus productos más populares, quiero pedirlo';
+                        } else if (aiMsgCount === 3) {
+                            testInput = 'Listo, eso sería todo. ¿Cómo hacemos el pago?';
+                        } else {
+                            testInput = 'Confirmo el pedido, gracias';
+                        }
+                    }
                 }
             }
         }
@@ -1102,9 +1148,20 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
 
     this.clearSimulatorSession();
     
-    // Cargar estado del comercio
+    // Cargar estado del comercio y configuración de IA para el copiloto
     const { data: merchant } = await this.supabaseService.getMerchantById(this.merchantId);
     
+    if (merchant) {
+      if (!this.aiApiKey && merchant.ai_api_key) this.aiApiKey = merchant.ai_api_key;
+      if (merchant.ai_model) this.aiModel = merchant.ai_model;
+      if (merchant.ai_provider) this.aiProvider = merchant.ai_provider;
+    }
+
+    if (!this.aiApiKey) {
+      const { data: settings } = await this.supabaseService.getPlatformSettings();
+      if (settings?.ai_api_key) this.aiApiKey = settings.ai_api_key;
+    }
+
     // Solo sobreescribir botMode si no se forzó via Input
     if (!this.botMode) {
       this.botMode = merchant?.bot_mode || false;
