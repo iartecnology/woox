@@ -32,6 +32,7 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
     cards: MetricCard[] = [];
     allOrders: any[] = [];
     recentOrders: any[] = [];
+    usageData: any = null;
 
     // --- CHART CONFIGURATION ---
 
@@ -203,10 +204,17 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
         this.isLoading = true;
         this.cdr.detectChanges();
 
-        const { data, error } = await this.supabaseService.getOrders(this.merchantId);
+        const [ordersRes, usageRes] = await Promise.all([
+            this.supabaseService.getOrders(this.merchantId),
+            this.supabaseService.getMerchantUsage(this.merchantId)
+        ]);
 
-        if (data) {
-            this.allOrders = data.map((o: any) => ({
+        if (usageRes.data) {
+            this.usageData = usageRes.data;
+        }
+
+        if (ordersRes.data) {
+            this.allOrders = ordersRes.data.map((o: any) => ({
                 id: o.id.substring(0, 8).toUpperCase(),
                 customer: o.customers?.full_name || 'Cliente Anon',
                 total: o.total,
@@ -261,13 +269,21 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
         const totalSales = filtered.reduce((acc, curr) => acc + Number(curr.total), 0);
         const totalOrders = filtered.length;
         const aiOrders = filtered.filter(o => o.closing_agent_type === 'ai').length;
+        const aiSales = filtered
+            .filter(o => o.closing_agent_type === 'ai')
+            .reduce((acc, curr) => acc + Number(curr.total), 0);
         const conversionRate = totalOrders > 0 ? Math.round((aiOrders / totalOrders) * 100) : 0;
 
+        const tokenUsage = this.usageData?.tokens_consumed 
+            ? `${Math.round(this.usageData.tokens_consumed / 1000)}k` 
+            : '0k';
+        const aiMsgCount = this.usageData?.ai_messages_count || 0;
+
         this.cards = [
-            { title: 'Ventas Periodo', value: `$${totalSales.toLocaleString()}`, change: 'En este periodo', isPositive: true, icon: '💰' },
-            { title: 'Pedidos Periodo', value: totalOrders.toString(), change: 'En este periodo', isPositive: true, icon: '📦' },
-            { title: 'Conversión IA', value: `${conversionRate}%`, change: 'En este periodo', isPositive: true, icon: '🤖' },
-            { title: 'Tiempo Promedio (Est.)', value: '24 min', change: 'Estable', isPositive: true, icon: '⏱️' }
+            { title: 'Ventas Periodo', value: `$${totalSales.toLocaleString()}`, change: 'Total facturado', isPositive: true, icon: '💰' },
+            { title: 'Ventas por IA', value: `$${aiSales.toLocaleString()}`, change: `${aiOrders} pedidos cerrados por IA`, isPositive: true, icon: '🤖' },
+            { title: 'Conversión IA', value: `${conversionRate}%`, change: `${aiOrders} de ${totalOrders} pedidos`, isPositive: true, icon: '🎯' },
+            { title: 'Consumo IA (Mes)', value: tokenUsage, change: `${aiMsgCount} respuestas automáticas`, isPositive: true, icon: '⚡' }
         ];
 
         // 2. Actualizar Doughnut

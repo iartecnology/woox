@@ -173,6 +173,138 @@ export class SupabaseService {
         return { data, error };
     }
 
+    async registerMerchant(params: {
+        businessName: string;
+        fullName: string;
+        email: string;
+        password: string;
+        industryType: string;
+    }) {
+        try {
+            // 1. Validar si el email ya existe en perfiles
+            const { data: existingUser } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('email', params.email)
+                .maybeSingle();
+
+            if (existingUser) {
+                return { error: { message: 'El correo electrónico ya está registrado. Por favor inicia sesión.' } };
+            }
+
+            // 2. Generar slug y merchant_code único
+            const cleanName = params.businessName
+                .trim()
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]/g, '-');
+            const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+            const slug = `${cleanName}-${randomSuffix}`;
+            const merchantCode = `${params.businessName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 8)}${randomSuffix}`;
+
+            // Calcular 14 días de prueba
+            const trialExpires = new Date();
+            trialExpires.setDate(trialExpires.getDate() + 14);
+
+            // 3. Crear el comercio
+            const { data: newMerchant, error: merchantErr } = await supabase
+                .from('merchants')
+                .insert([{
+                    name: params.businessName,
+                    slug: slug,
+                    merchant_code: merchantCode,
+                    industry_type: params.industryType || 'retail',
+                    subscription_plan: 'trial',
+                    subscription_status: 'trialing',
+                    subscription_expires_at: trialExpires.toISOString(),
+                    ai_enabled: true,
+                    is_active: true
+                }])
+                .select()
+                .single();
+
+            if (merchantErr || !newMerchant) {
+                return { error: merchantErr || { message: 'No se pudo crear el comercio' } };
+            }
+
+            // 4. Crear el perfil de administrador
+            const { data: newProfile, error: profileErr } = await supabase
+                .from('profiles')
+                .insert([{
+                    merchant_id: newMerchant.id,
+                    email: params.email,
+                    password: params.password,
+                    full_name: params.fullName,
+                    role: 'admin',
+                    is_active: true
+                }])
+                .select()
+                .single();
+
+            if (profileErr || !newProfile) {
+                // Si falla el perfil, intentar limpiar el comercio huérfano
+                await supabase.from('merchants').delete().eq('id', newMerchant.id);
+                return { error: profileErr || { message: 'Error al crear perfil de usuario' } };
+            }
+
+            // 5. Crear flujo inicial por defecto (ADN Bot Vendedor)
+            const initialFlow = {
+                merchant_id: newMerchant.id,
+                name: 'Flujo Asistente Comercial IA',
+                is_active: true,
+                trigger_type: 'always',
+                flow_data: {
+                    nodes: [
+                        {
+                            id: 'node_start',
+                            type: 'start',
+                            position: { x: 500, y: 100 },
+                            data: {
+                                label: 'Bienvenida',
+                                message: `¡Hola! 👋 Bienvenido a ${params.businessName}. ¿En qué te puedo asesorar hoy?`
+                            }
+                        },
+                        {
+                            id: 'node_ai_sales',
+                            type: 'ai_agent',
+                            position: { x: 500, y: 280 },
+                            data: {
+                                label: 'Asesor Comercial IA',
+                                prompt: `Eres el asesor comercial inteligente de ${params.businessName}.\nTu objetivo es atender amablemente al cliente, sugerir los productos o servicios adecuados, resolver dudas y guiarlo al cierre de su orden con precisión y entusiasmo.`,
+                                model: 'gemini-1.5-flash',
+                                temperature: 0.4
+                            }
+                        }
+                    ],
+                    connections: [
+                        {
+                            source: 'node_start',
+                            sourceHandle: 'output',
+                            target: 'node_ai_sales',
+                            targetHandle: 'input'
+                        }
+                    ]
+                }
+            };
+            await supabase.from('bot_flows').insert([initialFlow]);
+
+            return { data: { profile: newProfile, merchant: newMerchant }, error: null };
+        } catch (e: any) {
+            return { error: { message: e.message || 'Error inesperado durante el registro' } };
+        }
+    }
+
+    async getMerchantUsage(merchantId: string, month?: string) {
+        const periodMonth = month || new Date().toISOString().substring(0, 7);
+        return await supabase
+            .from('merchant_usage')
+            .select('*')
+            .eq('merchant_id', merchantId)
+            .eq('period_month', periodMonth)
+            .maybeSingle();
+    }
+
     async getMerchantById(id: string) {
         const { data, error } = await supabase
             .from('merchants')

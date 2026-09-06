@@ -641,6 +641,18 @@ async function executeAgentTool(
                 // NOTIFICAR SI EL PEDIDO SE CREÓ CORRECTAMENTE
                 if (order) {
                    await notifyMerchantAgents(supabase, merchantId, "¡Nuevo Pedido (IA)! 🛵", `Se ha registrado el pedido #${orderNum}\nTotal: $${total.toFixed(2)}`);
+                   // Contabilizar orden en SaaS Metering
+                   try {
+                       await supabase.rpc('track_merchant_usage', {
+                           p_merchant_id: merchantId,
+                           p_tokens: 0,
+                           p_is_ai_message: false,
+                           p_order_closed: true,
+                           p_order_value: total
+                       });
+                   } catch (e) {
+                       console.warn('[BOT-ENGINE] Error tracking order usage:', e);
+                   }
                 }
 
                 return `🎉 ¡Pedido registrado exitosamente!\n📋 Número de pedido: ${orderNum}\n💰 Total: $${total.toFixed(2)}\n📍 Dirección: ${address}\n\nEn breve te contactaremos para confirmar la entrega.`;
@@ -1419,6 +1431,19 @@ ${node.data.prompt || ''}
                         role: 'assistant',
                         content: result.text
                     });
+
+                    // Registrar consumo en SaaS Metering
+                    try {
+                        const estimatedTokens = Math.ceil((systemPrompt.length + finalUserMessage.length + result.text.length) / 4);
+                        await supabase.rpc('track_merchant_usage', {
+                            p_merchant_id: merchantId,
+                            p_tokens: estimatedTokens,
+                            p_is_ai_message: true,
+                            p_is_outbound: true
+                        });
+                    } catch (mErr) {
+                        console.warn('[BOT-ENGINE] Error tracking AI usage:', mErr);
+                    }
                 } else {
                     console.log('[BOT-ENGINE] Sin respuesta de texto del modelo.');
                     const generic = `Lo siento, tuve un problema. DEBUG:\n${debugLogs.join('\n')}`;

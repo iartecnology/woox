@@ -92,6 +92,7 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
     // Agent & Inbox Management
     inboxTab: 'mine' | 'unassigned' | 'all' = 'all';
+    operationalFilter: 'all' | 'ai' | 'human' = 'all';
     isInternalNote: boolean = false;
     isAgentTyping: boolean = false;
     typingAgentName: string = '';
@@ -610,7 +611,14 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             list = list.filter(c => !c.assigned_agent_id);
         }
 
-        // 3. Búsqueda
+        // 3. Filtro Operativo (IA vs Humano)
+        if (this.operationalFilter === 'ai') {
+            list = list.filter(c => c.ai_active !== false);
+        } else if (this.operationalFilter === 'human') {
+            list = list.filter(c => c.ai_active === false || !!c.assigned_agent_id);
+        }
+
+        // 4. Búsqueda
         if (this.searchQuery) {
             const query = this.searchQuery.toLowerCase();
             list = list.filter(c =>
@@ -619,6 +627,10 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             );
         }
         return list;
+    }
+
+    setOperationalFilter(filter: 'all' | 'ai' | 'human') {
+        this.operationalFilter = filter;
     }
 
     setFilter(channel: 'all' | 'whatsapp' | 'telegram' | 'instagram' | 'messenger' | 'simulator') {

@@ -51,6 +51,13 @@
         <div class="filter-pill" [class.active]="selectedChannel === 'simulator'" (click)="setFilter('simulator')">
           Pruebas 🚀</div>
       </div>
+
+      <!-- Filtro Operativo: IA vs Humano -->
+      <div class="channel-filters" style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.08);">
+        <div class="filter-pill" [class.active]="operationalFilter === 'all'" (click)="setOperationalFilter('all')">Todos Estados</div>
+        <div class="filter-pill" [class.active]="operationalFilter === 'ai'" (click)="setOperationalFilter('ai')">🤖 Atendido por IA</div>
+        <div class="filter-pill" [class.active]="operationalFilter === 'human'" (click)="setOperationalFilter('human')">👤 Control Humano</div>
+      </div>
     </div>
 
     <div class="conversation-list" style="overflow-y: auto; flex: 1; position: relative;"
@@ -160,8 +167,10 @@
         </div>
 
         <div class="chat-actions">
-          <div class="ai-banner">
-            <span class="ai-label">🤖 IA Activa</span>
+          <div class="ai-banner" [style.background]="selectedConversation.ai_active !== false ? 'rgba(99, 102, 241, 0.15)' : 'rgba(245, 158, 11, 0.15)'" style="padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px;">
+            <span class="ai-label" style="font-size: 0.8rem; font-weight: 700;">
+              {{ selectedConversation.ai_active !== false ? '🤖 IA Activa' : '👤 Humano al Mando' }}
+            </span>
             <label class="switch">
               <input type="checkbox" [checked]="selectedConversation.ai_active !== false" (change)="toggleAI()">
               <span class="slider"></span>
