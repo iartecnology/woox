@@ -167,9 +167,9 @@ export class SupabaseService {
         const { data, error } = await supabase
             .from('profiles')
             .select('*, merchants(*)')
-            .eq('email', email)
+            .eq('email', email.trim().toLowerCase())
             .eq('password', pass)
-            .single();
+            .maybeSingle();
         return { data, error };
     }
 

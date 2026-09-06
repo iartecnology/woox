@@ -65,11 +65,7 @@ export class LoginComponent implements OnInit {
 
             if (result.error) {
                 console.error('Supabase error:', result.error);
-                if (result.error.message.includes('JSON object requested, multiple (or no) rows returned')) {
-                    this.error = 'Credenciales incorrectas. El usuario no existe o la contraseña es errónea.';
-                } else {
-                    this.error = `Error: ${result.error.message}`;
-                }
+                this.error = 'Credenciales incorrectas. Verifica tu email y contraseña.';
             } else {
                 this.error = 'Credenciales incorrectas. Verifica tu email y contraseña.';
             }
