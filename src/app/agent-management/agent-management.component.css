@@ -267,7 +267,7 @@ select:focus {
 
 .code-area {
     font-family: 'Fira Code', 'Courier New', monospace;
-    background: #ffffff;
+    background: var(--bg-secondary);
     color: #0f172a;
     border: 1.5px solid #e2e8f0;
     font-size: 0.9rem;
@@ -281,7 +281,7 @@ select:focus {
 }
 
 .highlight-restrictions {
-    background: #fff7ed;
+    background: var(--bg-secondary)7ed;
     border: 1px solid #fed7aa;
     border-radius: 12px;
     padding: 16px;
@@ -1197,7 +1197,7 @@ select:focus {
 .block-b,
 .block-b-text {
     color: #d97706;
-    background: #fffbeb;
+    background: var(--bg-secondary)beb;
 }
 
 .block-c,
@@ -1444,7 +1444,7 @@ select:focus {
 .block-b,
 .block-b-text {
     color: #d97706;
-    background: #fffbeb !important;
+    background: var(--bg-secondary)beb !important;
     border-radius: 4px;
     padding: 0 4px;
 }
@@ -2018,7 +2018,7 @@ select:focus {
 }
 
 .confirm-modal-box {
-    background: #fff;
+    background: var(--bg-secondary);
     border-radius: 20px;
     padding: 32px;
     width: 90%;
@@ -2054,7 +2054,7 @@ select:focus {
 .confirm-modal-box h3 {
     margin: 0 0 8px;
     font-size: 1.25rem;
-    color: #1f2937;
+    color: var(--text-primary);
     font-weight: 800;
 }
 

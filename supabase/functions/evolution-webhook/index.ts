@@ -168,7 +168,7 @@ Deno.serve(async (req: Request) => {
                                 mediatype: "document",
                                 caption: caption || "Menú",
                                 fileName: "Menu.pdf",
-                                delay: 1200 
+                                delay: 400 
                             }) 
                         });
                         if (!res.ok) console.error(`[Evolution] Failed to send PDF: ${res.status} ${await res.text()}`);
@@ -180,7 +180,7 @@ Deno.serve(async (req: Request) => {
                             body: JSON.stringify({ 
                                 number: customerPhone, 
                                 text: part, 
-                                delay: 1200 
+                                delay: 400 
                             }) 
                         });
                         if (!res.ok) console.error(`[Evolution] Failed to send text: ${res.status} ${await res.text()}`);

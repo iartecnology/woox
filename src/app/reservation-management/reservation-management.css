@@ -608,7 +608,7 @@
 .chat-name {
     font-weight: 700;
     font-size: 0.95rem;
-    color: #111827;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -646,7 +646,7 @@
 .status-pill-small.confirmed { background: #E6F4EA; color: #137333; }
 .status-pill-small.pending { background: #FFF4E5; color: #B45309; }
 .status-pill-small.cancelled { background: #FCE8E6; color: #C5221F; }
-.status-pill-small.no-show { background: #F3F4F6; color: #374151; }
+.status-pill-small.no-show { background: #F3F4F6; color: var(--text-primary); }
 
 .offcanvas {
     position: fixed;
@@ -723,7 +723,7 @@
     margin: 0;
     font-size: 1.1rem;
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .offcanvas-body {
@@ -1146,7 +1146,7 @@
 .wizard-modal h2 {
     font-size: 28px;
     margin-bottom: 10px;
-    color: #111827;
+    color: var(--text-primary);
     letter-spacing: -0.025em;
 }
 

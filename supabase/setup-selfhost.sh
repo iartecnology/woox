@@ -36,9 +36,10 @@ cp .env.example .env
 DB_PASS=$(openssl rand -hex 16)
 JWT_SEC=$(openssl rand -hex 32)
 
-# Modificar archivo .env con contraseñas seguras
+# Modificar archivo .env con contraseñas seguras y puerto libre
 sed -i.bak "s/POSTGRES_PASSWORD=.*$/POSTGRES_PASSWORD=$DB_PASS/g" .env
 sed -i.bak "s/JWT_SECRET=.*$/JWT_SECRET=$JWT_SEC/g" .env
+sed -i.bak "s/POSTGRES_PORT=.*$/POSTGRES_PORT=54322/g" .env
 
 # Generar claves JWT usando Python (HS256)
 echo "🔑 Generando claves JWT para anon y service_role..."

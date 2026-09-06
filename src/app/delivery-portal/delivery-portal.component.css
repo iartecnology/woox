@@ -62,7 +62,7 @@
 
 .address {
     font-size: 0.95rem;
-    color: #374151;
+    color: var(--text-primary);
     margin-bottom: 16px;
     line-height: 1.4;
 }

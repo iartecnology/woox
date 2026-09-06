@@ -54,7 +54,7 @@
     font-size: 1.1rem;
     font-weight: 800;
     margin: 0;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .category-list {
@@ -75,7 +75,7 @@
 
 .category-list li:hover {
     background: #F9FAFB;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .category-list li.active {
@@ -236,7 +236,7 @@
     font-size: 1.75rem;
     font-weight: 800;
     margin: 0;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .header-text p {
@@ -385,7 +385,7 @@
     font-size: 1.1rem;
     font-weight: 700;
     margin: 0;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .price {
@@ -457,7 +457,7 @@
 
 .edit-btn {
     background: #F3F4F6;
-    color: #374151;
+    color: var(--text-primary);
     border: none;
 }
 
@@ -517,7 +517,7 @@
     font-size: 0.9rem;
     font-weight: 700;
     margin-bottom: 8px;
-    color: #374151;
+    color: var(--text-primary);
 }
 
 .form-row {

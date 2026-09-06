@@ -1,6 +1,6 @@
 export interface FlowNode {
   id: string;
-  type: 'start' | 'message' | 'question' | 'menu' | 'condition' | 'action' | 'ai_agent' | 'end' | 'ai_skill' | 'n8n' | 'mcp' | 'api' | 'memory_extract' | 'db_query' | 'set_variable' | 'switch' | 'delay' | 'business_hours' | 'semantic_router' | 'image_generator' | 'knowledge_query' | 'send_email' | 'transfer_operator' | 'wa_template' | 'catalog_search' | 'cart_summary' | 'order_checkout' | 'reservation_check' | 'reservation_create' | 'calendar_sync' | 'send_pdf';
+  type: 'start' | 'message' | 'question' | 'menu' | 'condition' | 'action' | 'ai_agent' | 'n8n_agent' | 'end' | 'ai_skill' | 'n8n' | 'mcp' | 'api' | 'memory_extract' | 'db_query' | 'set_variable' | 'switch' | 'delay' | 'business_hours' | 'semantic_router' | 'image_generator' | 'knowledge_query' | 'send_email' | 'transfer_operator' | 'wa_template' | 'catalog_search' | 'cart_summary' | 'order_checkout' | 'reservation_check' | 'reservation_create' | 'calendar_sync' | 'send_pdf';
   position: { x: number; y: number };
   data: {
     label: string;
@@ -25,6 +25,7 @@ export interface FlowNode {
     n8n_webhook_url?: string;
     n8n_wait_for_response?: boolean;
     mcp_server_id?: string;
+    mcp_server_url?: string;
     mcp_tool_name?: string;
     api_url?: string;
     api_method?: 'GET' | 'POST' | 'PUT';

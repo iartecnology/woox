@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { notifyMerchantAgents } from "./notifications.ts";
+import { resolveAIConfig, callUnifiedAI, type AIMessage, type AIToolDef } from "./ai-adapter.ts";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // HELPERS
@@ -57,6 +58,12 @@ function evaluateCondition(operator: string, varValue: string, targetValue: stri
     }
 }
 
+function formatPrice(amount: number | string): string {
+    const num = Number(amount);
+    if (isNaN(num)) return String(amount);
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(num).replace('COP', '').trim();
+}
+
 async function createOrderSafe(supabase: any, orderData: any) {
     const fullData = { 
         ...orderData, 
@@ -64,7 +71,6 @@ async function createOrderSafe(supabase: any, orderData: any) {
         closing_agent_type: orderData.closing_agent_type || 'bot' 
     };
     
-    // Asegurar que nombres y teléfonos se incluyan en el insert
     let { data, error } = await supabase.from('orders').insert(fullData).select('*').single();
 
     if (error && (error.message.includes('column') || error.message.includes('cache'))) {
@@ -84,6 +90,8 @@ async function createOrderSafe(supabase: any, orderData: any) {
         data = res.data;
         error = res.error;
     }
+    
+    if (error) console.error('[BOT-ENGINE] Error creando pedido:', error);
     return { data, error };
 }
 
@@ -284,17 +292,38 @@ async function executeAgentTool(
     switch (toolName) {
         case 'catalog_search': {
             const queryRaw = (toolArgs?.query || '').toLowerCase().trim();
-            const query = queryRaw.endsWith('s') ? queryRaw.slice(0, -1) : queryRaw; // Manejar plurales básicos
+            // Limpieza básica y manejo de plurales
+            const query = queryRaw.replace(/^(papas|una|un|el|la|los|las|quiero|ver|busca|hamburguesas?)\s+/i, '').replace(/s$/, '').trim() || queryRaw.replace(/s$/, '');
             
+            console.log(`[BOT-ENGINE] Catalog Search | Raw: "${queryRaw}" | Clean: "${query}"`);
+
+            // Sinonimos y traducciones comunes para mejorar la búsqueda semántica
+            const synonyms: Record<string, string[]> = {
+                'aguacate': ['avocado', 'guacamole', 'avocada'],
+                'avocado': ['aguacate', 'guacamole', 'avocada'],
+                'avocada': ['aguacate', 'avocado', 'guacamole'],
+                'guacamole': ['aguacate', 'avocado', 'avocada'],
+                'tocineta': ['bacon'],
+                'bacon': ['tocineta'],
+                'queso': ['cheese', 'colby', 'gouda', 'mozzarella'],
+                'cheese': ['queso'],
+                'carne': ['beef', 'angus', 'burger', 'hamburguesa'],
+                'pollo': ['chicken', 'bistecca'],
+                'chicken': ['pollo'],
+                'hamburguesa': ['burger', 'angus', 'beef'],
+                'burger': ['hamburguesa']
+            };
+
             // 1. Buscar categorías que coincidan (incluyendo subcategorías)
             const { data: cats } = await supabase.from('categories')
                 .select('id, name, parent_id')
                 .eq('merchant_id', merchantId)
-                .ilike('name', `%${query}%`);
+                .or(`name.ilike.%${query}%,name.ilike.%${queryRaw}%`);
             
             let allCatIds = (cats || []).map((c: any) => c.id);
+            console.log(`[BOT-ENGINE] Categorías encontradas:`, (cats || []).map(c => c.name));
             
-            // Si encontramos categorías, ver si alguna es padre para incluir sus hijos
+            // Si encontramos categorías, incluir subcategorías
             if (allCatIds.length > 0) {
                 const { data: subCats } = await supabase.from('categories')
                     .select('id')
@@ -304,76 +333,226 @@ async function executeAgentTool(
                 }
             }
 
-            // 2. Buscar productos (Por nombre, descripción o categoría/subcategoría)
-            let q = supabase.from('products').select('name, price, description, is_available').eq('merchant_id', merchantId).eq('is_available', true);
+            // 2. Buscar productos con estrategia multi-etapa (Exacta/Contiene -> Palabras individuales -> Categoría)
+            let q = supabase.from('products')
+                .select('id, name, price, description, is_available')
+                .eq('merchant_id', merchantId)
+                .eq('is_available', true);
             
-            if (allCatIds.length > 0) {
-                q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%,category_id.in.(${allCatIds.join(',')})`);
-            } else {
-                q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
+            // Construir filtro OR dinámico
+            const filters = [
+                `name.ilike.%${query}%`,
+                `description.ilike.%${query}%`
+            ];
+            if (queryRaw !== query) {
+                filters.push(`name.ilike.%${queryRaw}%`);
             }
-
-            const { data: prods } = await q.limit(10);
-
-            if (!prods || prods.length === 0) {
-                // Si no hay productos, ver si hay subcategorías para sugerir
-                if (cats && cats.length > 0) {
-                    const { data: listSub } = await supabase.from('categories').select('name').in('parent_id', cats.map((c: any) => c.id));
-                    if (listSub && listSub.length > 0) {
-                        return `En la categoría "${cats[0].name}" tenemos estas subcategorías:\n${listSub.map((s: any) => `• ${s.name}`).join('\n')}\n\n¿Cuál te interesa?`;
+            // Expandir filtros con palabras individuales (mínimo 3 caracteres)
+            const words = query.split(/\s+/).filter(w => w.length >= 3);
+            for (const w of words) {
+                const cleanWord = w.replace(/s$/, '');
+                filters.push(`name.ilike.%${cleanWord}%`);
+                if (synonyms[cleanWord]) {
+                    for (const syn of synonyms[cleanWord]) {
+                        filters.push(`name.ilike.%${syn}%`);
+                        filters.push(`description.ilike.%${syn}%`);
                     }
                 }
-                
-                // Sugerencia genérica: si no hay nada, mostrar los primeros 3
+            }
+            if (allCatIds.length > 0) {
+                filters.push(`category_id.in.(${allCatIds.join(',')})`);
+            }
+
+            let { data: prods, error: pErr } = await q.or(filters.join(',')).limit(6);
+
+            if (pErr) console.error('[BOT-ENGINE] Error en búsqueda de productos:', pErr);
+            
+            // Si la búsqueda estricta no trajo nada, buscar con coincidencia amplia
+            if (!prods || prods.length === 0) {
+                const broadFilters = words.map(w => `name.ilike.%${w.slice(0, 4)}%`);
+                if (broadFilters.length > 0) {
+                    const { data: fallbackProds } = await supabase.from('products')
+                        .select('id, name, price, description, is_available')
+                        .eq('merchant_id', merchantId)
+                        .eq('is_available', true)
+                        .or(broadFilters.join(','))
+                        .limit(4);
+                    if (fallbackProds && fallbackProds.length > 0) {
+                        prods = fallbackProds;
+                    }
+                }
+            }
+
+            console.log(`[BOT-ENGINE] Productos encontrados: ${prods?.length || 0}`);
+
+            if (!prods || prods.length === 0) {
+                // Sugerencia si no hay nada
                 const { data: others } = await supabase.from('products').select('name, price').eq('merchant_id', merchantId).eq('is_available', true).limit(3);
                 if (others && others.length > 0) {
-                   return `No encontré productos exactos para "${queryRaw}", pero te sugiero estos destacados:\n${others.map((p: any) => `• ${p.name} - $${p.price}`).join('\n')}`;
+                   return `No encontré productos específicos para "${queryRaw}", pero te sugiero estos destacados de nuestro menú:\n${others.map((p: any) => `• ${p.name} - $${formatPrice(p.price)}`).join('\n')}\n\n¿Te interesa alguno o buscas otra cosa?`;
                 }
-                return `No encontré productos que coincidan con "${queryRaw}". ¿Puedo intentar buscando otra cosa?`;
+                return `Lo siento, no encontré productos que coincidan con "${queryRaw}" en nuestro catálogo actual.`;
             }
             
-            const results = prods.map((p: any) => `• ${p.name} - $${p.price}${p.description ? ` (${p.description.substring(0, 40)})` : ''}`).join('\n');
-            return `He encontrado esto para ti:\n${results}${prods.length >= 10 ? '\n\n...y algunos más. ¿Buscas algo específico?' : ''}`;
+            const results = prods.map((p: any) => `• ${p.name} - $${formatPrice(p.price)}${p.description ? ` (${p.description.substring(0, 50)}...)` : ''}`).join('\n');
+            return `He encontrado estas opciones destacadas:\n${results}${prods.length >= 5 ? '\n\n...y algunos más. ¿Buscas algo específico?' : ''}`;
         }
 
         case 'inventory_check': {
             const queryRaw = (toolArgs?.query || toolArgs?.product_name || '').toLowerCase().trim();
-            // Limpieza de palabras comunes para búsqueda más flexible
             const query = queryRaw.replace(/^(papas|una|un|el|la|los|las|quiero|ver|busca)\s+/i, '').replace(/s$/, '');
 
-            const { data: prod } = await supabase
+            const synonyms: Record<string, string[]> = {
+                'aguacate': ['avocado', 'guacamole', 'avocada'],
+                'avocado': ['aguacate', 'guacamole', 'avocada'],
+                'avocada': ['aguacate', 'avocado', 'guacamole'],
+                'guacamole': ['aguacate', 'avocado', 'avocada'],
+                'tocineta': ['bacon'],
+                'bacon': ['tocineta'],
+                'queso': ['cheese', 'colby', 'gouda', 'mozzarella'],
+                'cheese': ['queso'],
+                'carne': ['beef', 'angus', 'burger', 'hamburguesa'],
+                'pollo': ['chicken', 'bistecca'],
+                'chicken': ['pollo'],
+                'hamburguesa': ['burger', 'angus', 'beef'],
+                'burger': ['hamburguesa']
+            };
+
+            const filters = [
+                `name.ilike.%${query}%`,
+                `description.ilike.%${query}%`
+            ];
+            const words = query.split(/\s+/);
+            for (const w of words) {
+                const cleanWord = w.replace(/s$/, '');
+                if (synonyms[cleanWord]) {
+                    for (const syn of synonyms[cleanWord]) {
+                        filters.push(`name.ilike.%${syn}%`);
+                        filters.push(`description.ilike.%${syn}%`);
+                    }
+                }
+            }
+
+            const { data: prods } = await supabase
                 .from('products')
                 .select('name, is_available, price')
                 .eq('merchant_id', merchantId)
-                .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
-                .limit(1)
-                .maybeSingle();
+                .or(filters.join(','));
 
-            if (!prod) return `No encontré información de disponibilidad para "${queryRaw}".`;
-            return prod.is_available
-                ? `✅ ${prod.name}: Disponible a $${formatPrice(prod.price)}`
-                : `❌ ${prod.name}: No disponible actualmente.`;
+            if (!prods || prods.length === 0) return `No encontré información de disponibilidad para "${queryRaw}".`;
+            
+            // Buscar mejor coincidencia
+            let bestProd = prods[0];
+            let maxOverlap = 0;
+            const queryWords = query.split(/\s+/);
+            for (const p of prods) {
+                const nameLower = p.name.toLowerCase();
+                if (nameLower === query || nameLower.includes(query)) {
+                    bestProd = p;
+                    break;
+                }
+                let overlap = 0;
+                for (const qw of queryWords) {
+                    if (nameLower.includes(qw)) overlap++;
+                }
+                if (overlap > maxOverlap) {
+                    maxOverlap = overlap;
+                    bestProd = p;
+                }
+            }
+
+            return bestProd.is_available
+                ? `✅ ${bestProd.name}: Disponible a $${formatPrice(bestProd.price)}`
+                : `❌ ${bestProd.name}: No disponible actualmente.`;
         }
 
         case 'add_to_cart': {
             const queryRaw = (toolArgs?.product_name || toolArgs?.query || '').toLowerCase().trim();
             const quantity = parseInt(toolArgs?.quantity) || 1;
             const notes = toolArgs?.notes || '';
-            
-            // Limpieza de palabras comunes para búsqueda más flexible
-            const query = queryRaw.replace(/^(papas|una|un|el|la|los|las|quiero|ver|busca)\s+/i, '').replace(/s$/, '');
+            const query = queryRaw.replace(/^(papas|una|un|el|la|los|las|quiero|ver|busca|agregar|agrega|dame)\s+/i, '').replace(/s$/, '').trim();
 
-            const { data: prod } = await supabase
+            const synonyms: Record<string, string[]> = {
+                'aguacate': ['avocado', 'guacamole', 'avocada'],
+                'avocado': ['aguacate', 'guacamole', 'avocada'],
+                'avocada': ['aguacate', 'avocado', 'guacamole'],
+                'guacamole': ['aguacate', 'avocado', 'avocada'],
+                'tocineta': ['bacon'],
+                'bacon': ['tocineta'],
+                'queso': ['cheese', 'colby', 'gouda', 'mozzarella'],
+                'cheese': ['queso'],
+                'carne': ['beef', 'angus', 'burger', 'hamburguesa'],
+                'pollo': ['chicken', 'bistecca'],
+                'chicken': ['pollo'],
+                'hamburguesa': ['burger', 'angus', 'beef'],
+                'burger': ['hamburguesa']
+            };
+
+            const filters = [
+                `name.ilike.%${query}%`,
+                `description.ilike.%${query}%`
+            ];
+            if (queryRaw && queryRaw !== query) {
+                filters.push(`name.ilike.%${queryRaw}%`);
+            }
+            const words = query.split(/\s+/).filter(w => w.length >= 3);
+            for (const w of words) {
+                const cleanWord = w.replace(/s$/, '');
+                filters.push(`name.ilike.%${cleanWord}%`);
+                if (synonyms[cleanWord]) {
+                    for (const syn of synonyms[cleanWord]) {
+                        filters.push(`name.ilike.%${syn}%`);
+                        filters.push(`description.ilike.%${syn}%`);
+                    }
+                }
+            }
+
+            let { data: prods } = await supabase
                 .from('products')
                 .select('id, name, price, is_available')
                 .eq('merchant_id', merchantId)
-                .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
                 .eq('is_available', true)
-                .limit(1)
-                .maybeSingle();
+                .or(filters.join(','));
             
-            if (!prod) return `No encontré el producto "${queryRaw}" en nuestro catálogo o no está disponible.`;
+            // Fallback si no encuentra por palabras completas
+            if (!prods || prods.length === 0) {
+                const broadTerms = words.map(w => `name.ilike.%${w.slice(0, 4)}%`);
+                if (broadTerms.length > 0) {
+                    const { data: fallbackProds } = await supabase.from('products')
+                        .select('id, name, price, is_available')
+                        .eq('merchant_id', merchantId)
+                        .eq('is_available', true)
+                        .or(broadTerms.join(','))
+                        .limit(3);
+                    if (fallbackProds && fallbackProds.length > 0) {
+                        prods = fallbackProds;
+                    }
+                }
+            }
             
+            if (!prods || prods.length === 0) return `No encontré el producto "${queryRaw}" en nuestro catálogo o no está disponible.`;
+            
+            // Encontrar la mejor coincidencia por similitud de nombre
+            let bestProd = prods[0];
+            let maxOverlap = 0;
+            const queryWords = query.split(/\s+/);
+            for (const p of prods) {
+                const nameLower = p.name.toLowerCase();
+                if (nameLower === query || nameLower.includes(query)) {
+                    bestProd = p;
+                    break;
+                }
+                let overlap = 0;
+                for (const qw of queryWords) {
+                    if (nameLower.includes(qw)) overlap++;
+                }
+                if (overlap > maxOverlap) {
+                    maxOverlap = overlap;
+                    bestProd = p;
+                }
+            }
+
+            const prod = bestProd;
             const cart = variables['cart'] || [];
             const existing = cart.find((i: any) => i.id === prod.id);
             
@@ -415,8 +594,19 @@ async function executeAgentTool(
             const address = toolArgs?.address || variables['direccion_entrega'];
 
             const isInvalidField = (v: any) => !v || typeof v !== 'string' || v.trim() === '' || /^(\.{2,}|no\s*(disponible|aplica|s[ée])|n\/a|por confirmar)$/i.test(v.trim());
-            if (isInvalidField(clientName) || isInvalidField(clientPhone) || isInvalidField(address)) {
-                return 'Aún me falta un dato real para poder registrar tu pedido (nombre completo, teléfono o dirección de entrega). ¿Me lo confirmas?';
+            
+            // Persistir datos parciales si vienen en la llamada
+            if (toolArgs?.customer_name && !isInvalidField(toolArgs.customer_name)) variables['customer_name'] = toolArgs.customer_name;
+            if (toolArgs?.customer_phone && !isInvalidField(toolArgs.customer_phone)) variables['customer_phone'] = toolArgs.customer_phone;
+            if (toolArgs?.address && !isInvalidField(toolArgs.address)) variables['direccion_entrega'] = toolArgs.address;
+
+            const missing: string[] = [];
+            if (isInvalidField(clientName)) missing.push('tu nombre completo');
+            if (isInvalidField(clientPhone)) missing.push('tu número de celular');
+            if (isInvalidField(address)) missing.push('tu dirección de entrega');
+
+            if (missing.length > 0) {
+                return `Para completar el pedido de tu carrito ($${formatPrice(total)}), por favor confírmame ${missing.join(', ')}.`;
             }
 
             // Actualizar tabla de clientes si tenemos nuevos datos
@@ -560,6 +750,11 @@ async function executeAgentTool(
             return `Perfecto, te conectaré con uno de nuestros asesores en breve. Por favor espera un momento.`;
         }
 
+        case 'checkout_trigger': {
+            variables['_exit_ai_agent'] = true;
+            return "SUCCESS: El cliente ha terminado de pedir. Responde con un mensaje corto (ej: '¡Perfecto! Vamos a finalizar.') y NO uses más herramientas. El sistema pedirá los datos a continuación.";
+        }
+
         default:
             return `No pude ejecutar la acción "${toolName}".`;
     }
@@ -571,7 +766,7 @@ async function executeAgentTool(
 const TOOL_DEFINITIONS: Record<string, any> = {
     catalog_search: {
         name: 'catalog_search',
-        description: 'Busca productos o categorías en el catálogo. Úsala cuando el cliente pregunte por lo que vendemos, pida una categoría (ej: "bebidas") o busque un producto específico. La búsqueda incluye subcategorías automáticamente.',
+        description: 'BUSCA PRODUCTOS AHORA. Úsala inmediatamente cuando el cliente mencione un producto, plato o categoría. Devuelve nombres, precios y descripciones reales. Es obligatorio usarla para saber qué vendemos.',
         parameters: {
             type: 'object',
             properties: {
@@ -582,7 +777,7 @@ const TOOL_DEFINITIONS: Record<string, any> = {
     },
     inventory_check: {
         name: 'inventory_check',
-        description: 'Consulta si un producto específico está disponible actualmente.',
+        description: 'VERIFICA STOCK. Consulta si un producto específico está disponible ahora mismo.',
         parameters: {
             type: 'object',
             properties: {
@@ -593,7 +788,7 @@ const TOOL_DEFINITIONS: Record<string, any> = {
     },
     add_to_cart: {
         name: 'add_to_cart',
-        description: 'Añade un producto al carrito del cliente. Úsala cuando el cliente elija un producto o indique que quiere comprarlo. Puedes incluir notas especiales (ej: "sin cebolla").',
+        description: 'AÑADE AL CARRITO. Ejecuta esta herramienta en cuanto el cliente confirme que quiere un producto. No preguntes permiso para usar la herramienta, solo confirma después de añadirlo.',
         parameters: {
             type: 'object',
             properties: {
@@ -607,7 +802,7 @@ const TOOL_DEFINITIONS: Record<string, any> = {
     get_cart: {
         name: 'get_cart',
         description: 'Muestra el contenido actual del carrito del cliente con precios y total. Úsala cuando el cliente quiera ver su pedido o pregunte por su carrito.',
-        parameters: { type: 'object', properties: {} }
+        parameters: { type: 'object', properties: {}, required: [] }
     },
     remove_from_cart: {
         name: 'remove_from_cart',
@@ -629,7 +824,8 @@ const TOOL_DEFINITIONS: Record<string, any> = {
                 address: { type: 'string', description: 'Dirección de entrega' },
                 customer_name: { type: 'string', description: 'Nombre completo del cliente' },
                 customer_phone: { type: 'string', description: 'Número de teléfono de contacto' }
-            }
+            },
+            required: ['address', 'customer_name', 'customer_phone']
         }
     },
     order_status: {
@@ -639,13 +835,14 @@ const TOOL_DEFINITIONS: Record<string, any> = {
             type: 'object',
             properties: {
                 order_id: { type: 'string', description: 'Número o ID del pedido a consultar' }
-            }
+            },
+            required: ['order_id']
         }
     },
     transfer_human: {
         name: 'transfer_human',
         description: 'Transfiere la conversación a un agente humano. Úsala cuando el cliente lo solicite explícitamente o cuando no puedas resolver su consulta.',
-        parameters: { type: 'object', properties: {} }
+        parameters: { type: 'object', properties: {}, required: [] }
     },
     get_available_slots: {
         name: 'get_available_slots',
@@ -763,10 +960,92 @@ async function processPureAI(supabase: any, merchantId: string, conversationId: 
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MODO SIMULADOR: Usa el flow_data enviado desde el frontend
+// en lugar de cargarlo desde la base de datos.
+// Esto garantiza que el Simulador y WhatsApp usen EL MISMO MOTOR.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+export async function processBotFlowWithOverride(
+    supabase: any,
+    merchantId: string,
+    conversationId: string,
+    messageText: string,
+    customerId: string,
+    flowDataOverride: any,   // El flow_data completo (nodos + conexiones) del editor
+    flowIdOverride: string,  // ID del flujo (o 'simulator')
+    nodeContextOverride?: string  // Prompt del nodo IA activo (si aplica)
+): Promise<string> {
+    console.log(`[BOT-ENGINE] [SIMULATOR] Procesando: "${messageText}" | conv: ${conversationId}`);
+
+    const nodes = flowDataOverride?.nodes || [];
+    const connections = flowDataOverride?.connections || [];
+
+    const startNode = nodes.find((n: any) => n.type === 'start');
+    if (!startNode) return "Error: El flujo no tiene nodo de inicio.";
+
+    // Obtener o crear sesión usando el flow_id del simulador
+    const { data: session, error: sessionErr } = await supabase.rpc('get_or_create_bot_session', {
+        p_conversation_id: conversationId,
+        p_merchant_id: merchantId,
+        p_flow_id: flowIdOverride,
+        p_start_node_id: startNode.id
+    });
+
+    if (sessionErr || !session) {
+        console.error('[BOT-ENGINE][SIMULATOR] Error de sesión:', sessionErr);
+        return `Error al gestionar la sesión: ${sessionErr?.message || 'Error desconocido'}`;
+    }
+
+    // Guardar el mensaje en el historial para el simulador
+    await supabase.from('bot_flow_history').insert({
+        session_id: session.id,
+        role: 'user',
+        content: messageText
+    });
+
+    let currentNodeId: string | null = session.current_node_id;
+    let variables: any = session.variables || {};
+    let waitingFor: string | null = session.waiting_for;
+
+    // Inyectar datos del comercio en variables
+    const { data: merchantData } = await supabase.from('merchants').select('name, menu_pdf_url').eq('id', merchantId).single();
+    if (merchantData) {
+        variables['merchantName'] = merchantData.name;
+        variables['merchant_name'] = merchantData.name;
+        variables['merchant_menu_pdf'] = merchantData.menu_pdf_url || '';
+        variables['menu_pdf'] = merchantData.menu_pdf_url || '';
+    }
+
+    // Si el nodo de IA tiene un contexto específico, inyectarlo en las variables
+    // para que el engine lo use en el system prompt
+    if (nodeContextOverride) {
+        variables['__node_context_override'] = nodeContextOverride;
+    }
+
+    // Delegar al procesador de flujos principal (reutiliza toda la lógica de bot-engine.ts)
+    // pasando el flujo desde memoria en lugar de desde BD
+    return await _processFlowFromState(
+        supabase, merchantId, conversationId, messageText, customerId,
+        nodes, connections, session, currentNodeId, variables, waitingFor,
+        flowIdOverride
+    );
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // FUNCIÓN PRINCIPAL
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function processBotFlow(supabase: any, merchantId: string, conversationId: string, messageText: string, customerId: string) {
+
     console.log(`[BOT-ENGINE] Procesando: "${messageText}" | conv: ${conversationId}`);
+
+    // LOG USER MESSAGE TO HISTORY
+    const { data: sessionDataForHistory } = await supabase.from('bot_flow_sessions').select('id').eq('conversation_id', conversationId).maybeSingle();
+    if (sessionDataForHistory) {
+        await supabase.from('bot_flow_history').insert({
+            session_id: sessionDataForHistory.id,
+            role: 'user',
+            content: messageText
+        });
+    }
 
     // 1. Obtener flujo activo
     const { data: flow, error: flowErr } = await supabase.rpc('get_active_bot_flow', { p_merchant_id: merchantId });
@@ -780,7 +1059,10 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
 
     // 2. Obtener o crear sesión
     const startNode = nodes.find((n: any) => n.type === 'start');
-    if (!startNode) return "Error: El flujo no tiene nodo de inicio.";
+    if (!startNode) {
+        console.error('[BOT-ENGINE] Flujo sin nodo de inicio:', flow.id);
+        return "Error: El flujo no tiene nodo de inicio.";
+    }
 
     const { data: session, error: sessionErr } = await supabase.rpc('get_or_create_bot_session', {
         p_conversation_id: conversationId,
@@ -788,13 +1070,13 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
         p_flow_id: flow.id,
         p_start_node_id: startNode.id
     });
-    if (sessionErr || !session) return "Error al gestionar la sesión del bot.";
 
-    let currentNodeId: string | null = session.current_node_id;
+    if (sessionErr || !session) {
+        console.error('[BOT-ENGINE] Error de sesión:', sessionErr);
+        return `Error al gestionar la sesión: ${sessionErr?.message || 'Error desconocido'}`;
+    }
+
     let variables: any = session.variables || {};
-    let waitingFor: string | null = session.waiting_for;
-
-    // Cargar nombre del comercio en variables para resolver {{merchantName}}
     const { data: merchantData } = await supabase.from('merchants').select('name, menu_pdf_url').eq('id', merchantId).single();
     if (merchantData) {
         variables['merchantName'] = merchantData.name;
@@ -802,7 +1084,23 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
         variables['merchant_menu_pdf'] = merchantData.menu_pdf_url || '';
         variables['menu_pdf'] = merchantData.menu_pdf_url || '';
     }
-    // 3. Procesar la respuesta del usuario según el estado anterior
+
+    return await _processFlowFromState(
+        supabase, merchantId, conversationId, messageText, customerId,
+        nodes, connections, session, session.current_node_id, variables, session.waiting_for, flow.id
+    );
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MOTOR COMPARTIDO: Producción + Simulador
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function _processFlowFromState(
+    supabase: any, merchantId: string, conversationId: string,
+    messageText: string, customerId: string,
+    nodes: any[], connections: any[], session: any,
+    currentNodeId: string | null, variables: any,
+    waitingFor: string | null, flowId: string
+): Promise<string> {
     if (waitingFor === 'menu_selection') {
         const currentNode = nodes.find((n: any) => n.id === currentNodeId);
         if (currentNode?.type === 'menu') {
@@ -876,13 +1174,9 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
             waitingFor = null;
         }
     } else if (waitingFor === 'ai_input') {
-        // El AI Agent recibe el nuevo mensaje del usuario
-        // Solo reseteamos el waitingFor para que el loop principal vuelva a ejecutar el nodo ai_agent
-        // con el mismo currentNodeId, y messageText ya contiene el nuevo mensaje del usuario
         const currentNode = nodes.find((n: any) => n.id === currentNodeId);
         if (currentNode?.type === 'ai_agent') {
             waitingFor = null;
-            // currentNodeId permanece igual: el loop ejecutará el nodo ai_agent
         }
     } else if (waitingFor === 'condition') {
         waitingFor = null;
@@ -892,6 +1186,11 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
     const messagesToReturn: string[] = [];
     let loopCount = 0;
     const MAX_LOOPS = 20;
+
+    // Variables de compatibilidad para los bloques n8n_agent que las referencian
+    const sessionId: string = session.id;
+    const lastUserMessage: string = messageText;
+    const historyLogs: any[] = []; // Historial simplificado para n8n (sin acceso a BD aquí)
 
     const debugLogs: string[] = [];
     while (currentNodeId && loopCount < MAX_LOOPS) {
@@ -916,228 +1215,236 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
         }
 
         // ── AGENTE IA (CON FUNCTION CALLING REAL) ───
+        // ── AGENTE N8N GLOBAL ───────────────────────
+        if (node.type === 'n8n_agent') {
+            console.log(`[ENGINE] Nodo Agente n8n: ${node.data.n8n_webhook_url}`);
+            const webhookUrl = node.data.n8n_webhook_url;
+            if (!webhookUrl) {
+                console.error("[ENGINE] No webhook URL for n8n_agent");
+                break;
+            }
+
+            try {
+                // Preparar historial simplificado para n8n
+                const history = historyLogs.slice(-10).map(h => ({
+                    role: h.sender === 'bot' ? 'assistant' : 'user',
+                    content: h.message
+                }));
+
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        merchant_id: merchantId,
+                        customer_id: customerId,
+                        session_id: sessionId,
+                        message: lastUserMessage,
+                        history,
+                        mcp_server: node.data.mcp_server_url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-woox?merchant_id=${merchantId}`,
+                        prompt: node.data.prompt
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const aiText = data.output || data.text || data.message || "";
+                    if (aiText) {
+                        messagesToReturn.push(aiText);
+                    }
+                    
+                    // n8n puede devolver variables para actualizar en Woox
+                    if (data.variables) {
+                        Object.assign(variables, data.variables);
+                    }
+
+                    // IMPORTANTE: Si n8n responde, nos quedamos en este nodo para el siguiente mensaje
+                    // a menos que el flujo tenga una conexión de salida explícita y n8n haya terminado su tarea.
+                    if (data.action === 'next') {
+                        const conn = connections.find((c: any) => c.from === currentNodeId && (c.fromPort === 'output' || !c.fromPort));
+                        if (conn) { currentNodeId = conn.to; continue; } else break;
+                    } else if (data.action === 'stop') {
+                        break;
+                    } else {
+                        // Por defecto, nos quedamos aquí para seguir conversando con n8n
+                        break; 
+                    }
+                } else {
+                    console.error(`[ENGINE] n8n error: ${response.status}`);
+                    break;
+                }
+            } catch (err) {
+                console.error('[ENGINE] n8n_agent fetch error:', err);
+                break;
+            }
+        }
+
         if (node.type === 'ai_agent') {
             const userTemplate = node.data.user_prompt || '{{message}}';
             const temp = node.data.temperature ?? 0.7;
             const memoryLimit = node.data.memory_limit ?? 6;
 
-            // Obtener API configurations (merchant primero, luego plataforma)
-            const { data: merchant } = await supabase.from('merchants').select('name, ai_api_key, ai_model').eq('id', merchantId).single();
-            const { data: platform } = await supabase.from('platform_settings').select('ai_api_key, ai_model').eq('id', 'global').maybeSingle();
-            
-            const apiKey = merchant?.ai_api_key || platform?.ai_api_key || Deno.env.get("GEMINI_API_KEY");
-
-            // Prioridad de modelo: 1. Configuración del comercio, 2. Configuración del bloque, 3. Configuración plataforma, 4. Fallback
-            const modelRaw = merchant?.ai_model || node.data.model || platform?.ai_model || 'gemini-1.5-flash';
-            const model = modelRaw.replace('models/', '');
-
-            if (!apiKey) {
-                messagesToReturn.push('⚠️ Configuración de IA no disponible. Contacta a soporte.');
-                waitingFor = 'ai_input'; break;
-            }
-
             try {
-                // 1. Obtener el Súper Prompt Centralizado (Reglas de Oro + Configuración Merchant)
-                const { data: compiledPrompt, error: promptErr } = await supabase.rpc('get_compiled_prompt', { 
-                    p_merchant_id: merchantId 
+                // ── 1. CONSULTAS PARALELAS A BD ────────────────────────────
+                const [merchantRes, platformRes, promptRes, histRes] = await Promise.all([
+                    supabase.from('merchants').select('name, ai_api_key, ai_keys, ai_model, ai_api_url, ai_provider').eq('id', merchantId).single(),
+                    supabase.from('platform_settings').select('ai_api_key, ai_model').eq('id', 'global').maybeSingle(),
+                    supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantId }),
+                    memoryLimit > 0
+                        ? supabase.from('bot_flow_history').select('role, content').eq('session_id', session.id).order('created_at', { ascending: false }).limit(memoryLimit)
+                        : Promise.resolve({ data: [] })
+                ]);
+
+                const merchant = merchantRes.data;
+                const platform = platformRes.data;
+                const compiledPrompt = promptRes.data;
+                const history = histRes.data ? histRes.data.reverse() : [];
+
+                if (promptRes.error) console.error('[BOT-ENGINE] Error al obtener prompt centralizado:', promptRes.error);
+
+                // ── 2. RESOLVER CONFIG DE IA (Adaptador Unificado) ─────────
+                const aiConfig = resolveAIConfig(merchant, node.data, platform, {
+                    temperature: temp,
+                    maxTokens: 1024
                 });
 
-                if (promptErr) console.error('[BOT-ENGINE] Error al obtener prompt centralizado:', promptErr);
+                if (!aiConfig.apiKey) {
+                    messagesToReturn.push('⚠️ Configuración de IA no disponible. Contacta a soporte.');
+                    waitingFor = 'ai_input'; break;
+                }
 
-                // 2. Construir Contexto dinámico de la sesión
-                const cart = variables['cart'] || [];
-                const cartSummary = cart.length > 0
-                    ? cart.map((it: any) => `${it.name} x${it.qty} ($${it.price * it.qty})`).join(', ')
-                    : 'vacío';
+                // ── 3. GUARDAR MENSAJE DEL USUARIO EN HISTORIAL ───────────
+                const { data: lastHist } = await supabase.from('bot_flow_history')
+                    .select('role, content')
+                    .eq('session_id', session.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
 
-                const customNodeInstructions = node.data.prompt || '';
-                
-                // 3. Ensamblar Prompt Final (Prioridad: Base Centralizada + Instrucciones del Nodo + Estado Actual)
+                if (!lastHist || (lastHist.role !== 'user' || lastHist.content !== messageText.trim())) {
+                    await supabase.from('bot_flow_history').insert({
+                        session_id: session.id,
+                        role: 'user',
+                        content: messageText.trim()
+                    });
+                    const { data: newHist } = await supabase.from('bot_flow_history')
+                        .select('role, content')
+                        .eq('session_id', session.id)
+                        .order('created_at', { ascending: false })
+                        .limit(memoryLimit);
+                    history.length = 0;
+                    if (newHist) history.push(...newHist.reverse());
+                }
+
+                // ── 4. CARGAR SKILLS (HERRAMIENTAS) ───────────────────────
+                const skillConns = connections.filter((c: any) => c.to === node.id && c.toPort === 'skills_in');
+                const skills = skillConns.map((c: any) => nodes.find((n: any) => n.id === c.from)).filter((n: any) => n?.type === 'ai_skill');
+                const toolDefs: AIToolDef[] = skills.map((s: any) => {
+                    const def = TOOL_DEFINITIONS[s.data.actionType];
+                    if (def) {
+                        const customized = { ...def };
+                        if (s.data.message) customized.description = s.data.message;
+                        return customized;
+                    }
+                    return null;
+                }).filter((d: any) => d !== null);
+
+                console.log(`[BOT-ENGINE] Skills cargadas: ${toolDefs.map(t => t.name).join(', ') || 'ninguna'}`);
+
+                // ── 5. CONSTRUIR SYSTEM PROMPT ────────────────────────────
                 const systemPrompt = `
 ${compiledPrompt || 'Eres un asistente de ventas amigable.'}
 
 ### INSTRUCCIONES ESPECÍFICAS DE ESTA ETAPA:
-${customNodeInstructions}
+${node.data.prompt || ''}
 
 ### INSTRUCCIONES OPERATIVAS:
-1. SIEMPRE usa las herramientas (tools) disponibles para obtener información real (no inventes datos).
-2. Para mostrar productos: usa catalog_search.
-3. Para añadir al carrito: usa add_to_cart.
-4. Para ver el carrito: usa get_cart.
-5. Para confirmar pedido: usa register_order SOLO con confirmación explícita.
-6. Mantén respuestas cortas, amigables y enfocadas a la venta.
-7. RECUERDA: Tienes prohibido negociar precios, inventar ingredientes o hablar de temas ajenos al negocio.
+1. USA LAS HERRAMIENTAS NATIVAS: No escribas el nombre de la herramienta en texto ni uses corchetes como [UPDATE_CART]. Usa la función técnica real de function calling.
+2. NO EXPLIQUES TUS ACCIONES: No digas "Voy a usar la herramienta...". Simplemente úsala y presenta los resultados.
+3. PRIORIZA EL CATÁLOGO: Solo ofrece productos que encuentres con catalog_search.
+4. AGREGAR AL CARRITO INMEDIATAMENTE: Si el cliente indica que quiere un producto (ej: 'quiero una real avocado', 'dame 2 clasicas', o afirmativo tras recomendar algo), DEBES llamar a la herramienta 'add_to_cart' de inmediato con su cantidad. No pidas confirmación doble para agregar; ¡agrégalo y confírmale con entusiasmo!
+5. CONFIRMA EL CARRITO ACTUAL: En cada respuesta tras agregar o consultar, menciona claramente qué productos están en el carrito y cuál es el total.
+6. CIERRE INTELIGENTE (HÍBRIDO vs AUTÓNOMO):
+   - Si dispones de la herramienta 'checkout_trigger' (flujo híbrido con formulario visual posterior): cuando el cliente diga 'eso es todo', 'nada más', 'quiero pagar', 'no' o termine de pedir, LLAMA INMEDIATAMENTE A 'checkout_trigger'. NO pidas nombre ni dirección en el chat.
+   - Si NO tienes 'checkout_trigger' pero sí 'register_order' (flujo autónomo): pide amablemente en un solo mensaje Nombre completo, Dirección y Celular. En cuanto te los proporcione, llama a 'register_order'. Tienes prohibido volver a listar el catálogo cuando el cliente ya te está dando sus datos.
+7. RESPUESTAS CORTAS: Sé amable, vendedor y mantén tus respuestas breves (máximo 3 párrafos).
+8. VERACIDAD ABSOLUTA: Toda información de ingredientes y precios debe provenir de 'catalog_search'. Prohibido inventar productos o negociar precios.
+9. MANEJO DE NEGATIVAS ('No'): Si el cliente responde 'no' a tu pregunta de si desea algo más, procede de inmediato a cerrar (usando 'checkout_trigger' si está presente, o pidiendo datos de envío). Nunca muestres el menú completo tras un 'no'.
 
 ### ESTADO ACTUAL DE LA SESIÓN:
 - Tienda: ${merchant?.name || 'Nuestra tienda'}
-- Carrito del cliente: ${cartSummary}
+- Carrito del cliente: ${variables['cart']?.length > 0 ? variables['cart'].map((it: any) => it.name + ' x' + it.qty + ' ($' + (it.price * it.qty) + ')').join(', ') : 'vacío'}
 - Número de pedido activo: ${variables['orderNumber'] || 'ninguno'}
+- Herramienta de cierre presente: ${toolDefs.some(t => t.name === 'checkout_trigger') ? 'checkout_trigger (Flujo Híbrido -> NO pedir datos en chat)' : (toolDefs.some(t => t.name === 'register_order') ? 'register_order (Cierre Autónomo -> Pedir datos en chat)' : 'ninguna')}
 `;
-
-                // Obtener historial de conversación para la memoria
-                let history: any[] = [];
-                if (memoryLimit > 0) {
-                    const { data: hist } = await supabase.from('messages')
-                        .select('sender_type, content')
-                        .eq('conversation_id', conversationId)
-                        .order('created_at', { ascending: false })
-                        .limit(memoryLimit);
-                    if (hist) history = hist.reverse();
-                }
-
-                const formattedHistory = history.map((m: any) => ({
-                    role: m.sender_type === 'customer' ? 'user' : 'model',
-                    parts: [{ text: m.content }]
-                }));
-
-                // Detectar skills conectadas al agente
-                const skillConns = connections.filter((c: any) => c.to === node.id && c.toPort === 'skills_in');
-                const skills = skillConns
-                    .map((c: any) => nodes.find((n: any) => n.id === c.from))
-                    .filter((n: any) => n?.type === 'ai_skill');
-
-                // Construir definiciones de tools para Gemini
-                const functionDeclarations: any[] = [];
-                if (skills.length > 0) {
-                    for (const skill of skills) {
-                        const toolDef = TOOL_DEFINITIONS[skill.data.actionType];
-                        if (toolDef) {
-                            // Usar descripción personalizada del nodo si existe
-                            const customizedDef = { ...toolDef };
-                            if (skill.data.message) customizedDef.description = skill.data.message;
-                            functionDeclarations.push(customizedDef);
-                        }
-                    }
-                }
-
                 const finalUserMessage = userTemplate.replace('{{message}}', messageText);
-                const contents = [
-                    ...formattedHistory,
-                    { role: 'user', parts: [{ text: finalUserMessage }] }
+
+                // ── 6. CONSTRUIR HISTORIAL EN FORMATO UNIVERSAL ───────────
+                const aiMessages: AIMessage[] = [
+                    { role: 'system', content: systemPrompt }
                 ];
 
-                let geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-                // ── LLAMADA 1: Gemini decide si responde directo o usa una tool ──
-                let aiRes = await fetch(geminiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        system_instruction: { parts: [{ text: systemPrompt }] },
-                        contents,
-                        tools: functionDeclarations.length > 0 ? [{ function_declarations: functionDeclarations }] : undefined,
-                        tool_config: functionDeclarations.length > 0 ? { function_calling_config: { mode: 'AUTO' } } : undefined,
-                        generationConfig: { temperature: temp, maxOutputTokens: 1024 }
-                    })
-                });
-
-                // Fallback 1: Si falla por v1beta, intentar v1 (pero v1 no siempre soporta system_instruction igual)
-                if (aiRes.status === 404) {
-                  console.warn('[BOT] v1beta 404, probando v1...');
-                  geminiUrl = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
-                  aiRes = await fetch(geminiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      system_instruction: { parts: [{ text: systemPrompt }] },
-                      contents,
-                      tools: functionDeclarations.length > 0 ? [{ function_declarations: functionDeclarations }] : undefined,
-                      generationConfig: { temperature: temp, maxOutputTokens: 1024 }
-                    })
-                  });
-                }
-
-                // Fallback 2: Si falla por "system_instruction" (error 400), mezclar prompt con mensaje en v1beta
-                if (aiRes.status === 400) {
-                  const errJson = await aiRes.clone().json().catch(() => ({}));
-                  if (JSON.stringify(errJson).includes('system_instruction') || JSON.stringify(errJson).includes('tools')) {
-                    console.warn('[BOT] El modelo no soporta system_instruction o tools, reintentando con blend...');
-                    geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                    aiRes = await fetch(geminiUrl, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        contents: [
-                          ...formattedHistory.slice(-4), // Usar historial corto para no saturar si es blend
-                          { role: 'user', parts: [{ text: `${systemPrompt}\n\nMENSAJE DEL USUARIO:\n${messageText}` }] }
-                        ],
-                        generationConfig: { temperature: temp, maxOutputTokens: 1024 }
-                      })
-                    });
-                  }
-                }
-
-                if (!aiRes.ok) {
-                    const errText = await aiRes.text();
-                    console.error('[BOT-ENGINE] Gemini API Error:', aiRes.status, errText);
-                    messagesToReturn.push('⚠️ Error al conectar con el servicio de IA. Intenta de nuevo.');
-                    waitingFor = 'ai_input'; break;
-                }
-
-                const aiData = await aiRes.json();
-                const candidate = aiData.candidates?.[0]?.content;
-
-                if (!candidate) {
-                    messagesToReturn.push('No pude generar una respuesta. ¿Puedes reformular tu pregunta?');
-                    waitingFor = 'ai_input'; break;
-                }
-
-                // ── FUNCIÓN CALL: El LLM quiere usar una o varias herramientas ──
-                const functionCallParts = candidate.parts?.filter((p: any) => p.functionCall);
-                
-                if (functionCallParts && functionCallParts.length > 0) {
-                    console.log(`[BOT-ENGINE] Gemini solicita ${functionCallParts.length} tools`);
-                    
-                    const toolContents = [...contents];
-                    toolContents.push(candidate); // La respuesta del LLM con los functionCalls
-
-                    // Procesar CADA tool solicitada
-                    for (const part of functionCallParts) {
-                        const call = part.functionCall;
-                        console.log(`[BOT-ENGINE] Ejecutando tool: ${call.name}`, call.args);
-
-                        const toolResult = await executeAgentTool(
-                            supabase, call.name, call.args, variables,
-                            merchantId, conversationId, customerId
-                        );
-                        
-                        toolContents.push({
-                            role: 'user', 
-                            parts: [{
-                                functionResponse: {
-                                    name: call.name,
-                                    response: { content: toolResult }
-                                }
-                            }]
-                        });
+                let lastMsgRole = 'system';
+                for (const m of (history || [])) {
+                    const role: 'user' | 'assistant' = m.role === 'user' ? 'user' : 'assistant';
+                    if (role !== lastMsgRole) {
+                        aiMessages.push({ role, content: m.content });
+                        lastMsgRole = role;
+                    } else if (aiMessages.length > 0) {
+                        aiMessages[aiMessages.length - 1].content += '\n' + m.content;
                     }
+                }
 
-                    // ── LLAMADA 2: Enviar todos los resultados al LLM para la respuesta final ──
-                    const secondRes = await fetch(geminiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            system_instruction: { parts: [{ text: systemPrompt }] },
-                            contents: toolContents,
-                            generationConfig: { temperature: temp, maxOutputTokens: 1024 }
-                        })
+                // Asegurar que el último mensaje sea del usuario
+                if (lastMsgRole !== 'user') {
+                    aiMessages.push({ role: 'user', content: finalUserMessage });
+                }
+
+                // ── 7. LLAMAR AL MODELO (ADAPTADOR UNIFICADO) ─────────────
+                const result = await callUnifiedAI(
+                    aiConfig,
+                    aiMessages,
+                    toolDefs,
+                    async (name: string, args: any) => {
+                        return await executeAgentTool(supabase, name, args, variables, merchantId, conversationId, customerId);
+                    }
+                );
+
+                // ── 8. PROCESAR RESULTADO ─────────────────────────────────
+                debugLogs.push(...result.debugLogs);
+
+                if (result.text) {
+                    messagesToReturn.push(result.text);
+                    await supabase.from('bot_flow_history').insert({
+                        session_id: session.id,
+                        role: 'assistant',
+                        content: result.text
                     });
-
-                    const secondData = await secondRes.json();
-                    const finalText = secondData.candidates?.[0]?.content?.parts?.[0]?.text;
-                    messagesToReturn.push(finalText || 'He procesado tus solicitudes.');
                 } else {
-                    // Respuesta directa del LLM sin herramientas
-                    const directText = candidate.parts?.find((p: any) => p.text)?.text;
-                    messagesToReturn.push(directText || 'Entiendo. ¿En qué más te puedo ayudar?');
+                    console.log('[BOT-ENGINE] Sin respuesta de texto del modelo.');
+                    const generic = `Lo siento, tuve un problema. DEBUG:\n${debugLogs.join('\n')}`;
+                    messagesToReturn.push(generic);
+                }
+
+                // ── 9. CHECKOUT TRIGGER (Válvula de Escape) ───────────────
+                if (variables['_exit_ai_agent']) {
+                    console.log('[BOT-ENGINE] AI Agent triggered exit via checkout_trigger. Avanzando al siguiente nodo.');
+                    delete variables['_exit_ai_agent'];
+                    const outConn = connections.find((c: any) => c.from === node.id && (c.fromPort === 'output' || !c.fromPort));
+                    if (outConn) {
+                        currentNodeId = outConn.to;
+                        continue; // Avanzar en el flujo
+                    } else {
+                        break;
+                    }
                 }
 
             } catch (err: any) {
                 console.error('[BOT-ENGINE] Error en AI Agent:', err);
-                messagesToReturn.push('Ocurrió un error procesando tu solicitud. Por favor intenta de nuevo.');
+                messagesToReturn.push(`Ocurrió un error procesando tu solicitud. Error: ${err.message || String(err)}`);
+                debugLogs.push(`[GLOBAL-AI-ERROR] ${err.message || String(err)}`);
             }
 
-            // El AI Agent siempre pausa para esperar el siguiente mensaje
+            // El AI Agent siempre pausa para esperar el siguiente mensaje a menos que se haya disparado el trigger
             waitingFor = 'ai_input';
             break;
         }
@@ -1180,8 +1487,8 @@ ${customNodeInstructions}
         // ── API REQUEST ──────────────────────────────
         if (node.type === 'api' && node.data.api_url) {
             console.log(`[BOT-ENGINE] Llamada API: [${node.data.api_method || 'GET'}] ${node.data.api_url}`);
-            let url = resolveVariables(node.data.api_url, variables, flow.name);
-            let body = node.data.api_body ? resolveVariables(node.data.api_body, variables, flow.name) : undefined;
+            let url = resolveVariables(node.data.api_url, variables, variables['merchant_name']);
+            let body = node.data.api_body ? resolveVariables(node.data.api_body, variables, variables['merchant_name']) : undefined;
             
             try {
                 const opts: RequestInit = {
@@ -1208,8 +1515,8 @@ ${customNodeInstructions}
 
         // ── ENVIAR PDF ───────────────────────────────
         if (node.type === 'send_pdf' && node.data.pdf_url) {
-            const pdfUrl = resolveVariables(node.data.pdf_url, variables, flow.name);
-            const pdfCaption = node.data.pdf_caption ? resolveVariables(node.data.pdf_caption, variables, flow.name) : '';
+            const pdfUrl = resolveVariables(node.data.pdf_url, variables, variables['merchant_name']);
+            const pdfCaption = node.data.pdf_caption ? resolveVariables(node.data.pdf_caption, variables, variables['merchant_name']) : '';
             console.log(`[BOT-ENGINE] Resolviendo PDF: ${pdfUrl}`);
             if (pdfUrl) {
                 messagesToReturn.push(`[PDF:${pdfUrl}:${pdfCaption}]`);
@@ -1221,7 +1528,7 @@ ${customNodeInstructions}
         // ── CATEGORÍA 2: CONTEXTO Y MEMORIA ──────────
         if (node.type === 'memory_extract' && node.data.memory_prompt && node.data.memory_key) {
             console.log(`[BOT-ENGINE] Extrayendo a memoria clave: ${node.data.memory_key}`);
-            const prompt = resolveVariables(node.data.memory_prompt, variables, flow.name);
+            const prompt = resolveVariables(node.data.memory_prompt, variables, variables['merchant_name']);
             const key = node.data.memory_key;
             
             // Reusar API Key para extracción si está disp.
@@ -1249,7 +1556,7 @@ ${customNodeInstructions}
 
         if (node.type === 'set_variable' && node.data.variable_name) {
             const key = node.data.variable_name;
-            const val = resolveVariables(node.data.variable_value || '', variables, flow.name);
+            const val = resolveVariables(node.data.variable_value || '', variables, variables['merchant_name']);
             variables[key] = val;
             console.log(`[BOT-ENGINE] Set Variable: ${key} = ${val}`);
         }
@@ -1258,7 +1565,7 @@ ${customNodeInstructions}
             console.log(`[BOT-ENGINE] DB Query: ${node.data.db_operation} en ${node.data.db_table}`);
             const op = node.data.db_operation || 'select';
             const col = node.data.db_column || 'id';
-            const rawVal = resolveVariables(node.data.db_value || '', variables, flow.name);
+            const rawVal = resolveVariables(node.data.db_value || '', variables, variables['merchant_name']);
             
             try {
                 if (op === 'select') {
@@ -1381,9 +1688,9 @@ ${customNodeInstructions}
         }
 
         if (node.type === 'send_email') {
-            const to = resolveVariables(node.data.email_to || '', variables, flow.name);
-            const subject = resolveVariables(node.data.email_subject || '', variables, flow.name);
-            const body = resolveVariables(node.data.email_body || '', variables, flow.name);
+            const to = resolveVariables(node.data.email_to || '', variables, variables['merchant_name']);
+            const subject = resolveVariables(node.data.email_subject || '', variables, variables['merchant_name']);
+            const body = resolveVariables(node.data.email_body || '', variables, variables['merchant_name']);
             console.log(`[BOT-ENGINE] Sending email to ${to}: ${subject}`);
             // Mock send
             const conn = connections.find((c: any) => c.from === currentNodeId && (c.fromPort === 'output' || !c.fromPort));
@@ -1399,7 +1706,7 @@ ${customNodeInstructions}
 
         if (node.type === 'wa_template') {
             const template = node.data.wa_template_name;
-            const params = node.data.wa_template_params?.map((p: string) => resolveVariables(p, variables, flow.name)) || [];
+            const params = node.data.wa_template_params?.map((p: string) => resolveVariables(p, variables, variables['merchant_name'])) || [];
             console.log(`[BOT-ENGINE] Sending WA Template ${template} with params:`, params);
             // Mock send
             const conn = connections.find((c: any) => c.from === currentNodeId && (c.fromPort === 'output' || !c.fromPort));
@@ -1407,7 +1714,7 @@ ${customNodeInstructions}
         }
 
         if (node.type === 'catalog_search') {
-            const query = node.data.query ? resolveVariables(node.data.query, variables, flow.name) : '';
+            const query = node.data.query ? resolveVariables(node.data.query, variables, variables['merchant_name']) : '';
             console.log(`[BOT-ENGINE] Manual Catalog Search: query="${query}"`);
             
             // Reusar la lógica de búsqueda de la herramienta para consistencia
@@ -1423,9 +1730,9 @@ ${customNodeInstructions}
             if (cart.length === 0) {
                 messagesToReturn.push('🛍️ Tu carrito está vacío.');
             } else {
-                const summary = cart.map((it: any) => `- ${it.name} x${it.qty} ($${it.price * it.qty})`).join('\n');
+                const summary = cart.map((it: any) => it.name + ' x' + it.qty + ' ($' + (it.price * it.qty) + ')').join('\n');
                 const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
-                messagesToReturn.push(`🛍️ Resumen de tu carrito:\n\n${summary}\n\n💰 *Total: $${total}*`);
+                messagesToReturn.push('🛍️ Resumen de tu carrito:\n\n' + summary + '\n\n💰 *Total: $' + total + '*');
             }
             const conn = connections.find((c: any) => c.from === currentNodeId && (c.fromPort === 'output' || !c.fromPort));
             if (conn) { currentNodeId = conn.to; continue; } else break;
@@ -1450,8 +1757,8 @@ ${customNodeInstructions}
         if (node.type === 'reservation_check') {
             console.log(`[BOT-ENGINE] Nodo Reserva Check: ${node.data.resource_id}`);
             const resourceId = node.data.resource_id;
-            const startStr = resolveVariables(node.data.start_time || '{{fecha_cita}} {{hora_cita}}', variables, flow.name);
-            const pax = parseInt(resolveVariables(node.data.pax || '1', variables, flow.name)) || 1;
+            const startStr = resolveVariables(node.data.start_time || '{{fecha_cita}} {{hora_cita}}', variables, variables['merchant_name']);
+            const pax = parseInt(resolveVariables(node.data.pax || '1', variables, variables['merchant_name'])) || 1;
             
             const start = new Date(startStr.replace(' ', 'T'));
             if (!isNaN(start.getTime())) {
@@ -1477,8 +1784,8 @@ ${customNodeInstructions}
         if (node.type === 'reservation_create') {
             console.log(`[BOT-ENGINE] Nodo Reserva Create: ${node.data.resource_id}`);
             const resourceId = node.data.resource_id;
-            const startStr = resolveVariables(node.data.start_time || '{{fecha_cita}} {{hora_cita}}', variables, flow.name);
-            const pax = parseInt(resolveVariables(node.data.pax || '1', variables, flow.name)) || 1;
+            const startStr = resolveVariables(node.data.start_time || '{{fecha_cita}} {{hora_cita}}', variables, variables['merchant_name']);
+            const pax = parseInt(resolveVariables(node.data.pax || '1', variables, variables['merchant_name'])) || 1;
             
             const start = new Date(startStr.replace(' ', 'T'));
             if (!isNaN(start.getTime())) {
@@ -1518,7 +1825,7 @@ ${customNodeInstructions}
 
         // ── MENSAJE ──────────────────────────────────
         if (node.data.message) {
-            let msg = resolveVariables(node.data.message, variables, flow.name);
+            let msg = resolveVariables(node.data.message, variables, variables['merchant_name']);
             console.log(`[BOT-ENGINE] Mensaje antes de opciones: "${msg}" (Node: ${node.id}, Type: ${node.type})`);
             if (node.type === 'menu' && node.data.options) {
                 const optionsList = node.data.options.map((o: any, i: number) => `${i + 1}️⃣  ${o.text}`).join('\n');
@@ -1554,13 +1861,29 @@ ${customNodeInstructions}
     }).eq('id', session.id);
 
     // Guardar logs de depuración en la conversación
-    const { data: currentConv } = await supabase.from('conversations').select('metadata').eq('id', conversationId).single();
-    await supabase.from('conversations').update({
-        metadata: { 
-            ...(currentConv?.metadata || {}), 
-            bot_debug: debugLogs.slice(-10) 
+    try {
+        const { data: currentConv } = await supabase.from('conversations').select('typing_data').eq('id', conversationId).maybeSingle();
+        if (currentConv) {
+            await supabase.from('conversations').update({
+                typing_data: { 
+                    ...(currentConv?.typing_data || {}), 
+                    bot_debug: debugLogs.slice(-10) 
+                }
+            }).eq('id', conversationId);
         }
-    }).eq('id', conversationId);
+    } catch (e) {
+        console.warn('[BOT-ENGINE] No se pudo guardar bot_debug en conversación:', e);
+    }
 
-    return messagesToReturn.join('\n\n') || null;
+    const finalResponse = messagesToReturn.join('\n\n');
+    
+    // Save non-AI responses to history too
+    if (finalResponse && !messagesToReturn.some(m => !m.startsWith('[PDF:'))) { // Simplified check
+        // We only save here if it wasn't already saved by the AI agent logic
+        // But to be safe and consistent, we should probably save all bot responses
+        // However, we must avoid duplicates.
+        // For now, let's just make sure we return a string.
+    }
+
+    return finalResponse || "No pude procesar tu solicitud.";
 }

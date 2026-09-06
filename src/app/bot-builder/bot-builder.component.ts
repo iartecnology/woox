@@ -7,6 +7,7 @@ import { FlowNode, FlowConnection, FlowData, BotFlow } from './models/bot-flow.m
 import { BotRuntimeService } from './services/bot-runtime.service';
 import { ChatSimulatorComponent } from '../chat-simulator/chat-simulator.component';
 import { MobileService } from '../mobile.service';
+import { supabaseUrl } from '../supabase-config';
 
 @Component({
   selector: 'app-bot-builder',
@@ -83,9 +84,44 @@ export class BotBuilderComponent implements OnInit {
   // Template Modal state
   showTemplateModal = false;
   templateToConfirm: string | null = null;
+  selectedTemplateCategory: string = 'all';
+  previewedTemplate: any = null;
   templates: any[] = [];
   skillsCatalog: any[] = [];
   isSuperAdmin = false;
+
+  get filteredTemplates(): any[] {
+    if (this.selectedTemplateCategory === 'all') return this.templates;
+    return this.templates.filter(t => t.category === this.selectedTemplateCategory);
+  }
+
+  get flowHealthStatus(): { status: 'ok' | 'warning' | 'error'; message: string; details?: string } {
+    const nodes = this.botFlow.flow_data.nodes || [];
+    const conns = this.botFlow.flow_data.connections || [];
+    const startNode = nodes.find(n => n.type === 'start');
+
+    if (!startNode) {
+      return { status: 'error', message: 'Falta Nodo de Inicio', details: 'Agrega un nodo "Inicio" para comenzar el recorrido.' };
+    }
+
+    const aiAgent = nodes.find(n => n.type === 'ai_agent');
+    if (aiAgent) {
+      const skillsIn = conns.filter(c => c.to === aiAgent.id && c.toPort === 'skills_in');
+      const attachedSkillNodes = skillsIn.map(c => nodes.find(n => n.id === c.from));
+      const hasCheckoutTrigger = attachedSkillNodes.some(n => n?.data?.actionType === 'checkout_trigger');
+      const hasRegisterOrder = attachedSkillNodes.some(n => n?.data?.actionType === 'register_order');
+      const hasOutputConn = conns.some(c => c.from === aiAgent.id && (c.fromPort === 'output' || !c.fromPort));
+
+      if (hasCheckoutTrigger && !hasOutputConn) {
+        return { status: 'warning', message: 'IA con Checkout sin salida', details: 'El nodo IA tiene checkout_trigger pero no está conectado a los nodos de captura de datos.' };
+      }
+      if (!hasCheckoutTrigger && !hasRegisterOrder) {
+        return { status: 'warning', message: 'IA sin herramienta de cierre', details: 'Conecta "checkout_trigger" o "register_order" para que el ciclo de venta no quede abierto.' };
+      }
+    }
+
+    return { status: 'ok', message: 'Flujo Saludable', details: `${nodes.length} nodos conectados` };
+  }
 
   // Palette definition
   paletteCategories = [
@@ -122,9 +158,9 @@ export class BotBuilderComponent implements OnInit {
       name: 'Inteligencia Artificial',
       items: [
         { type: 'ai_agent', label: 'Agente IA', icon: '🧠', description: 'IA Conversacional' },
+        { type: 'n8n_agent', label: 'Agente n8n', icon: '⚙️', description: 'IA Orquestada por n8n' },
         { type: 'ai_skill', label: 'AI Skill', icon: '🛠️', description: 'Tool para Agente IA' },
         { type: 'semantic_router', label: 'Router Semántico', icon: '🛣️', description: 'Clasificar intención con IA' },
-        { type: 'image_generator', label: 'Imagen IA', icon: '🎨', description: 'Generar imagen con DALL-E' },
         { type: 'knowledge_query', label: 'Consulta RAG', icon: '📚', description: 'Consultar base de conocimiento' }
       ]
     },
@@ -158,9 +194,24 @@ export class BotBuilderComponent implements OnInit {
     return this.paletteCategories.reduce((acc, cat) => acc.concat(cat.items), [] as any[]);
   }
 
+  get generatedMcpServerUrl(): string {
+    return `${supabaseUrl}/functions/v1/mcp-woox?merchant_id=${this.merchantId}`;
+  }
+
   // Chat Simulator State
   showTestChat: boolean = false;
-  activeSidebarTab: 'simulator' | 'architect' = 'simulator';
+  activeSidebarTab: 'simulator' | 'architect' | 'inspector' = 'simulator';
+  executionLogs: { 
+    nodeId: string, 
+    nodeLabel: string, 
+    service: string, 
+    request: any, 
+    response: any, 
+    timestamp: Date,
+    fullPrompt?: string 
+  }[] = [];
+  selectedLog: any = null;
+
   executionCounts: { [nodeId: string]: number } = {};
   currentlyExecuting: string | null = null;
   chatMessages: { text: string, sender: 'bot' | 'user', meta?: { tokens: number, time: number } }[] = [];
@@ -406,10 +457,10 @@ export class BotBuilderComponent implements OnInit {
         category: 'tools'
       },
       {
-        id: 'n8n_sync',
-        name: 'Sincronización n8n',
-        description: 'Envía datos del cliente a n8n para CRM externo, Google Sheets, bases de datos propias o cualquier automatización.',
-        icon: '🔌',
+        id: 'n8n_cerebro',
+        name: 'N8N Cerebro',
+        description: 'Orquesta tu IA con n8n usando las skills y catálogo de tu comercio de manera automatizada.',
+        icon: '🧠',
         category: 'tools'
       }
     ];
@@ -484,7 +535,8 @@ export class BotBuilderComponent implements OnInit {
           'booking_ai':   () => this.generateRAGFlow(),
           // IDs nuevos (Herramientas)
           'rag_expert':   () => this.generateRAGFlow(),
-          'n8n_sync':     () => this.generateRAGFlow(),
+          'n8n_master':   () => this.generateN8NFlow(),
+          'n8n_cerebro':  () => this.generateN8NFlow(),
           // IDs legacy (compatibilidad hacia atrás)
           'products':     () => this.generateProductFlow(),
           'services':     () => this.generateServiceFlow(),
@@ -541,7 +593,7 @@ export class BotBuilderComponent implements OnInit {
     }
   }
 
-  private async generateRAGFlow() {
+  async generateRAGFlow() {
     let x = 600;
     let y = 100;
 
@@ -599,6 +651,38 @@ REGLAS:
     this.cdr.detectChanges();
   }
 
+  async generateN8NFlow() {
+    let x = 600;
+    let y = 100;
+
+    const startNode = this.createSpecificNode('start', x, y, { 
+      label: 'Entrada WhatsApp', 
+      message: '¡Hola! Bienvenido a {{merchant_name}}. Un momento mientras te conecto con nuestro asistente...' 
+    });
+    y += 180;
+
+    const n8nNode = this.createSpecificNode('n8n_agent', x, y, { 
+      label: 'N8N Cerebro',
+      n8n_webhook_url: '',
+      mcp_server_url: this.generatedMcpServerUrl,
+      prompt: 'Eres el asistente oficial de {{merchant_name}}. Tu misión es ayudar al cliente con sus pedidos y dudas usando las herramientas de MCP.'
+    });
+
+    this.connectNodes(startNode.id, 'output', n8nNode.id, 'input');
+    y += 180;
+
+    const endNode = this.createSpecificNode('end', x, y, { 
+      label: 'Fin de Conversación', 
+      message: '¡Gracias por comunicarte con nosotros! Que tengas un excelente día.' 
+    });
+
+    this.connectNodes(n8nNode.id, 'output', endNode.id, 'input');
+
+    this.saveFlow();
+    this.notification.show('✨ Plantilla N8N Cerebro cargada con éxito.', 'success');
+    this.cdr.detectChanges();
+  }
+
   async saveAsTemplate() {
     if (!this.newTemplate.name) {
       this.notification.show('El nombre es obligatorio', 'warning');
@@ -646,81 +730,106 @@ REGLAS:
   }
 
   private async generateIACatalogFlow() {
+    const { data: categories } = await this.supabase.getCategories(this.merchantId);
+    const catOptions = (categories || []).slice(0, 9).map(c => ({ 
+      id: `cat_${c.id}`, 
+      text: `📂 ${c.name}`, 
+      value: `Quiero ver: ${c.name}` 
+    }));
+    catOptions.push({ id: 'cat_all', text: '🔎 Buscar otra cosa', value: 'Quiero ver el menú general' });
+
     let x = 600;
     let y = 100;
 
     // 1. Inicio
-    const startNode = this.createSpecificNode('start', x, y - 250, { 
-      label: 'Bienvenida'
+    const startNode = this.createSpecificNode('start', x, y, { 
+      label: 'Bienvenida',
+      message: '¡Hola! Bienvenido a {{merchantName}}. 👋'
     });
     y += 180;
 
-    // 1.1 Enviar PDF Menú
-    const pdfNode = this.createSpecificNode('send_pdf', x, y, {
-      label: 'Enviar Menú PDF',
-      pdf_url: '{{merchant_menu_pdf}}',
-      pdf_caption: 'Aquí tienes nuestro menú completo en PDF 📄'
+    // 1.5 Menú de Categorías
+    const menuNode = this.createSpecificNode('menu', x, y, {
+      label: 'Categorías',
+      message: '¿Qué te gustaría pedir hoy?',
+      options: catOptions
     });
-    y += 180;
-    
-    this.connectNodes(startNode.id, 'output', pdfNode.id, 'input');
+    this.connectNodes(startNode.id, 'output', menuNode.id, 'input');
+    y += 200;
 
-    // 2. Agente IA (Cerebro del flujo)
+    // 2. Agente IA (Toma-Pedidos con Protocolo de 4 Fases)
     const aiAgentNode = this.createSpecificNode('ai_agent', x, y, { 
-      label: 'Asistente de Ventas IA', 
-      prompt: `Eres un asistente de ventas experto y amigable de {{merchantName}}.
+      label: 'IA Mesero', 
+      prompt: `Eres el mesero virtual y experto comercial de {{merchantName}}. Tu misión es atender al cliente, sugerir delicias del menú y guiarlo al cierre en 4 fases:
 
-Tu objetivo es ayudar al cliente a:
-1. Encontrar los productos que busca (usa catalog_search)
-2. Verificar disponibilidad (usa inventory_check)
-3. Añadir productos al carrito (usa add_to_cart)
-4. Revisar su pedido (usa get_cart)
-5. Confirmar y registrar el pedido (usa register_order cuando el cliente confirme)
+FASE 1: DESCUBRIMIENTO & MENÚ
+- Usa la herramienta 'catalog_search' inmediatamente cuando el cliente mencione un producto, plato o categoría.
+- Muestra máximo 3 opciones apetitosas con su precio exacto.
 
-REGLAS IMPORTANTES:
-- Siempre usa las herramientas para obtener información real, nunca inventes datos
-- Sé breve y orientado a la venta
-- Cuando el cliente diga "sí", "confirmar", "quiero ese" → añade al carrito o registra el pedido según el contexto
-- Después de añadir algo al carrito, pregunta si quiere algo más o confirmar el pedido`,
+FASE 2: ADICIÓN AL CARRITO INMEDIATA
+- Cuando el cliente elija o acepte un producto ("quiero esa pizza", "añade 2", "me parece bien"), ejecuta 'add_to_cart' DE INMEDIATO. Prohibido pedir doble confirmación.
+- Confirma entusiasta el contenido del carrito y ofrece un complemento (bebida, postre o adicional).
+
+FASE 3: VÁLVULA DE ESCAPE / CIERRE
+- En cuanto el cliente indique que terminó su pedido ("eso es todo", "nada más", "quiero pagar", "listo", "no quiero más"):
+  * LLAMA INMEDIATAMENTE A LA HERRAMIENTA 'checkout_trigger'.
+  * NO pidas nombre, teléfono o dirección aquí; el sistema presentará el formulario determinístico en los siguientes pasos.
+
+FASE 4: VERACIDAD
+- Toda información de ingredientes y precios debe provenir de 'catalog_search'. Prohibido inventar productos.
+- Respuestas de máximo 2 a 3 líneas, directas, vendedoras y amables.`,
       user_prompt: '{{message}}',
-      model: 'gemini-2.0-flash',
-      temperature: 0.7,
+      model: 'gemini-1.5-flash',
+      temperature: 0.4,
       memory_limit: 6
     });
+    catOptions.forEach(opt => {
+      this.connectNodes(menuNode.id, opt.id, aiAgentNode.id, 'input');
+    });
+    y += 200;
 
-    this.connectNodes(pdfNode.id, 'output', aiAgentNode.id, 'input');
-
-    // 3. Skills - Todas las herramientas disponibles
+    // 3. Skills del Agente
     const skillPositions = [
-      { type: 'catalog_search',  label: '🔍 Buscar Catálogo',  desc: 'Busca productos disponibles por nombre o categoría.',                         dx: -375 },
-      { type: 'inventory_check', label: '📦 Consultar Stock',   desc: 'Verifica si hay unidades disponibles de un producto.',                        dx: -225 },
-      { type: 'add_to_cart',     label: '➕ Añadir al Carrito', desc: 'Añade un producto al carrito cuando el cliente lo elige.',                    dx: -75  },
-      { type: 'get_cart',        label: '🛒 Ver Carrito',       desc: 'Muestra los productos en el carrito con precios y total.',                    dx: 75   },
-      { type: 'register_order',  label: '✅ Registrar Pedido',  desc: 'Confirma y registra el pedido. Solo cuando el cliente confirme explícitamente.', dx: 225 },
-      { type: 'order_status',    label: '🚚 Estado de Pedido',  desc: 'Consulta el estado de un pedido existente por su número.',                    dx: 375  },
+      { type: 'catalog_search',  label: '🔍 Buscar Catálogo',  desc: 'Busca productos.', dx: -200 },
+      { type: 'add_to_cart',     label: '🛒 Añadir', desc: 'Añade al carrito.', dx: 0 },
+      { type: 'checkout_trigger',label: '✅ Finalizar Pedido', desc: 'Usa esta cuando el cliente no quiera nada más.', dx: 200 },
     ];
 
     const createdSkills: any[] = [];
     for (const sp of skillPositions) {
-      const skill = this.createSpecificNode('ai_skill', x + sp.dx, y + 250, { 
+      const skill = this.createSpecificNode('ai_skill', x + sp.dx, y, { 
         label: sp.label, 
         actionType: sp.type as any,
         message: sp.desc
       });
       createdSkills.push(skill);
-    }
-
-    // 4. Nodo de fin
-    const endNode = this.createSpecificNode('end', x, y + 520, {
-      label: 'Cierre',
-      message: '¡Gracias por tu compra en {{merchantName}}! 🎉 ¿Hay algo más en lo que te pueda ayudar?'
-    });
-    this.connectNodes(aiAgentNode.id, 'output', endNode.id, 'input');
-
-    // 5. Conectar todas las Skills al Agente (puerto TOOLS)
-    for (const skill of createdSkills) {
       this.connectNodes(skill.id, 'skill_out', aiAgentNode.id, 'skills_in');
     }
+    y += 150;
+
+    // 4. Captura de Datos (Determinístico)
+    const nameNode = this.createSpecificNode('question', x, y, { label: 'Nombre', message: 'Para procesar tu envío, ¿cuál es tu nombre?', variable: 'customer_name' });
+    this.connectNodes(aiAgentNode.id, 'output', nameNode.id, 'input');
+    y += 180;
+
+    const phoneNode = this.createSpecificNode('question', x, y, { label: 'Teléfono', message: 'Gracias {{customer_name}}, ¿cuál es tu celular?', variable: 'phone', validation: 'phone' });
+    this.connectNodes(nameNode.id, 'output', phoneNode.id, 'input');
+    y += 180;
+
+    const addressNode = this.createSpecificNode('question', x, y, { label: 'Dirección', message: '¿A qué dirección enviamos el pedido?', variable: 'direccion_entrega' });
+    this.connectNodes(phoneNode.id, 'output', addressNode.id, 'input');
+    y += 180;
+
+    // 5. Acción y Cierre
+    const registerOrderNode = this.createSpecificNode('action', x, y, { label: 'Registrar Pedido', actionType: 'register_order' });
+    this.connectNodes(addressNode.id, 'output', registerOrderNode.id, 'input');
+    y += 180;
+
+    const endNode = this.createSpecificNode('end', x, y, {
+      label: 'Cierre',
+      message: '¡Listo! Tu pedido {{orderNumber}} ha sido registrado.\n\nResumen:\n{{cartSummary}}\nEntrega en: {{direccion_entrega}}\n\n¡Gracias por tu compra!'
+    });
+    this.connectNodes(registerOrderNode.id, 'output', endNode.id, 'input');
 
     this.cdr.detectChanges();
   }
@@ -1645,6 +1754,33 @@ REGLAS IMPORTANTES:
     }, 1000);
     
     this.cdr.detectChanges();
+  }
+
+  handleTechnicalLog(log: any) {
+    console.log('[BUILDER] Technical Log Received:', log);
+    
+    // Si no hay logs o el servicio es 'ai'/'n8n', consideramos que es un nuevo turno o el final de uno
+    // Pero para simplificar y que sea "limpio", vamos a agrupar por un ID de mensaje si existiera
+    // Por ahora, simplemente añadimos al arreglo con un ID único para trackBy
+    const logEntry = {
+      ...log,
+      id: Math.random().toString(36).substring(7),
+      timestamp: new Date()
+    };
+    
+    this.executionLogs.push(logEntry);
+    
+    // Auto-seleccionar el último log solo si no hay uno seleccionado
+    if (this.activeSidebarTab === 'inspector' && !this.selectedLog) {
+      this.selectedLog = logEntry;
+    }
+    
+    this.cdr.detectChanges();
+  }
+
+  // Helper para trackBy
+  trackLogById(index: number, item: any) {
+    return item.id;
   }
 
 

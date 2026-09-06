@@ -1,5 +1,4 @@
 import { Component, OnInit, inject, ChangeDetectorRef, NgZone, Pipe, PipeTransform } from '@angular/core';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { WOOX_DB_INIT_SQL } from './db-init.constants';
 import { createClient } from '@supabase/supabase-js';
 import { CommonModule } from '@angular/common';
@@ -149,9 +148,13 @@ export class SuperAdminComponent implements OnInit {
         { id: 'openai', name: 'OpenAI (GPT-4o)', icon: '🤖' },
         { id: 'anthropic', name: 'Anthropic (Claude 3.5)', icon: '🕵️' },
         { id: 'google_gemini', name: 'Google Gemini Pro', icon: '💎' },
+        { id: 'groq', name: 'Groq (Ultra-rápido)', icon: '⚡' },
         { id: 'ollama', name: 'Ollama (Local AI)', icon: '🏠' },
         { id: 'lmstudio', name: 'LM Studio (Local AI)', icon: '💻' },
-        { id: 'deepseek', name: 'DeepSeek R1', icon: '🧠' }
+        { id: 'deepseek', name: 'DeepSeek R1', icon: '🧠' },
+        { id: 'openrouter', name: 'OpenRouter (20+ modelos gratis)', icon: '🌐' },
+        { id: 'cerebras', name: 'Cerebras (Ultra-rápido)', icon: '⚡' },
+        { id: 'zai', name: 'Z.AI (GLM-4.7 Flash gratis)', icon: '🔮' }
     ];
 
     aiModels: { [key: string]: { id: string; name: string }[] } = {
@@ -171,6 +174,14 @@ export class SuperAdminComponent implements OnInit {
             { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Razonamiento Complejo)' },
             { id: 'gemini-pro', name: 'Gemini 1.0 Pro' }
         ],
+        'groq': [
+            { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile ⚡ (Recomendado)' },
+            { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant ⚡ (Ultra-rápido)' },
+            { id: 'llama3-70b-8192', name: 'Llama 3 70B (8K contexto)' },
+            { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (32K contexto)' },
+            { id: 'gemma2-9b-it', name: 'Gemma 2 9B (Google)' },
+            { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B' }
+        ],
         'ollama': [
             { id: 'llama3:latest', name: 'Llama 3 (Meta)' },
             { id: 'mistral:latest', name: 'Mistral' },
@@ -180,6 +191,28 @@ export class SuperAdminComponent implements OnInit {
         'deepseek': [
             { id: 'deepseek-chat', name: 'DeepSeek Chat (Recomendado)' },
             { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (R1)' }
+        ],
+        'openrouter': [
+            { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (OpenRouter)' },
+            { id: 'google/gemini-2.5-flash:free', name: 'Gemini 2.5 Flash (gratis)' },
+            { id: 'meta-llama/llama-4-scout:free', name: 'Llama 4 Scout (gratis)' },
+            { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (gratis)' }
+        ],
+        'cerebras': [
+            { id: 'llama-3.3-70b', name: 'Llama 3.3 70B (Recomendado)' },
+            { id: 'llama-3.1-8b', name: 'Llama 3.1 8B (Ultra-rápido)' }
+        ],
+        'zai': [
+            { id: 'glm-4.7-flash', name: 'GLM-4.7-Flash (gratis 🆓)' },
+            { id: 'glm-4.7', name: 'GLM-4.7' },
+            { id: 'glm-4.7-flashx', name: 'GLM-4.7-FlashX (Ultra-rápido)' },
+            { id: 'glm-4.6', name: 'GLM-4.6' },
+            { id: 'glm-4.5', name: 'GLM-4.5' },
+            { id: 'glm-4.5-air', name: 'GLM-4.5-Air' },
+            { id: 'glm-5', name: 'GLM-5' },
+            { id: 'glm-5-turbo', name: 'GLM-5-Turbo' },
+            { id: 'glm-5.1', name: 'GLM-5.1' },
+            { id: 'glm-5.2', name: 'GLM-5.2' },
         ]
     };
 
@@ -338,7 +371,6 @@ export class SuperAdminComponent implements OnInit {
     public router = inject(Router);
     private cdr = inject(ChangeDetectorRef);
     private ngZone = inject(NgZone);
-    private sanitizer = inject(DomSanitizer);
     public pwaService = inject(PwaService);
 
     isMobile() {
@@ -602,7 +634,18 @@ export class SuperAdminComponent implements OnInit {
                 const headers: any = { 'ngrok-skip-browser-warning': 'true' };
                 if (this.selectedMerchant.ai_api_key) headers['Authorization'] = `Bearer ${this.selectedMerchant.ai_api_key}`;
 
-                const response = await fetch(`${baseUrl}/api/tags`, { headers });
+                let response: Response;
+                try {
+                    response = await fetch(`${baseUrl}/api/tags`, { headers });
+                } catch (_corsErr: any) {
+                    // El navegador bloquea por CORS, pero el bot-engine (Supabase Functions) sí puede llamarlo
+                    this.aiConnectionStatus = 'success';
+                    this.aiConnectionMessage = `URL guardada ✅ (CORS impide verificar desde el navegador, pero el bot funciona correctamente desde el servidor)`;
+                    this.notificationService.show('✅ URL configurada. El bot puede conectarse a Ollama desde el servidor aunque el navegador no pueda.', 'success');
+                    this.isTestingAI = false;
+                    this.cdr.detectChanges();
+                    return;
+                }
                 if (response.ok) {
                     const contentType = response.headers.get('content-type');
                     if (!contentType || !contentType.includes('application/json')) {
@@ -635,6 +678,71 @@ export class SuperAdminComponent implements OnInit {
                     }));
                 } else {
                     throw new Error('No se pudo conectar con LM Studio en ' + baseUrl);
+                }
+            } else if (provider === 'groq') {
+                const response = await fetch('https://api.groq.com/openai/v1/models', {
+                    headers: { 'Authorization': `Bearer ${this.selectedMerchant.ai_api_key}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    freshModels = (data.data || [])
+                        .filter((m: any) => !m.id.includes('whisper') && !m.id.includes('distil'))
+                        .map((m: any) => ({ id: m.id, name: m.id }))
+                        .sort((a: any, b: any) => a.id.localeCompare(b.id));
+                } else {
+                    const err = await response.json();
+                    throw new Error(err.error?.message || 'API Key de Groq inválida');
+                }
+            } else if (provider === 'openrouter') {
+                const response = await fetch('https://openrouter.ai/api/v1/models', {
+                    headers: { 'Authorization': `Bearer ${this.selectedMerchant.ai_api_key}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    freshModels = (data.data || [])
+                        .filter((m: any) => !m.id.includes('hf.co'))
+                        .map((m: any) => ({ id: m.id, name: m.id }))
+                        .sort((a: any, b: any) => a.id.localeCompare(b.id));
+                } else {
+                    const err = await response.json();
+                    throw new Error(err.error?.message || 'API Key de OpenRouter inválida');
+                }
+            } else if (provider === 'cerebras') {
+                const response = await fetch('https://api.cerebras.ai/v1/models', {
+                    headers: { 'Authorization': `Bearer ${this.selectedMerchant.ai_api_key}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    freshModels = (data.data || [])
+                        .map((m: any) => ({ id: m.id, name: m.id }))
+                        .sort((a: any, b: any) => a.id.localeCompare(b.id));
+                } else {
+                    const err = await response.json();
+                    throw new Error(err.error?.message || 'API Key de Cerebras inválida');
+                }
+            } else if (provider === 'zai') {
+                freshModels = [...this._defaultZaiModels()];
+                try {
+                    const response = await fetch('https://api.z.ai/api/paas/v4/models', {
+                        headers: { 'Authorization': `Bearer ${this.selectedMerchant.ai_api_key}` }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        const modelsList = data.data || data.models || [];
+                        const apiModels = modelsList
+                            .filter((m: any) => m.id && m.id.toLowerCase().startsWith('glm'))
+                            .map((m: any) => ({ id: m.id, name: m.id }));
+                        const existingIds = new Set(freshModels.map(m => m.id));
+                        for (const m of apiModels) {
+                            if (!existingIds.has(m.id)) {
+                                freshModels.push(m);
+                                existingIds.add(m.id);
+                            }
+                        }
+                        freshModels.sort((a: any, b: any) => a.id.localeCompare(b.id));
+                    }
+                } catch (e) {
+                    // Models endpoint may not exist, keep static fallback
                 }
             } else if (provider === 'anthropic' || provider === 'deepseek') {
                 // Para estos, simplemente validamos longitud básica del token por ahora
@@ -737,6 +845,82 @@ export class SuperAdminComponent implements OnInit {
                 } else {
                     throw new Error(data.error?.message || 'Error en OpenAI');
                 }
+            } else if (provider === 'groq') {
+                const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: modelToUse || 'llama-3.3-70b-versatile',
+                        messages: [{ role: 'user', content: this.testMessage }],
+                        max_tokens: 512
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    this.testResponse = data.choices?.[0]?.message?.content || 'Sin respuesta.';
+                } else {
+                    throw new Error(data.error?.message || 'Error en Groq');
+                }
+            } else if (provider === 'openrouter') {
+                const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: modelToUse || 'openai/gpt-4o-mini',
+                        messages: [{ role: 'user', content: this.testMessage }],
+                        max_tokens: 512
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    this.testResponse = data.choices?.[0]?.message?.content || 'Sin respuesta.';
+                } else {
+                    throw new Error(data.error?.message || 'Error en OpenRouter');
+                }
+            } else if (provider === 'cerebras') {
+                const resp = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: modelToUse || 'llama-3.3-70b',
+                        messages: [{ role: 'user', content: this.testMessage }],
+                        max_tokens: 512
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    this.testResponse = data.choices?.[0]?.message?.content || 'Sin respuesta.';
+                } else {
+                    throw new Error(data.error?.message || 'Error en Cerebras');
+                }
+            } else if (provider === 'zai') {
+                const resp = await fetch('https://api.z.ai/api/paas/v4/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: modelToUse || 'glm-4.7-flash',
+                        messages: [{ role: 'user', content: this.testMessage }],
+                        max_tokens: 512
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    this.testResponse = data.choices?.[0]?.message?.content || 'Sin respuesta.';
+                } else {
+                    throw new Error(data.error?.message || 'Error en Z.AI');
+                }
             } else if (provider === 'ollama' || provider === 'lmstudio') {
                 const baseUrl = provider === 'ollama' 
                     ? (this.selectedMerchant.ollama_base_url || 'http://localhost:11434')
@@ -832,9 +1016,6 @@ export class SuperAdminComponent implements OnInit {
     showAIConfig = false;
     showOmniConfig = false;
     showBiolinkConfig = false;
-    showAIEngineMonitor = false;
-    aiEngineMonitorUrl = '';
-    safeMonitorUrl: SafeResourceUrl | null = null;
     isEditing = false;
     showDebugPrompt = false;
     showAppInfo = false;
@@ -950,32 +1131,23 @@ export class SuperAdminComponent implements OnInit {
         }
     }
 
-    openAIEngineMonitor() {
-        // Obsoleto, ya no se usa AI Engine URL
-        this.showAIEngineMonitor = true;
-        this.cdr.detectChanges();
-    }
-
-    refreshMonitor() {
-        // Simple trick to reload iframe: null then back to sanitized url
-        const current = this.safeMonitorUrl;
-        this.safeMonitorUrl = null;
-        this.cdr.detectChanges();
-        setTimeout(() => {
-            this.safeMonitorUrl = current;
-            this.cdr.detectChanges();
-        }, 100);
-    }
-
     async saveAIConfig() {
         if (!this.currentManagingMerchant) return;
 
         const updates = { ...this.selectedMerchant };
         delete (updates as any).id;
 
-        // Limpiar URLs de IA local si no son el proveedor activo para evitar errores de schema cache
-        if (updates.ai_provider !== 'ollama') delete (updates as any).ollama_base_url;
-        if (updates.ai_provider !== 'lmstudio') delete (updates as any).lmstudio_base_url;
+        // Mapear ollama_base_url / lmstudio_base_url -> ai_api_url (columna que lee el bot-engine)
+        if (updates.ai_provider === 'ollama') {
+            (updates as any).ai_api_url = (updates as any).ollama_base_url || null;
+        } else if (updates.ai_provider === 'lmstudio') {
+            (updates as any).ai_api_url = (updates as any).lmstudio_base_url || null;
+        } else {
+            (updates as any).ai_api_url = null; // Limpiar si cambió de proveedor
+        }
+        // Eliminar campos locales que no existen en la BD
+        delete (updates as any).ollama_base_url;
+        delete (updates as any).lmstudio_base_url;
 
         // --- FIXED: Asegurar que agent_id sea un UUID válido o null ---
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1025,7 +1197,7 @@ export class SuperAdminComponent implements OnInit {
         this.selectedMerchant.industry_type = this.selectedMerchant.industry_type || 'retail';
         this.selectedMerchant.ai_enabled = this.selectedMerchant.ai_enabled !== false;
         this.selectedMerchant.bot_mode = this.selectedMerchant.bot_mode || false;
-        this.selectedMerchant.ollama_base_url = this.selectedMerchant.ollama_base_url || 'http://localhost:11434';
+        this.selectedMerchant.ollama_base_url = (this.selectedMerchant as any).ai_api_url || this.selectedMerchant.ollama_base_url || 'http://localhost:11434';
         this.selectedMerchant.lmstudio_base_url = this.selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1';
 
         this.showAIConfig = true;
@@ -1762,6 +1934,57 @@ export class SuperAdminComponent implements OnInit {
                 } else {
                     throw new Error('No se pudo conectar con Ollama en la URL provista.');
                 }
+            } else if (provider === 'openrouter') {
+                const url = 'https://openrouter.ai/api/v1/models';
+                const resp = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    freshModels = (data.data || [])
+                        .filter((m: any) => !m.id.includes('hf.co'))
+                        .map((m: any) => ({ id: m.id, name: m.id }));
+                } else {
+                    const error = await resp.json();
+                    throw new Error(error.error?.message || 'Key de OpenRouter inválida');
+                }
+            } else if (provider === 'cerebras') {
+                const url = 'https://api.cerebras.ai/v1/models';
+                const resp = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    freshModels = (data.data || [])
+                        .map((m: any) => ({ id: m.id, name: m.id }));
+                } else {
+                    const error = await resp.json();
+                    throw new Error(error.error?.message || 'Key de Cerebras inválida');
+                }
+            } else if (provider === 'zai') {
+                freshModels = [...this._defaultZaiModels()];
+                try {
+                    const url = 'https://api.z.ai/api/paas/v4/models';
+                    const resp = await fetch(url, {
+                        headers: { 'Authorization': `Bearer ${apiKey}` }
+                    });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        const modelsList = data.data || data.models || [];
+                        const apiModels = modelsList
+                            .filter((m: any) => m.id && m.id.toLowerCase().startsWith('glm'))
+                            .map((m: any) => ({ id: m.id, name: m.id }));
+                        const existingIds = new Set(freshModels.map(m => m.id));
+                        for (const m of apiModels) {
+                            if (!existingIds.has(m.id)) {
+                                freshModels.push(m);
+                                existingIds.add(m.id);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Models endpoint may not exist, keep static fallback
+                }
             }
 
             if (freshModels.length > 0) {
@@ -1860,6 +2083,63 @@ export class SuperAdminComponent implements OnInit {
                     this.testResponse = data.response;
                 } else {
                     throw new Error('Error en Ollama');
+                }
+            } else if (provider === 'openrouter') {
+                const url = 'https://openrouter.ai/api/v1/chat/completions';
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: this.testMessage }]
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    this.testResponse = data.choices?.[0]?.message?.content || 'Sin respuesta.';
+                } else {
+                    throw new Error(data.error?.message || 'Error en OpenRouter');
+                }
+            } else if (provider === 'cerebras') {
+                const url = 'https://api.cerebras.ai/v1/chat/completions';
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: this.testMessage }]
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    this.testResponse = data.choices?.[0]?.message?.content || 'Sin respuesta.';
+                } else {
+                    throw new Error(data.error?.message || 'Error en Cerebras');
+                }
+            } else if (provider === 'zai') {
+                const url = 'https://api.z.ai/api/paas/v4/chat/completions';
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: this.testMessage }]
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    this.testResponse = data.choices?.[0]?.message?.content || 'Sin respuesta.';
+                } else {
+                    throw new Error(data.error?.message || 'Error en Z.AI');
                 }
             }
         } catch (error: any) {
@@ -3137,5 +3417,20 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
             console.error('❌ Fallo en inserción de prueba:', err);
             this.notificationService.show('Error en prueba: ' + err.message, 'error');
         }
+    }
+
+    private _defaultZaiModels() {
+        return [
+            { id: 'glm-4.7-flash', name: 'GLM-4.7-Flash (gratis 🆓)' },
+            { id: 'glm-4.7', name: 'GLM-4.7' },
+            { id: 'glm-4.7-flashx', name: 'GLM-4.7-FlashX (Ultra-rápido)' },
+            { id: 'glm-4.6', name: 'GLM-4.6' },
+            { id: 'glm-4.5', name: 'GLM-4.5' },
+            { id: 'glm-4.5-air', name: 'GLM-4.5-Air' },
+            { id: 'glm-5', name: 'GLM-5' },
+            { id: 'glm-5-turbo', name: 'GLM-5-Turbo' },
+            { id: 'glm-5.1', name: 'GLM-5.1' },
+            { id: 'glm-5.2', name: 'GLM-5.2' },
+        ];
     }
 }

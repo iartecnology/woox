@@ -1805,19 +1805,4 @@
             </div>
         </div>
     </div>
-    <!-- MONITOR DE IA ENGINE (IFRAME) -->
-    <div class="modal-overlay monitor-overlay" *ngIf="showAIEngineMonitor" (click)="showAIEngineMonitor = false">
-        <div class="monitor-modal-content ai-engine-monitor" (click)="$event.stopPropagation()">
-            <div class="monitor-header">
-                <h3>📟 Monitor de Motor IA (Woox Core)</h3>
-                <div class="monitor-actions-header">
-                    <button class="refresh-iframe-btn" (click)="refreshMonitor()">🔄 Recargar</button>
-                    <button class="close-monitor-btn" (click)="showAIEngineMonitor = false">✕</button>
-                </div>
-            </div>
-            <div class="monitor-iframe-container" *ngIf="safeMonitorUrl">
-                <iframe [src]="safeMonitorUrl" frameborder="0" width="100%" height="100%"></iframe>
-            </div>
-        </div>
-    </div>
 </div>

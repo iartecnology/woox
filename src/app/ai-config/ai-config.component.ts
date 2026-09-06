@@ -45,9 +45,13 @@ export class AiConfigComponent implements OnInit {
         { id: 'openai', name: 'OpenAI (GPT-4o)', icon: '🤖' },
         { id: 'anthropic', name: 'Anthropic (Claude 3.5)', icon: '🕵️' },
         { id: 'google_gemini', name: 'Google Gemini Pro', icon: '💎' },
+        { id: 'groq', name: 'Groq (Llama 3.3)', icon: '⚡' },
         { id: 'ollama', name: 'Ollama (Local AI)', icon: '🏠' },
         { id: 'lmstudio', name: 'LM Studio (Local AI)', icon: '💻' },
-        { id: 'deepseek', name: 'DeepSeek R1', icon: '🧠' }
+        { id: 'deepseek', name: 'DeepSeek R1', icon: '🧠' },
+        { id: 'openrouter', name: 'OpenRouter (20+ modelos gratis)', icon: '🌐' },
+        { id: 'cerebras', name: 'Cerebras (Ultra-rápido)', icon: '⚡' },
+        { id: 'zai', name: 'Z.AI (GLM-4.7 Flash gratis)', icon: '🔮' }
     ];
 
     aiModels: { [key: string]: { id: string; name: string }[] } = {
@@ -68,6 +72,11 @@ export class AiConfigComponent implements OnInit {
             { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Experimental)' },
             { id: 'gemma-2-9b-it', name: 'Gemma 2 9B (Ligero)' }
         ],
+        'groq': [
+            { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (Súper Rápido)' },
+            { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B' },
+            { id: 'llama3-70b-8192', name: 'Llama 3 70B' }
+        ],
         'ollama': [
             { id: 'llama3:latest', name: 'Llama 3' },
             { id: 'mistral:latest', name: 'Mistral' },
@@ -76,6 +85,28 @@ export class AiConfigComponent implements OnInit {
         'deepseek': [
             { id: 'deepseek-chat', name: 'DeepSeek Chat (Recomendado)' },
             { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (R1)' }
+        ],
+        'openrouter': [
+            { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (OpenRouter)' },
+            { id: 'google/gemini-2.5-flash:free', name: 'Gemini 2.5 Flash (gratis)' },
+            { id: 'meta-llama/llama-4-scout:free', name: 'Llama 4 Scout (gratis)' },
+            { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (gratis)' }
+        ],
+        'cerebras': [
+            { id: 'llama-3.3-70b', name: 'Llama 3.3 70B (Recomendado)' },
+            { id: 'llama-3.1-8b', name: 'Llama 3.1 8B (Ultra-rápido)' }
+        ],
+        'zai': [
+            { id: 'glm-4.7-flash', name: 'GLM-4.7-Flash (gratis 🆓)' },
+            { id: 'glm-4.7', name: 'GLM-4.7' },
+            { id: 'glm-4.7-flashx', name: 'GLM-4.7-FlashX (Ultra-rápido)' },
+            { id: 'glm-4.6', name: 'GLM-4.6' },
+            { id: 'glm-4.5', name: 'GLM-4.5' },
+            { id: 'glm-4.5-air', name: 'GLM-4.5-Air' },
+            { id: 'glm-5', name: 'GLM-5' },
+            { id: 'glm-5-turbo', name: 'GLM-5-Turbo' },
+            { id: 'glm-5.1', name: 'GLM-5.1' },
+            { id: 'glm-5.2', name: 'GLM-5.2' },
         ]
     };
 
@@ -319,6 +350,54 @@ export class AiConfigComponent implements OnInit {
                 this.aiConnectionStatus = 'success';
                 this.aiConnectionMessage = 'Configuración de Gemini lista.';
                 return;
+            } else if (provider === 'openrouter') {
+                const response = await fetch('https://openrouter.ai/api/v1/models', {
+                    headers: { 'Authorization': `Bearer ${this.merchantConfig.ai_api_key}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    freshModels = (data.data || [])
+                        .filter((m: any) => !m.id.includes('hf.co'))
+                        .map((m: any) => ({ id: m.id, name: m.id }));
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || 'API Key de OpenRouter inválida');
+                }
+            } else if (provider === 'cerebras') {
+                const response = await fetch('https://api.cerebras.ai/v1/models', {
+                    headers: { 'Authorization': `Bearer ${this.merchantConfig.ai_api_key}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    freshModels = (data.data || [])
+                        .map((m: any) => ({ id: m.id, name: m.id }));
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || 'API Key de Cerebras inválida');
+                }
+            } else if (provider === 'zai') {
+                freshModels = [...this._defaultZaiModels()];
+                try {
+                    const response = await fetch('https://api.z.ai/api/paas/v4/models', {
+                        headers: { 'Authorization': `Bearer ${this.merchantConfig.ai_api_key}` }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        const modelsList = data.data || data.models || [];
+                        const apiModels = modelsList
+                            .filter((m: any) => m.id && m.id.toLowerCase().startsWith('glm'))
+                            .map((m: any) => ({ id: m.id, name: m.id }));
+                        const existingIds = new Set(freshModels.map(m => m.id));
+                        for (const m of apiModels) {
+                            if (!existingIds.has(m.id)) {
+                                freshModels.push(m);
+                                existingIds.add(m.id);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Models endpoint may not exist, keep static fallback
+                }
             } else {
                 // Otros proveedores (DeepSeek, Anthropic)
                 if (!this.merchantConfig.ai_api_key) throw new Error('Se requiere API Key');
@@ -429,5 +508,20 @@ PROTOCOLO DE CIERRE (PASO A PASO):
 
 MENÚ DISPONIBLE:
 ${catalogContext}`;
+    }
+
+    private _defaultZaiModels() {
+        return [
+            { id: 'glm-4.7-flash', name: 'GLM-4.7-Flash (gratis 🆓)' },
+            { id: 'glm-4.7', name: 'GLM-4.7' },
+            { id: 'glm-4.7-flashx', name: 'GLM-4.7-FlashX (Ultra-rápido)' },
+            { id: 'glm-4.6', name: 'GLM-4.6' },
+            { id: 'glm-4.5', name: 'GLM-4.5' },
+            { id: 'glm-4.5-air', name: 'GLM-4.5-Air' },
+            { id: 'glm-5', name: 'GLM-5' },
+            { id: 'glm-5-turbo', name: 'GLM-5-Turbo' },
+            { id: 'glm-5.1', name: 'GLM-5.1' },
+            { id: 'glm-5.2', name: 'GLM-5.2' },
+        ];
     }
 }

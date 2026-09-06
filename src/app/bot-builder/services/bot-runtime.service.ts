@@ -9,6 +9,7 @@ export interface BotResponse {
     allNodes?: { id: string, label: string, type: string }[];
     options?: any[]; // Opciones de menú si aplica
     completed?: boolean; // true cuando el nodo 'end' fue alcanzado
+    technicalLogs?: any[]; // Logs de peticiones HTTP a IA/n8n/MCP
 }
 
 @Injectable({
@@ -74,41 +75,32 @@ export class BotRuntimeService {
             const nextNodeId = this.getNextNodeId(flowData, startNode.id, 'output');
             const nextNode = nodes.find((n: any) => n.id === nextNodeId);
             
-            const response = await this.advanceAndCollect(flowData, nextNode, session, flow);
+            const response = await this.advanceAndCollect(flowData, nextNode, session, flow, userMessage);
             return { 
                 messages: startMessage ? [startMessage, ...response.messages] : response.messages, 
                 session: response.session,
                 totalNodes: nodes.length,
                 allNodes: nodes.map((n: any) => ({ id: n.id, label: n.data?.label || n.type, type: n.type })),
-                executionPath: response.executionPath
+                executionPath: response.executionPath,
+                technicalLogs: response.technicalLogs
             };
         }
 
         // 4. Sesión existente → Procesar input según el nodo actual
         const currentNode = nodes.find((n: any) => n.id === session.current_node_id);
         if (!currentNode) {
-            // El nodo guardado ya no existe en el flujo (flujo regenerado).
-            // Reiniciar la sesión desde el inicio automáticamente.
-            console.warn('[BotRuntime] Nodo no encontrado, reinicinado flujo...');
+            console.warn('[BotRuntime] Nodo actual no encontrado (posible edición del flujo). Reiniciando...');
             const startNode = nodes.find((n: any) => n.type === 'start');
             if (startNode) {
                 const nextNodeId = this.getNextNodeId(flowData, startNode.id, 'output');
                 const nextNode = nodes.find((n: any) => n.id === nextNodeId);
-                session.variables = {
-                    merchant_name: merchant?.name || '',
-                    merchant_menu_pdf: merchant?.menu_pdf_url || '',
-                    menu_pdf: merchant?.menu_pdf_url || ''
-                };
-                const response = await this.advanceAndCollect(flowData, nextNode, session, flow);
+                const res = await this.advanceAndCollect(flowData, nextNode, session, flow, userMessage);
                 return {
-                    messages: ['🔄 El flujo fue actualizado. Reiniciando...', ...response.messages],
-                    session: response.session,
-                    totalNodes: nodes.length,
-                    allNodes: nodes.map((n: any) => ({ id: n.id, label: n.data?.label || n.type, type: n.type })),
-                    executionPath: response.executionPath
+                    ...res,
+                    messages: ['🔄 El flujo ha cambiado. Reiniciando...', ...res.messages]
                 };
             }
-            return { messages: ['⚠️ Error: Flujo no configurado correctamente.'], session };
+            return { messages: ['⚠️ Error: No se encontró el inicio del flujo.'], session };
         }
 
         const response = await this.handleUserInput(flowData, currentNode, userMessage, session, flow);
@@ -143,7 +135,7 @@ export class BotRuntimeService {
                         merchant_menu_pdf: merchant?.menu_pdf_url || '',
                         menu_pdf: merchant?.menu_pdf_url || ''
                     };
-                    return await this.advanceAndCollect(flowData, nextNode, session, flow);
+                    return await this.advanceAndCollect(flowData, nextNode, session, flow, userInput);
                 }
             }
         }
@@ -164,7 +156,7 @@ export class BotRuntimeService {
 
             const nextNodeId = this.getNextNodeId(flowData, currentNode.id, 'output');
             const nextNode = nodes.find((n: any) => n.id === nextNodeId);
-            return await this.advanceAndCollect(flowData, nextNode, session, flow);
+            return await this.advanceAndCollect(flowData, nextNode, session, flow, userInput);
         }
 
         if (currentNode.type === 'menu') {
@@ -197,21 +189,35 @@ export class BotRuntimeService {
                 __reservation_stage: 'day_selection'  // iniciar etapas de reserva si aplica
             };
 
-            return await this.advanceAndCollect(flowData, nextNode, session, flow);
+            return await this.advanceAndCollect(flowData, nextNode, session, flow, userInput);
         }
 
         if (currentNode.type === 'ai_agent') {
-            const variables = session.variables || {};
-            // Simulación básica de respuesta de IA para el runtime client-side
-            const response = `🤖 [IA]: He recibido tu mensaje: "${userInput}". Usando mis habilidades integradas, estoy procesando tu solicitud para asistirte mejor. ¿En qué más puedo ayudarte?`;
-            
-            // En el simulador, mantenemos la sesión en el agente IA (no avanza automáticamente a la salida)
-            await this.updateSession(session, currentNode.id, 'ai_input');
-            
-            return {
-                messages: [response],
-                session
-            };
+            try {
+                const { data: aiResponse, error: aiError } = await this.supabase.processBotAI({
+                    conversation_id: session.conversation_id,
+                    merchant_id: session.merchant_id,
+                    message: userInput
+                });
+
+                if (aiError) throw aiError;
+
+                const responseText = aiResponse?.choices?.[0]?.message?.content || aiResponse?.content || 'El asistente no pudo responder en este momento.';
+                
+                // Actualizar la sesión para que permanezca en el nodo IA esperando más input
+                await this.updateSession(session, currentNode.id, 'ai_input');
+                
+                return {
+                    messages: [responseText],
+                    session
+                };
+            } catch (err) {
+                console.error('[BotRuntime] Error llamando al motor IA:', err);
+                return {
+                    messages: ['🤖 Lo siento, tuve un problema técnico procesando tu solicitud. ¿Podrías intentar de nuevo?'],
+                    session
+                };
+            }
         }
 
         if (currentNode.type === 'reservation_check') {
@@ -286,7 +292,7 @@ export class BotRuntimeService {
 
                     const nextAvailId = this.getNextNodeId(flowData, currentNode.id, 'available');
                     const nextNode = nodes.find((n: any) => n.id === nextAvailId);
-                    return await this.advanceAndCollect(flowData, nextNode, session, flow);
+                    return await this.advanceAndCollect(flowData, nextNode, session, flow, userInput);
                 }
 
                 // No entendió
@@ -334,7 +340,8 @@ export class BotRuntimeService {
         flowData: any,
         node: any,
         session: any,
-        flow: any
+        flow: any,
+        userInput: string = ''
     ): Promise<BotResponse> {
         const messages: string[] = [];
         const executionPath: any[] = []; 
@@ -346,111 +353,177 @@ export class BotRuntimeService {
         while (node && iterations < maxIterations) {
             iterations++;
             executionPath.push({ id: node.id, type: node.type, label: node.data?.label || node.type });
+            
+            const tLog: any = {
+                nodeId: node.id,
+                nodeLabel: node.data?.label || node.type,
+                service: 'db', // default
+                timestamp: new Date(),
+                request: { node_data: node.data, variables: { ...session.variables } },
+                response: {}
+            };
+
             switch (node.type) {
                 case 'message':
+                    tLog.service = 'db';
                     const msg = node.data?.message;
-                    if (msg) messages.push(this.resolveVariables(msg, session.variables, flow));
+                    const resolvedMsg = msg ? this.resolveVariables(msg, session.variables, flow) : '';
+                    if (msg) messages.push(resolvedMsg);
+                    tLog.response = { resolved_message: resolvedMsg };
+                    
                     const nextMsgNodeId = this.getNextNodeId(flowData, node.id, 'output');
                     node = nodes.find((n: any) => n.id === nextMsgNodeId);
                     break;
 
                 case 'send_pdf':
+                    tLog.service = 'db';
                     const pdfUrl = this.resolveVariables(node.data?.pdf_url || '', session.variables, flow);
                     const pdfCaption = this.resolveVariables(node.data?.pdf_caption || '', session.variables, flow);
                     if (pdfUrl) {
                         messages.push(`[PDF:${pdfUrl}:${pdfCaption || 'Documento PDF'}]`);
                     }
+                    tLog.response = { pdf_url: pdfUrl, caption: pdfCaption };
                     const nextPdfNodeId = this.getNextNodeId(flowData, node.id, 'output');
                     node = nodes.find((n: any) => n.id === nextPdfNodeId);
                     break;
 
-                case 'question':
-                    const qMsg = node.data?.message || node.data?.question;
-                    if (qMsg) messages.push(this.resolveVariables(qMsg, session.variables, flow));
-                    await this.updateSession(session, node.id, 'input');
-                    return { messages, session, executionPath };
-
                 case 'menu':
+                    tLog.service = 'db';
                     const mMsg = node.data?.message || node.data?.label || 'Por favor elige una opción:';
                     const menuMsg = this.resolveVariables(mMsg, session.variables, flow);
                     const mOptions = node.data?.options || [];
                     const optionsText = mOptions.map((o: any, i: number) => `${i + 1}. ${o.text}`).join('\n');
                     messages.push(`${menuMsg}\n\n${optionsText}`);
+                    tLog.response = { options: mOptions.length };
                     await this.updateSession(session, node.id, 'menu_selection');
-                    return { messages, session, executionPath, options: mOptions };
+                    
+                    if (!session.technicalLogs) session.technicalLogs = [];
+                    session.technicalLogs.push(tLog);
+                    return { messages, session, executionPath, options: mOptions, technicalLogs: session.technicalLogs };
 
                 case 'reservation_check':
-                    // Iniciar etapas de reserva: pedir día primero
+                    tLog.service = 'db';
                     const dayList = this.getNextDays(7);
                     const dayOpts = dayList.map((d: string, i: number) => `${i + 1}. ${d}`).join('\n');
                     messages.push(`📅 ¿Para qué día te gustaría agendar?\n\n${dayOpts}`);
-                    // CRUCIAL: guardar el nodo reservation_check como nodo actual + stage inicial
-                    session.variables = {
-                        ...(session.variables || {}),
-                        __reservation_stage: 'day_selection'
-                    };
+                    session.variables = { ...(session.variables || {}), __reservation_stage: 'day_selection' };
+                    tLog.response = { stage: 'day_selection' };
                     await this.updateSession(session, node.id, 'input');
-                    return { messages, session, executionPath };
-
+                    
+                    if (!session.technicalLogs) session.technicalLogs = [];
+                    session.technicalLogs.push(tLog);
+                    return { messages, session, executionPath, technicalLogs: session.technicalLogs };
 
                 case 'condition':
+                    tLog.service = 'db';
                     const result = this.evaluateCondition(node.data, session.variables);
+                    tLog.response = { 
+                        evaluation: `${node.data.variable} ${node.data.operator} ${node.data.value}`,
+                        result: result 
+                    };
                     const nextCondNodeId = this.getNextNodeId(flowData, node.id, result ? 'yes' : 'no');
                     node = nodes.find((n: any) => n.id === nextCondNodeId);
+                    // IMPORTANTE: No usar return aquí, dejar que el while continúe al siguiente nodo
                     break;
 
                 case 'action':
+                    tLog.service = 'db';
                     const actionResult = await this.executeAction(node.data, session);
                     if (actionResult) messages.push(actionResult);
+                    tLog.response = { action: node.data.actionType, result: actionResult };
+                    
                     const nextActNodeId = this.getNextNodeId(flowData, node.id, 'output');
                     node = nodes.find((n: any) => n.id === nextActNodeId);
                     break;
 
                 case 'ai_agent':
-                    const aiMsg = node.data?.message || '🧠 [Agente Inteligente]: Hola, ¿cómo puedo ayudarte hoy?';
-                    messages.push(this.resolveVariables(aiMsg, session.variables, flow));
-                    await this.updateSession(session, node.id, 'ai_input');
-                    return { messages, session, executionPath };
+                case 'n8n_agent':
+                    const isN8N = node.type === 'n8n_agent';
+                    tLog.service = isN8N ? 'n8n' : 'ai';
 
-                case 'end':
-                    if (node.data?.message) {
-                        messages.push(this.resolveVariables(node.data.message, session.variables, flow));
-                    }
-                    await this.updateSession(session, node.id, null, 'completed');
-                    return { messages, session, executionPath, completed: true };
-
-                case 'reservation_create':
-                    // Registrar la reserva en el CRM y la Agenda real
-                    try {
-                        const vars = session.variables || {};
-                        const resourceId = vars.resource_id;
-                        const bookingDay  = vars.__selected_day || vars.booking_start || 'Hoy';
-                        const bookingTime = vars.__selected_time || '09:00';
-                        const currentYear = new Date().getFullYear();
-                        const fullDateTime = `${bookingDay} ${currentYear} ${bookingTime}`;
-
-                        if (resourceId && this.supabase) {
-                            await this.supabase.createReservation({
-                                merchant_id: session.merchant_id,
-                                resource_id: resourceId,
-                                start_time: fullDateTime,
-                                customer_name: vars.customer_name || 'Cliente de Chat',
-                                customer_phone: vars.customer_phone || session.phone || '',
-                                pax: node.data?.pax || 1,
-                                status: 'confirmed'
+                    if (isN8N) {
+                        // n8n sigue usando su webhook directamente
+                        const webhookUrl = node.data.n8n_webhook_url;
+                        const n8nPayload = {
+                            merchant_id: session.merchant_id,
+                            customer_id: session.customer_id,
+                            message: userInput || '',
+                            prompt: node.data.prompt
+                        };
+                        tLog.request = n8nPayload;
+                        try {
+                            const res = await fetch(webhookUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(n8nPayload)
                             });
+                            const data = await res.json();
+                            tLog.response = data;
+                            const txt = data.output || data.text || data.message || '';
+                            if (txt) messages.push(txt);
+                        } catch (e: any) {
+                            tLog.response = { error: e.message };
+                            messages.push('⚠️ Error conectando con n8n. Verifica el webhook.');
                         }
-                    } catch (err) {
-                        console.error('Bot Error Booking:', err);
+                        await this.updateSession(session, node.id, 'input');
+                    } else {
+                        // ✅ MOTOR REAL: Enviar el flujo completo al backend
+                        // El backend usa Skills (catalog_search, add_to_cart),
+                        // memoria conversacional y soporte multi-proveedor IA
+                        const aiPayload = {
+                            conversation_id: session.conversation_id,
+                            merchant_id: session.merchant_id,
+                            message: userInput || '',
+                            simulator_mode: true,
+                            flow_id: flow.id || 'simulator',
+                            node_context: node.data.prompt,
+                            flow_data: flowData
+                        };
+                        tLog.request = {
+                            ...aiPayload,
+                            flow_data: `[${(flowData?.nodes?.length || 0)} nodos, ${(flowData?.connections?.length || 0)} conexiones]`
+                        };
+
+                        try {
+                            const { data: aiRes, error: aiErr } = await this.supabase.processBotAI(aiPayload);
+                            if (aiErr) throw aiErr;
+
+                            tLog.response = { content: aiRes?.content, success: aiRes?.success };
+                            const responseText = aiRes?.content || '';
+                            if (responseText) messages.push(responseText);
+                            else messages.push('🤖 El asistente no pudo generar una respuesta. Revisa la configuración del nodo.');
+                        } catch (aiExc: any) {
+                            tLog.response = { error: aiExc.message };
+                            messages.push('🤖 El asistente no está disponible en este momento. Intenta de nuevo.');
+                            await this.updateSession(session, node.id, 'ai_input');
+                            if (!session.technicalLogs) session.technicalLogs = [];
+                            session.technicalLogs.push(tLog);
+                            return { messages, session, executionPath, technicalLogs: session.technicalLogs };
+                        }
+                        await this.updateSession(session, node.id, 'ai_input');
                     }
 
-                    const nextCreateNodeId = this.getNextNodeId(flowData, node.id, 'success');
-                    node = nodes.find((n: any) => n.id === nextCreateNodeId);
-                    break;
+                    if (!session.technicalLogs) session.technicalLogs = [];
+                    session.technicalLogs.push(tLog);
+                    return { messages, session, executionPath, technicalLogs: session.technicalLogs };
+
+                case 'question':
+                    tLog.service = 'db';
+                    const qMsg = node.data?.message || node.data?.question;
+                    if (qMsg) messages.push(this.resolveVariables(qMsg, session.variables, flow));
+                    tLog.response = { waiting_for: node.data?.variable };
+                    await this.updateSession(session, node.id, 'input');
+                    
+                    if (!session.technicalLogs) session.technicalLogs = [];
+                    session.technicalLogs.push(tLog);
+                    return { messages, session, executionPath, technicalLogs: session.technicalLogs };
 
                 default:
                     node = null;
             }
+
+            if (!session.technicalLogs) session.technicalLogs = [];
+            session.technicalLogs.push(tLog);
         }
 
         if (iterations >= maxIterations) {

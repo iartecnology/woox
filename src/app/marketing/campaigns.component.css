@@ -133,7 +133,7 @@
 
 .status-badge.completed {
     background: #f3f4f6;
-    color: #374151;
+    color: var(--text-primary);
 }
 
 .status-badge.running {

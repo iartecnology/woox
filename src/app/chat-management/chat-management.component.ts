@@ -154,46 +154,46 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             content = content.substring(0, 200000) + '... [Mensaje truncado]';
         }
 
-        // Custom Parsing for [PDF:url:caption]
-        content = content.replace(/\[PDF:(.*?)\]/g, (match, inner) => {
+        // 1. Parse Markdown first
+        let html = '';
+        try {
+            html = marked.parse(content, { breaks: true }) as string;
+        } catch (e) {
+            console.error('Error parsing markdown:', e);
+            html = content; // Fallback
+        }
+
+        // 2. Custom Parsing for [PDF:url:caption] AFTER markdown
+        // We use a regex that matches the pattern in the resulting HTML
+        html = html.replace(/\[PDF:(.*?)\]/g, (match, inner) => {
             let safeUrl = '';
             let safeCaption = 'Documento PDF';
             
-            const urlEndIdx = inner.lastIndexOf('.pdf:');
-            if (urlEndIdx !== -1) {
-                safeUrl = encodeURI(inner.substring(0, urlEndIdx + 4).trim());
-                safeCaption = inner.substring(urlEndIdx + 5).trim() || 'Documento PDF';
+            // Try to find the last colon which separates URL from Caption
+            // Format is [PDF:https://url.com/file.pdf:My Caption]
+            const lastColonIdx = inner.lastIndexOf(':');
+            
+            if (lastColonIdx !== -1 && lastColonIdx > 8) { // > 8 to skip https://
+                safeUrl = inner.substring(0, lastColonIdx).trim();
+                safeCaption = inner.substring(lastColonIdx + 1).trim() || 'Documento PDF';
             } else {
-                const firstColonIdx = inner.indexOf(':');
-                const secondColonIdx = inner.indexOf(':', firstColonIdx + 1);
-                if (secondColonIdx !== -1) {
-                    safeUrl = encodeURI(inner.substring(0, secondColonIdx).trim());
-                    safeCaption = inner.substring(secondColonIdx + 1).trim() || 'Documento PDF';
-                } else {
-                    safeUrl = encodeURI(inner.trim());
-                }
+                safeUrl = inner.trim();
             }
 
             return `
-                <div class="pdf-attachment" style="background: #f1f5f9; padding: 12px; border-radius: 8px; margin: 10px 0; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px;">
+                <div class="pdf-attachment" style="background: #f1f5f9; padding: 12px; border-radius: 8px; margin: 10px 0; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; clear: both;">
                     <div style="background: #ef4444; color: white; border-radius: 6px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
                         📄
                     </div>
                     <div style="flex: 1;">
-                        <div style="font-weight: 600; font-size: 0.95rem; color: #1e293b;">${safeCaption}</div>
-                        <a href="${safeUrl}" target="_blank" style="font-size: 0.85rem; color: #3b82f6; text-decoration: none; font-weight: 500;">Abrir Documento →</a>
+                        <div style="font-weight: 600; font-size: 0.95rem; color: #1e293b; margin-bottom: 2px;">${safeCaption}</div>
+                        <a href="${safeUrl}" target="_blank" style="font-size: 0.85rem; color: #3b82f6; text-decoration: none; font-weight: 500; display: inline-block;">Abrir Documento →</a>
                     </div>
                 </div>
             `;
         });
-        
-        try {
-            const html = marked.parse(content, { breaks: true }) as string;
-            return this.sanitizer.bypassSecurityTrustHtml(html);
-        } catch (e) {
-            console.error('Error parsing markdown:', e);
-            return content; // Fallback to plain text
-        }
+
+        return this.sanitizer.bypassSecurityTrustHtml(html);
     }
 
     get filteredGroupedProducts(): { category: string, products: any[] }[] {
@@ -635,8 +635,10 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
         }
 
         this.selectedConversation = conv;
-        this.mobileService.setHeader(conv.customer_name, true, () => this.backToList());
-        this.mobileService.setImmersive(true);
+        if (this.isMobile()) {
+            this.mobileService.setHeader(conv.customer_name, true, () => this.backToList());
+            this.mobileService.setImmersive(true);
+        }
         this.isLoadingDetails = true;
         this.cdr.detectChanges();
 

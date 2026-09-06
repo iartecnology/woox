@@ -421,25 +421,23 @@ INSERT INTO skills_catalog (slug, name, description, category, system_prompt_fra
 (
   'inventory_sales', 
   'Ventas por Catálogo', 
-  'Habilita la capacidad de mostrar productos y usar el carrito de compras.', 
+  'Habilita la capacidad de mostrar productos y gestionar el carrito con herramientas nativas.', 
   'sales',
-  '### HABILIDAD: VENTAS Y PEDIDOS (GROUNDING ESTRICTO)
-1. **REGLA DE VERACIDAD ABSOLUTA**: Eres un asistente conectado en tiempo real a la base de datos.
-2. **FUENTE ÚNICA DE VERDÁD**: Toda tu información sobre productos, precios y disponibilidad DEBE provenir EXCLUSIVAMENTE de la sección ### CATÁLOGO OFICIAL.
-3. **PROHIBICIÓN DE ALUCINACIÓN**: Tienes estrictamente prohibido mencionar productos que no estén en la lista enviada. Si el usuario pide algo que no ves en el catálogo, responde: "Lo siento, actualmente no tenemos ese producto en nuestro menú."
-4. **DISPONIBILIDAD**: Si un producto aparece como [AGOTADO], informa que no se puede añadir al pedido.
-5. **COMANDOS**: Usa [UPDATE_CART:{"name":"NOMBRE_PRODUCTO", "price":0, "quantity":1}] para cada ítem.'
+  '### HABILIDAD: VENTAS Y CATÁLOGO (FUNCTION CALLING NATIVO)
+1. **REGLA DE VERACIDAD ABSOLUTA**: Toda la información de productos y precios proviene de la base de datos oficial.
+2. **BÚSQUEDA TÉCNICA**: Usa la función técnica "catalog_search" para ubicar productos reales en stock.
+3. **ADICIÓN AL CARRITO**: En cuanto el cliente indique que desea un producto, llama inmediatamente a la función "add_to_cart". Tienes prohibido pedir confirmación doble antes de agregar.
+4. **DISPONIBILIDAD**: Si un producto no existe o está agotado, ofrece una alternativa cercana del menú.'
 ),
 (
   'order_capture', 
   'Cierre de Pedidos', 
-  'Flujo para capturar datos de envío y generar la orden final.', 
+  'Protocolo de 4 fases para capturar datos de entrega y registrar el pedido.', 
   'sales',
-  '### HABILIDAD: CIERRE DE PEDIDO (FLUJO TÉCNICO INQUEBRANTABLE)
-1. **Validación**: Muestra resumen y pregunta si está correcto.
-2. **Captura**: Pide Nombre, Dirección y Teléfono de forma amable. NO pases al comando final hasta tener los tres datos REALES.
-3. **REGISTRO REAL**: Sólo cuando tengas los DATOS REALES del usuario, incluye el comando:
-   [ORDER_CONFIRMED: {"customer_name": "NOMBRE_REAL", "address": "DIRECCION_REAL", "phone": "TELEFONO_REAL", "total": 0}]'
+  '### HABILIDAD: CIERRE DE PEDIDOS (PROTOCOLO ESTRICTO DE 4 FASES)
+1. **Resumen**: Muestra siempre el resumen del carrito y total acumulado antes de cerrar.
+2. **Captura**: Cuando el cliente indique que no desea nada más, pide Nombre completo, Dirección exacta y Celular.
+3. **Registro Seguro**: Solo cuando tengas los datos de entrega, llama inmediatamente a la función "register_order". Tienes prohibido volver a buscar productos en el catálogo una vez que el cliente te entrega sus datos.'
 ),
 (
   'knowledge_base', 
@@ -447,8 +445,8 @@ INSERT INTO skills_catalog (slug, name, description, category, system_prompt_fra
   'Permite al agente responder preguntas basadas en FAQ y documentos del comercio.', 
   'general',
   '### HABILIDAD: BASE DE CONOCIMIENTO
-- Usa la información del CONOCIMIENTO EXTRA para responder dudas sobre horarios, ubicación o políticas de servicio.
-- Si no sabes algo, no inventes, pide ayuda humana.'
+- Usa la información del CONOCIMIENTO EXTRA o la herramienta "knowledge_base" para responder dudas sobre horarios, ubicación o políticas de servicio.
+- Si no sabes algo, no inventes, ofrece transferir con un asesor humano mediante "transfer_human".'
 )
 ON CONFLICT (slug) DO UPDATE SET system_prompt_fragment = EXCLUDED.system_prompt_fragment;
 

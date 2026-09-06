@@ -30,7 +30,7 @@ body {
     transform: translateX(-50%);
     font-size: 1.5rem;
     font-weight: 800;
-    color: #111827;
+    color: var(--text-primary);
     /* Darker, less purple */
     letter-spacing: -0.5px;
     font-family: 'Inter', sans-serif;
@@ -138,7 +138,7 @@ body {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    background-color: #ffffff !important;
+    background-color: var(--bg-secondary) !important;
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
     min-width: 240px;
@@ -179,7 +179,7 @@ body {
 
 .dropdown-name {
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
     font-size: 0.95rem;
 }
 
@@ -266,7 +266,7 @@ body {
     left: -280px;
     width: 280px;
     height: 100vh;
-    background-color: #ffffff !important;
+    background-color: var(--bg-secondary) !important;
     opacity: 1 !important;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
     z-index: 2000;
@@ -311,7 +311,7 @@ body {
 
 .close-sidebar:hover {
     background: #f3f4f6;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 
@@ -335,7 +335,7 @@ body {
 
 .sidebar-content a:hover {
     background: #f9fafb;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .sidebar-content a.active {
@@ -578,7 +578,7 @@ body {
 }
 
 .modal-content {
-    background: #ffffff;
+    background: var(--bg-secondary);
     color: var(--text-primary);
     padding: 40px;
     border-radius: 24px;
@@ -753,7 +753,7 @@ body {
 .loading-text {
     font-size: 1.25rem;
     font-weight: 700;
-    color: #1f2937;
+    color: var(--text-primary);
     margin: 0;
 }
 

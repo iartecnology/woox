@@ -15,7 +15,7 @@
 .header-text h1 {
     font-size: 1.8rem;
     font-weight: 800;
-    color: #111827;
+    color: var(--text-primary);
     margin: 0;
 }
 
@@ -64,7 +64,7 @@
 
 .config-section.highlight {
     border-left: 5px solid #ef4444;
-    background: #fffafa;
+    background: var(--bg-secondary)afa;
 }
 
 .config-section h3 {
@@ -93,7 +93,7 @@
     font-size: 0.85rem;
     font-weight: 700;
     margin-bottom: 8px;
-    color: #374151;
+    color: var(--text-primary);
 }
 
 textarea,
@@ -131,7 +131,7 @@ select:focus {
 }
 
 .agent-instructions-preview.restrictions-pre {
-    background: #fff1f2;
+    background: var(--bg-secondary)1f2;
     border-color: #fecaca;
     color: #991b1b;
 }
@@ -171,7 +171,7 @@ select:focus {
 .test-btn {
     background: white;
     border: 1px solid #e5e7eb;
-    color: #1f2937;
+    color: var(--text-primary);
     padding: 10px 20px;
     border-radius: 12px;
     font-weight: 600;
@@ -277,7 +277,7 @@ input:checked+.slider:before {
     font-size: 0.95rem;
     font-weight: 600;
     user-select: none;
-    color: #374151;
+    color: var(--text-primary);
 }
 
 .checkbox-container input {
@@ -617,7 +617,7 @@ input:checked+.slider:before {
     margin: 0 0 8px 0;
     font-size: 1.1rem;
     font-weight: 800;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .skill-info p {
@@ -777,7 +777,7 @@ input:checked+.bot-slider {
 }
 
 .automation-status-badge.manual {
-    background: #fff7ed;
+    background: var(--bg-secondary)7ed;
     color: #c2410c;
     border-color: #fed7aa;
 }
@@ -843,7 +843,7 @@ input:checked+.bot-slider {
 
 .manual-alert {
     margin-top: 24px;
-    background: #fff7ed;
+    background: var(--bg-secondary)7ed;
     border: 1px solid #fed7aa;
     border-radius: 12px;
     padding: 16px;

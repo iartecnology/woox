@@ -718,6 +718,21 @@ export class SupabaseService {
         };
     }
 
+    async processBotAI(params: { 
+        conversation_id: string; 
+        merchant_id: string; 
+        message: string; 
+        context?: string;
+        // Nuevos parámetros para el simulador:
+        flow_data?: any;       // El flujo JSON completo
+        flow_id?: string;      // ID del flujo
+        simulator_mode?: boolean; // true = usa el motor real con el flujo enviado
+    }) {
+        return await supabase.functions.invoke('bot-engine', {
+            body: params
+        });
+    }
+
     async getMerchantCustomers(merchantId: string) {
         return await supabase
             .from('customers')

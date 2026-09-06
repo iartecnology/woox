@@ -23,8 +23,15 @@
       </span>
     </div>
 
+    <span class="health-badge" [class]="'health-' + flowHealthStatus.status" [title]="flowHealthStatus.details || ''">
+      <span *ngIf="flowHealthStatus.status === 'ok'">💚</span>
+      <span *ngIf="flowHealthStatus.status === 'warning'">⚠️</span>
+      <span *ngIf="flowHealthStatus.status === 'error'">🚨</span>
+      {{ flowHealthStatus.message }}
+    </span>
+
     <button id="btn-plantillas" class="btn-icon" (click)="openTemplateModal()">
-      🔥 Plantillas Pro
+      🔥 Plantillas ADN
     </button>
     <button *ngIf="isSuperAdmin" class="btn-icon btn-outline" (click)="showSaveTemplateModal = true">
       🎁 Guardar como Plantilla
@@ -37,21 +44,34 @@
 
 <!-- Modal de Selección de Plantillas -->
 <div *ngIf="showTemplateModal" id="modal-selector-plantillas" class="delete-confirmation-overlay" style="display: flex !important;">
-  <div class="delete-confirmation-dialog template-selector-modal" (click)="$event.stopPropagation()" [style.maxWidth]="templateToConfirm ? '450px' : '700px'">
+  <div class="delete-confirmation-dialog template-selector-modal" (click)="$event.stopPropagation()" [style.maxWidth]="templateToConfirm ? '450px' : '780px'">
     
     <!-- Vista 1: Selector de Plantillas -->
     <ng-container *ngIf="!templateToConfirm">
       <div class="dialog-icon">✨</div>
-      <h3>Plantillas Pro</h3>
-      <p>Elige una estructura base para comenzar tu flujo más rápido:</p>
+      <h3>Plantillas de Flujos ADN</h3>
+      <p>Elige un ciclo de venta o atención preconfigurado con las mejores prácticas de IA:</p>
+
+      <!-- Filtros por Categoría -->
+      <div class="template-filter-pills">
+        <button class="filter-pill" [class.active]="selectedTemplateCategory === 'all'" (click)="selectedTemplateCategory = 'all'">Todos</button>
+        <button class="filter-pill" [class.active]="selectedTemplateCategory === 'commerce'" (click)="selectedTemplateCategory = 'commerce'">🛍️ Ventas & Catálogo</button>
+        <button class="filter-pill" [class.active]="selectedTemplateCategory === 'booking'" (click)="selectedTemplateCategory = 'booking'">📅 Citas & Reservas</button>
+        <button class="filter-pill" [class.active]="selectedTemplateCategory === 'tools'" (click)="selectedTemplateCategory = 'tools'">🛠️ RAG & Herramientas</button>
+      </div>
+
       <div class="template-grid">
-        <div class="template-card" *ngFor="let t of templates" (click)="selectTemplate(t.id)">
+        <div class="template-card" *ngFor="let t of filteredTemplates" (click)="selectTemplate(t.id)">
           <div class="template-card-icon">
             <i *ngIf="t.icon?.startsWith('fa-')" [class]="t.icon"></i>
-            <span *ngIf="!t.icon?.startsWith('fa-')">{{ t.icon || '📄' }}</span>
+            <span *ngIf="!t.icon?.startsWith('fa-') && t.icon?.length <= 2">{{ t.icon || '📄' }}</span>
+            <i *ngIf="!t.icon?.startsWith('fa-') && t.icon?.length > 2" class="material-icons">{{ t.icon }}</i>
           </div>
           <div class="template-card-body">
-            <h4>{{ t.name }}</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <h4>{{ t.name }}</h4>
+              <span class="category-tag" [class]="'cat-' + t.category">{{ t.category }}</span>
+            </div>
             <p>{{ t.description }}</p>
           </div>
           <!-- Botón borrar: solo en plantillas guardadas (tienen created_at) -->
@@ -355,10 +375,13 @@
       <button class="sidebar-tab" [class.active]="activeSidebarTab === 'architect'" (click)="activeSidebarTab = 'architect'">
         <i class="fa-solid fa-wand-magic-sparkles"></i> Arquitecto IA
       </button>
+      <button class="sidebar-tab" [class.active]="activeSidebarTab === 'inspector'" (click)="activeSidebarTab = 'inspector'">
+        <i class="fa-solid fa-bug"></i> Inspector
+      </button>
     </div>
 
     <!-- Panel Content: Simulator -->
-    <div class="tab-panel-content" *ngIf="activeSidebarTab === 'simulator'" style="padding:0;">
+    <div class="tab-panel-content" [style.display]="activeSidebarTab === 'simulator' ? 'block' : 'none'" style="padding:0;">
       <app-chat-simulator 
           *ngIf="merchantId"
           [merchantName]="merchantName" 
@@ -368,8 +391,57 @@
           [botFlow]="this.botFlow"
           [botMode]="true"
           [inline]="true"
-          (onNodeExecuted)="onSimNodeExecuted($event)">
+          (onNodeExecuted)="onSimNodeExecuted($event)"
+          (onTechnicalLog)="handleTechnicalLog($event)">
       </app-chat-simulator>
+    </div>
+
+    <!-- Panel Content: Inspector (Debugger) -->
+    <div class="tab-panel-content inspector-mode" *ngIf="activeSidebarTab === 'inspector'">
+      <div class="chat-header">
+        <h4>🔍 Inspector de Ejecución</h4>
+        <button class="btn btn-sm btn-outline-secondary" (click)="executionLogs = []">🗑️ Limpiar</button>
+      </div>
+
+      <div class="inspector-list" #inspectorList>
+        <div *ngIf="executionLogs.length === 0" class="empty-inspector">
+           <div class="empty-icon">📂</div>
+           <h4>Consola Limpia</h4>
+           <p>Los datos técnicos aparecerán aquí.</p>
+        </div>
+
+        <!-- Usamos slice().reverse() para no mutar el array original y trackBy para estabilidad -->
+        <div *ngFor="let log of executionLogs.slice().reverse(); trackBy: trackLogById" 
+             class="log-card" 
+             (click)="selectedLog = log" 
+             [class.active]="selectedLog === log">
+          <div class="log-indicator" [class]="log.service"></div>
+          <div class="log-content">
+            <div class="log-top">
+              <span class="log-badge" [class]="log.service">{{ log.service | uppercase }}</span>
+              <span class="log-time">{{ log.timestamp | date:'HH:mm:ss' }}</span>
+            </div>
+            <div class="log-node-name">{{ log.nodeLabel }}</div>
+          </div>
+          <div class="log-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        </div>
+      </div>
+
+      <!-- Detalle del Log Seleccionado -->
+      <div class="inspector-detail" *ngIf="selectedLog">
+        <div class="detail-section">
+          <h5>📤 Request (Enviado)</h5>
+          <pre class="json-viewer">{{ selectedLog.request | json }}</pre>
+        </div>
+        <div class="detail-section mt-3">
+          <h5>📥 Response (Recibido)</h5>
+          <pre class="json-viewer">{{ selectedLog.response | json }}</pre>
+        </div>
+        <div class="detail-section mt-3" *ngIf="selectedLog.fullPrompt">
+          <h5>📜 Prompt Completo</h5>
+          <div class="prompt-box">{{ selectedLog.fullPrompt }}</div>
+        </div>
+      </div>
     </div>
 
     <!-- Panel Content: Architect (IA Assist) -->
@@ -590,6 +662,28 @@
     </div>
 
     <!-- Campos del Nodo AI Skill -->
+    <div *ngIf="editingNode.type === 'n8n_agent'" class="form-group" style="grid-column: span 2;">
+      <label>URL del Webhook Maestro (n8n)</label>
+      <input type="text" class="form-control mb-2" [(ngModel)]="editingNode.data.n8n_webhook_url" placeholder="https://n8n.tu-servidor.com/webhook/..." />
+      
+      <label>Servidor MCP Skills (Default)</label>
+      <input type="text" class="form-control mb-2" [(ngModel)]="editingNode.data.mcp_server_url" [placeholder]="generatedMcpServerUrl" />
+      
+      <div class="alert alert-secondary py-2 small d-flex flex-column gap-1 mb-2" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
+        <span class="fw-bold">🔗 URL del Servidor MCP para tu Comercio:</span>
+        <code class="text-break select-all" style="background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 4px; color: #10b981; font-family: monospace; display: block; margin-top: 4px;">{{ generatedMcpServerUrl }}</code>
+        <span class="opacity-70 mt-1">Usa esta URL en n8n para que el agente acceda a tus skills (catálogo, carrito, stock).</span>
+      </div>
+
+      <label>System Prompt (Personalidad del Comercio)</label>
+      <textarea class="form-control mb-2" rows="4" [(ngModel)]="editingNode.data.prompt" 
+                placeholder="Ej: Eres un asistente experto en comida italiana..."></textarea>
+      
+      <div class="alert alert-info py-2 small">
+        💡 Este nodo enviará automáticamente el <code>merchant_id</code> y <code>customer_id</code> a n8n para manejo multi-tenant.
+      </div>
+    </div>
+
     <div *ngIf="editingNode.type === 'ai_skill'" class="ai-skill-properties" style="grid-column: span 2;">
       <div class="form-group">
         <label>Habilidad (Tool del Agente IA)</label>

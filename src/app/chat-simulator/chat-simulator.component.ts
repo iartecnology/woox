@@ -567,6 +567,7 @@ export class ChatSimulatorComponent implements OnInit, OnDestroy, OnChanges, Aft
   @Input() botFlow: any = null;
   @Input() showLog: boolean = true;
   @Output() onNodeExecuted = new EventEmitter<string>();
+  @Output() onTechnicalLog = new EventEmitter<any>();
   @Output() onClose = new EventEmitter<void>();
 
   logCollapsed: boolean = false;
@@ -946,6 +947,42 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
           temperature: 0.8,
           max_tokens: 100
         };
+      } else if (this.aiProvider === 'openrouter') {
+        apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+        headers['Authorization'] = `Bearer ${this.aiApiKey}`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Historial reciente:\n${recentMessages}\n\nEscribe tu próxima respuesta como cliente:` }
+          ],
+          temperature: 0.8,
+          max_tokens: 100
+        };
+      } else if (this.aiProvider === 'cerebras') {
+        apiUrl = 'https://api.cerebras.ai/v1/chat/completions';
+        headers['Authorization'] = `Bearer ${this.aiApiKey}`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Historial reciente:\n${recentMessages}\n\nEscribe tu próxima respuesta como cliente:` }
+          ],
+          temperature: 0.8,
+          max_tokens: 100
+        };
+      } else if (this.aiProvider === 'zai') {
+        apiUrl = 'https://api.z.ai/api/paas/v4/chat/completions';
+        headers['Authorization'] = `Bearer ${this.aiApiKey}`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Historial reciente:\n${recentMessages}\n\nEscribe tu próxima respuesta como cliente:` }
+          ],
+          temperature: 0.8,
+          max_tokens: 100
+        };
       } else if (this.aiProvider === 'ollama') {
         apiUrl = `${this.ollamaBaseUrl}/api/chat`;
         requestBody = {
@@ -987,7 +1024,7 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
 
         const data = await response.json();
         let text = '';
-        if (isOpenAI) {
+        if (isOpenAI || this.aiProvider === 'openrouter' || this.aiProvider === 'cerebras' || this.aiProvider === 'zai') {
            text = data.choices?.[0]?.message?.content || '';
         } else if (this.aiProvider === 'lmstudio') {
            text = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || '';
@@ -1116,9 +1153,14 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
            const t1 = performance.now();
            const stepMs = Math.round(t1 - t0);
            
-            if (botRes && botRes.messages.length > 0) {
+            if (botRes && (botRes.messages.length > 0 || (botRes.executionPath && botRes.executionPath.length > 0))) {
               this.messages = []; // Limpiar el "Iniciando..."
               this.totalFlowNodes = botRes.totalNodes || 0;
+
+              // Emitir logs técnicos si los hay
+              if (botRes.technicalLogs && botRes.technicalLogs.length > 0) {
+                botRes.technicalLogs.forEach((log: any) => this.onTechnicalLog.emit(log));
+              }
               
               if (botRes.executionPath) {
                this.totalSessionExecutions += botRes.executionPath.length;
@@ -1240,14 +1282,20 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
         }
         
         // PROCESAR EXECUTION PATH
-        if (botResponse && botResponse.executionPath) {
-          this.totalSessionExecutions += botResponse.executionPath.length;
-          for (const node of botResponse.executionPath) {
-            this.activeSimNodeId = node.id;
-            this.onNodeExecuted.emit(node.id);
-            const existing = this.sessionExecutionLog.find(l => l.id === node.id);
-            if (existing) existing.count = (existing.count || 1) + 1;
-            else this.sessionExecutionLog.push({ ...node, count: 1 });
+        if (botResponse) {
+          if (botResponse.technicalLogs && botResponse.technicalLogs.length > 0) {
+            botResponse.technicalLogs.forEach((log: any) => this.onTechnicalLog.emit(log));
+          }
+          
+          if (botResponse.executionPath) {
+            this.totalSessionExecutions += botResponse.executionPath.length;
+            for (const node of botResponse.executionPath) {
+              this.activeSimNodeId = node.id;
+              this.onNodeExecuted.emit(node.id);
+              const existing = this.sessionExecutionLog.find(l => l.id === node.id);
+              if (existing) existing.count = (existing.count || 1) + 1;
+              else this.sessionExecutionLog.push({ ...node, count: 1 });
+            }
           }
         }
         
@@ -1434,6 +1482,51 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
           temperature: 0.7,
           max_tokens: 1024
         };
+      } else if (this.aiProvider === 'openrouter') {
+        apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+        headers['Authorization'] = `Bearer ${this.aiApiKey}`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: fullSystemInstruction },
+            ...chatContents.map((msg: any) => ({
+              role: msg.role === 'model' ? 'assistant' : 'user',
+              content: msg.parts[0].text
+            }))
+          ],
+          temperature: 0.7,
+          max_tokens: 1024
+        };
+      } else if (this.aiProvider === 'cerebras') {
+        apiUrl = 'https://api.cerebras.ai/v1/chat/completions';
+        headers['Authorization'] = `Bearer ${this.aiApiKey}`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: fullSystemInstruction },
+            ...chatContents.map((msg: any) => ({
+              role: msg.role === 'model' ? 'assistant' : 'user',
+              content: msg.parts[0].text
+            }))
+          ],
+          temperature: 0.7,
+          max_tokens: 1024
+        };
+      } else if (this.aiProvider === 'zai') {
+        apiUrl = 'https://api.z.ai/api/paas/v4/chat/completions';
+        headers['Authorization'] = `Bearer ${this.aiApiKey}`;
+        requestBody = {
+          model: modelName,
+          messages: [
+            { role: 'system', content: fullSystemInstruction },
+            ...chatContents.map((msg: any) => ({
+              role: msg.role === 'model' ? 'assistant' : 'user',
+              content: msg.parts[0].text
+            }))
+          ],
+          temperature: 0.7,
+          max_tokens: 1024
+        };
       } else if (this.aiProvider === 'ollama') {
         // Ollama API
         apiUrl = `${this.ollamaBaseUrl}/api/chat`;
@@ -1550,7 +1643,7 @@ Estado actual esperado por el bot: Esperando ${waitingFor} ${expectedVar ? `(Var
       let aiText = '';
       let usedTokens = 0;
 
-      if (isOpenAI) {
+      if (isOpenAI || this.aiProvider === 'openrouter' || this.aiProvider === 'cerebras' || this.aiProvider === 'zai') {
         aiText = data.choices?.[0]?.message?.content || '';
         usedTokens = data.usage?.total_tokens || 0;
       } else if (this.aiProvider === 'lmstudio') {
