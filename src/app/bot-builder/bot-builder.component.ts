@@ -95,13 +95,78 @@ export class BotBuilderComponent implements OnInit {
     return this.templates.filter(t => t.category === this.selectedTemplateCategory);
   }
 
-  get flowHealthStatus(): { status: 'ok' | 'warning' | 'error'; message: string; details?: string } {
+  activeModel: string = 'gemini-1.5-flash';
+
+  aiArchetypes = [
+    {
+      id: 'retail_seller',
+      name: 'Vendedor Asertivo',
+      icon: '🛍️',
+      badge: 'Comercio & Retail',
+      summary: 'Recomienda del catálogo, agrega al carrito en caliente y ofrece venta cruzada.',
+      prompt: `Eres el asesor comercial estrella de {{merchantName}}. Tu misión es entender qué necesita el cliente, buscar en el catálogo con 'catalog_search', ofrecer máximo 3 opciones apetitosas con precio y descripción, y cuando el cliente elija, agregar de inmediato al carrito con 'add_to_cart'. Luego sugiere un complemento o adicional antes de cerrar.`,
+      temperature: 0.5,
+      skills: ['catalog_search', 'add_to_cart', 'checkout_trigger']
+    },
+    {
+      id: 'restaurant_waiter',
+      name: 'Mesero Gourmet',
+      icon: '🍽️',
+      badge: 'Restaurantes',
+      summary: 'Presenta platos, opciones del menú y activa el checkout cuando el comensal termina.',
+      prompt: `Eres el mesero virtual de {{merchantName}}. Atiende con amabilidad y calidez:
+1. Recomienda entradas, platos fuertes y bebidas usando 'catalog_search'.
+2. Cuando el comensal elija un plato o bebida, agrégala de inmediato con 'add_to_cart'.
+3. Si el comensal dice "eso es todo", "nada más" o pide la cuenta, ejecuta de inmediato 'checkout_trigger' para pasar al formulario de entrega.`,
+      temperature: 0.4,
+      skills: ['catalog_search', 'add_to_cart', 'checkout_trigger']
+    },
+    {
+      id: 'booking_agent',
+      name: 'Asesor de Citas & Reservas',
+      icon: '📅',
+      badge: 'Servicios & Citas',
+      summary: 'Verifica disponibilidad de horarios y agenda citas de forma fluida.',
+      prompt: `Eres el asesor de reservas de {{merchantName}}. Tu labor es ayudar al usuario a agendar una cita:
+1. Pregunta qué servicio desea y la fecha de preferencia.
+2. Consulta la disponibilidad del horario usando 'get_available_slots'.
+3. Si hay cupo, confirma los datos del cliente y crea la reserva con 'create_booking'.`,
+      temperature: 0.3,
+      skills: ['get_available_slots', 'create_booking', 'transfer_human']
+    },
+    {
+      id: 'rag_support',
+      name: 'Soporte RAG Estricto',
+      icon: '📚',
+      badge: 'Knowledge Base',
+      summary: 'Responde exclusivamente con base en la documentación oficial y transfiere si no sabe.',
+      prompt: `Eres el especialista de soporte oficial de {{merchantName}}.
+Tu regla inquebrantable:
+1. Consulta SIEMPRE la herramienta 'knowledge_base' antes de responder cualquier duda técnica o política.
+2. Si la respuesta no está en la base de datos, sé honesto y ofrece conectar con un humano mediante 'transfer_human'.
+3. No inventes precios, garantías ni condiciones no descritas.`,
+      temperature: 0.2,
+      skills: ['knowledge_base', 'transfer_human']
+    }
+  ];
+
+  skillsToggleList = [
+    { type: 'catalog_search', label: 'Buscar Catálogo', icon: '🔍', desc: 'Consulta productos y precios oficiales' },
+    { type: 'add_to_cart', label: 'Añadir al Carrito', icon: '🛒', desc: 'Agrega productos directamente a la orden' },
+    { type: 'get_cart', label: 'Ver Carrito', icon: '👁️', desc: 'Resume los productos actuales y total' },
+    { type: 'checkout_trigger', label: 'Cierre Híbrido (Checkout)', icon: '✅', desc: 'Pasa a la captura de datos visual al terminar' },
+    { type: 'register_order', label: 'Registrar Pedido (Chat)', icon: '📦', desc: 'Cierre autónomo pidiendo datos en la conversación' },
+    { type: 'knowledge_base', label: 'Base de Conocimiento (RAG)', icon: '📚', desc: 'Búsqueda semántica en PDFs y documentos' },
+    { type: 'transfer_human', label: 'Transferir a Humano', icon: '👤', desc: 'Pasa el chat a un agente real de soporte' }
+  ];
+
+  get flowHealthStatus(): { status: 'ok' | 'warning' | 'error'; message: string; details?: string; canRepair?: boolean } {
     const nodes = this.botFlow.flow_data.nodes || [];
     const conns = this.botFlow.flow_data.connections || [];
     const startNode = nodes.find(n => n.type === 'start');
 
     if (!startNode) {
-      return { status: 'error', message: 'Falta Nodo de Inicio', details: 'Agrega un nodo "Inicio" para comenzar el recorrido.' };
+      return { status: 'error', message: 'Falta Nodo de Inicio', details: 'Agrega un nodo "Inicio" para comenzar el recorrido.', canRepair: true };
     }
 
     const aiAgent = nodes.find(n => n.type === 'ai_agent');
@@ -113,14 +178,262 @@ export class BotBuilderComponent implements OnInit {
       const hasOutputConn = conns.some(c => c.from === aiAgent.id && (c.fromPort === 'output' || !c.fromPort));
 
       if (hasCheckoutTrigger && !hasOutputConn) {
-        return { status: 'warning', message: 'IA con Checkout sin salida', details: 'El nodo IA tiene checkout_trigger pero no está conectado a los nodos de captura de datos.' };
+        return { 
+          status: 'warning', 
+          message: 'IA con Checkout sin salida', 
+          details: 'El nodo IA tiene checkout_trigger pero no está conectado a los nodos de captura de datos.',
+          canRepair: true 
+        };
       }
       if (!hasCheckoutTrigger && !hasRegisterOrder) {
-        return { status: 'warning', message: 'IA sin herramienta de cierre', details: 'Conecta "checkout_trigger" o "register_order" para que el ciclo de venta no quede abierto.' };
+        return { 
+          status: 'warning', 
+          message: 'IA sin herramienta de cierre', 
+          details: 'Conecta "checkout_trigger" o "register_order" para que el ciclo de venta no quede abierto.',
+          canRepair: true 
+        };
       }
     }
 
-    return { status: 'ok', message: 'Flujo Saludable', details: `${nodes.length} nodos conectados` };
+    return { status: 'ok', message: 'Flujo Saludable', details: `${nodes.length} nodos conectados`, canRepair: false };
+  }
+
+  // Auto-reparador de Flujo
+  autoRepairFlow() {
+    const nodes = this.botFlow.flow_data.nodes || [];
+    let conns = [...(this.botFlow.flow_data.connections || [])];
+    let repaired = false;
+
+    // 1. Asegurar nodo Start
+    let startNode = nodes.find(n => n.type === 'start');
+    if (!startNode) {
+      startNode = this.createSpecificNode('start', 300, 100, {
+        label: 'Inicio',
+        message: '¡Hola! Bienvenido a {{merchantName}}. ¿En qué puedo colaborarte hoy? 👋'
+      });
+      repaired = true;
+    }
+
+    // 2. Conectar Start con el primer nodo si no tiene salida
+    const startOutput = conns.find(c => c.from === startNode!.id);
+    const aiAgent = nodes.find(n => n.type === 'ai_agent');
+    if (!startOutput && aiAgent) {
+      conns.push({
+        id: `conn_repair_${Date.now()}_start`,
+        from: startNode.id,
+        fromPort: 'output',
+        to: aiAgent.id,
+        toPort: 'input'
+      });
+      repaired = true;
+    }
+
+    // 3. Reparar IA si no tiene herramientas de cierre
+    if (aiAgent) {
+      const skillsIn = conns.filter(c => c.to === aiAgent.id && c.toPort === 'skills_in');
+      const attachedSkillNodes = skillsIn.map(c => nodes.find(n => n.id === c.from));
+      const hasCheckout = attachedSkillNodes.some(n => n?.data?.actionType === 'checkout_trigger');
+      const hasRegister = attachedSkillNodes.some(n => n?.data?.actionType === 'register_order');
+
+      if (!hasCheckout && !hasRegister) {
+        // Conectar o crear checkout_trigger
+        let checkoutSkill = nodes.find(n => n.type === 'ai_skill' && n.data?.actionType === 'checkout_trigger');
+        if (!checkoutSkill) {
+          checkoutSkill = this.createSpecificNode('ai_skill', aiAgent.position.x + 220, aiAgent.position.y + 160, {
+            label: '✅ Finalizar Pedido',
+            actionType: 'checkout_trigger',
+            message: 'Se activa cuando el cliente termina de pedir o dice que no desea nada más.'
+          });
+        }
+        conns.push({
+          id: `conn_repair_${Date.now()}_skill`,
+          from: checkoutSkill.id,
+          fromPort: 'skill_out',
+          to: aiAgent.id,
+          toPort: 'skills_in'
+        });
+        repaired = true;
+      }
+
+      // 4. Si tiene checkout_trigger pero no tiene salida hacia captura de datos
+      const hasOutputConn = conns.some(c => c.from === aiAgent.id && (c.fromPort === 'output' || !c.fromPort));
+      if (!hasOutputConn) {
+        // Buscar o crear nodo de nombre
+        let nameNode = nodes.find(n => n.type === 'question' && n.data?.variable === 'customer_name');
+        if (!nameNode) {
+          nameNode = this.createSpecificNode('question', aiAgent.position.x, aiAgent.position.y + 260, {
+            label: 'Nombre del Cliente',
+            message: 'Para procesar tu pedido, ¿cuál es tu nombre completo?',
+            variable: 'customer_name'
+          });
+        }
+        conns.push({
+          id: `conn_repair_${Date.now()}_ai_out`,
+          from: aiAgent.id,
+          fromPort: 'output',
+          to: nameNode.id,
+          toPort: 'input'
+        });
+
+        // Asegurar teléfono
+        let phoneNode = nodes.find(n => n.type === 'question' && n.data?.variable === 'phone');
+        if (!phoneNode) {
+          phoneNode = this.createSpecificNode('question', nameNode.position.x, nameNode.position.y + 180, {
+            label: 'Teléfono',
+            message: 'Gracias {{customer_name}}, ¿a qué número de teléfono te contactamos?',
+            variable: 'phone',
+            validation: 'phone'
+          });
+          conns.push({
+            id: `conn_repair_${Date.now()}_name_phone`,
+            from: nameNode.id,
+            fromPort: 'output',
+            to: phoneNode.id,
+            toPort: 'input'
+          });
+        }
+
+        // Asegurar dirección
+        let addrNode = nodes.find(n => n.type === 'question' && n.data?.variable === 'direccion_entrega');
+        if (!addrNode) {
+          addrNode = this.createSpecificNode('question', phoneNode.position.x, phoneNode.position.y + 180, {
+            label: 'Dirección',
+            message: '¿A qué dirección entregamos tu pedido?',
+            variable: 'direccion_entrega'
+          });
+          conns.push({
+            id: `conn_repair_${Date.now()}_phone_addr`,
+            from: phoneNode.id,
+            fromPort: 'output',
+            to: addrNode.id,
+            toPort: 'input'
+          });
+        }
+
+        // Asegurar register_order y fin
+        let regNode = nodes.find(n => n.type === 'action' && n.data?.actionType === 'register_order');
+        if (!regNode) {
+          regNode = this.createSpecificNode('action', addrNode.position.x, addrNode.position.y + 180, {
+            label: 'Registrar Pedido',
+            actionType: 'register_order'
+          });
+          conns.push({
+            id: `conn_repair_${Date.now()}_addr_reg`,
+            from: addrNode.id,
+            fromPort: 'output',
+            to: regNode.id,
+            toPort: 'input'
+          });
+        }
+
+        let endNode = nodes.find(n => n.type === 'end');
+        if (!endNode) {
+          endNode = this.createSpecificNode('end', regNode.position.x, regNode.position.y + 180, {
+            label: 'Cierre',
+            message: '¡Listo! Tu pedido {{orderNumber}} ha sido confirmado y está en preparación. 🛵✨'
+          });
+          conns.push({
+            id: `conn_repair_${Date.now()}_reg_end`,
+            from: regNode.id,
+            fromPort: 'output',
+            to: endNode.id,
+            toPort: 'input'
+          });
+        }
+
+        repaired = true;
+      }
+    }
+
+    this.botFlow.flow_data.connections = conns;
+    this.notification.show('🪄 ¡Flujo analizado y reparado con éxito!', 'success');
+    this.cdr.detectChanges();
+  }
+
+  // --- ARQUETIPOS Y HABILIDADES DE IA INTEGRADAS ---
+  applyArchetype(archetypeId: string) {
+    if (!this.editingNode || this.editingNode.type !== 'ai_agent') return;
+    const arch = this.aiArchetypes.find(a => a.id === archetypeId);
+    if (!arch) return;
+
+    this.editingNode.data.prompt = arch.prompt;
+    this.editingNode.data.temperature = arch.temperature;
+    this.editingNode.data.label = `IA ${arch.name}`;
+
+    // Activar las skills del arquetipo
+    for (const skillType of arch.skills) {
+      if (!this.isSkillActiveOnAgent(skillType)) {
+        this.toggleSkillOnAgent(skillType);
+      }
+    }
+
+    this.notification.show(`✨ Arquetipo aplicado: ${arch.name}`, 'success');
+    this.cdr.detectChanges();
+  }
+
+  isSkillActiveOnAgent(skillType: string): boolean {
+    if (!this.editingNode || this.editingNode.type !== 'ai_agent') return false;
+    const conns = this.botFlow.flow_data.connections || [];
+    const nodes = this.botFlow.flow_data.nodes || [];
+    const skillsIn = conns.filter(c => c.to === this.editingNode!.id && c.toPort === 'skills_in');
+    return skillsIn.some(c => {
+      const node = nodes.find(n => n.id === c.from);
+      return node && node.type === 'ai_skill' && node.data?.actionType === skillType;
+    });
+  }
+
+  toggleSkillOnAgent(skillType: string) {
+    if (!this.editingNode || this.editingNode.type !== 'ai_agent') return;
+    const agentId = this.editingNode.id;
+    const isActive = this.isSkillActiveOnAgent(skillType);
+
+    if (isActive) {
+      // Desactivar: desconectar la skill del agente
+      const conns = this.botFlow.flow_data.connections || [];
+      const nodes = this.botFlow.flow_data.nodes || [];
+      const connToRemove = conns.find(c => {
+        if (c.to === agentId && c.toPort === 'skills_in') {
+          const n = nodes.find(node => node.id === c.from);
+          return n && n.type === 'ai_skill' && n.data?.actionType === skillType;
+        }
+        return false;
+      });
+
+      if (connToRemove) {
+        this.botFlow.flow_data.connections = this.botFlow.flow_data.connections.filter(c => c.id !== connToRemove.id);
+        this.notification.show(`Skill desactivada: ${skillType}`, 'info');
+      }
+    } else {
+      // Activar: buscar o crear nodo ai_skill y conectarlo
+      let skillNode = this.botFlow.flow_data.nodes.find(n => n.type === 'ai_skill' && n.data?.actionType === skillType);
+      if (!skillNode) {
+        const skillInfo = this.skillsToggleList.find(s => s.type === skillType);
+        const offsetX = (this.botFlow.flow_data.nodes.filter(n => n.type === 'ai_skill').length % 3 - 1) * 180;
+        const offsetY = 200 + Math.floor(this.botFlow.flow_data.nodes.filter(n => n.type === 'ai_skill').length / 3) * 120;
+        skillNode = this.createSpecificNode('ai_skill', this.editingNode.position.x + offsetX, this.editingNode.position.y + offsetY, {
+          label: skillInfo?.label || skillType,
+          actionType: skillType as any,
+          message: skillInfo?.desc || ''
+        });
+      }
+
+      this.connectNodes(skillNode.id, 'skill_out', agentId, 'skills_in');
+      this.notification.show(`Skill conectada: ${skillType}`, 'success');
+    }
+    this.cdr.detectChanges();
+  }
+
+  async setQuickModel(modelKey: string) {
+    this.activeModel = modelKey;
+    if (this.merchantId) {
+      try {
+        await this.supabase.updateMerchantSettings(this.merchantId, { ai_model: modelKey });
+        this.notification.show(`Modelo activo cambiado a: ${modelKey}`, 'success');
+      } catch (err: any) {
+        console.error('Error guardando modelo:', err);
+      }
+    }
+    this.cdr.detectChanges();
   }
 
   // Palette definition
@@ -336,6 +649,7 @@ export class BotBuilderComponent implements OnInit {
       const { data: merchant } = await this.supabase.getMerchantById(this.merchantId);
       if (merchant) {
          this.merchantName = merchant.name;
+         this.activeModel = merchant.ai_model || 'gemini-1.5-flash';
          this.simulationState.variables['merchant_name'] = merchant.name;
          this.simulationState.variables['merchant_menu_pdf'] = merchant.menu_pdf;
          this.simulationState.variables['menu_pdf'] = merchant.menu_pdf;

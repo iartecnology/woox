@@ -23,12 +23,27 @@
       </span>
     </div>
 
-    <span class="health-badge" [class]="'health-' + flowHealthStatus.status" [title]="flowHealthStatus.details || ''">
-      <span *ngIf="flowHealthStatus.status === 'ok'">💚</span>
-      <span *ngIf="flowHealthStatus.status === 'warning'">⚠️</span>
-      <span *ngIf="flowHealthStatus.status === 'error'">🚨</span>
-      {{ flowHealthStatus.message }}
-    </span>
+    <div class="model-quick-badge">
+      <span class="model-icon">🧠</span>
+      <select class="model-select" [ngModel]="activeModel" (ngModelChange)="setQuickModel($event)">
+        <option value="gemini-1.5-flash">Gemini 1.5 Flash (Ultrarrápido)</option>
+        <option value="gemini-2.0-flash">Gemini 2.0 Flash (Última Gen)</option>
+        <option value="llama-3.3-70b-versatile">Groq LLaMA 3.3 (70B)</option>
+        <option value="gpt-4o-mini">OpenAI GPT-4o Mini</option>
+      </select>
+    </div>
+
+    <div class="health-container">
+      <span class="health-badge" [class]="'health-' + flowHealthStatus.status" [title]="flowHealthStatus.details || ''">
+        <span *ngIf="flowHealthStatus.status === 'ok'">💚</span>
+        <span *ngIf="flowHealthStatus.status === 'warning'">⚠️</span>
+        <span *ngIf="flowHealthStatus.status === 'error'">🚨</span>
+        {{ flowHealthStatus.message }}
+      </span>
+      <button *ngIf="flowHealthStatus.canRepair" class="btn-repair" (click)="autoRepairFlow()" title="Auto-reparar conexiones faltantes en el flujo">
+        🪄 Auto-reparar
+      </button>
+    </div>
 
     <button id="btn-plantillas" class="btn-icon" (click)="openTemplateModal()">
       🔥 Plantillas ADN
@@ -599,32 +614,52 @@
       <!-- Tabs Header -->
       <div class="properties-tabs">
         <button class="tab-btn" [class.active]="activeNodeTab === 'general'" (click)="activeNodeTab = 'general'">
-          ⚙️ General
+          🎭 Arquetipos
         </button>
         <button class="tab-btn" [class.active]="activeNodeTab === 'instructions'" (click)="activeNodeTab = 'instructions'">
           📜 Instrucciones
+        </button>
+        <button class="tab-btn" [class.active]="activeNodeTab === 'tools'" (click)="activeNodeTab = 'tools'">
+          🛠️ Habilidades
         </button>
         <button class="tab-btn" [class.active]="activeNodeTab === 'memory'" (click)="activeNodeTab = 'memory'">
           🧠 Memoria
         </button>
       </div>
 
-      <!-- Tab Content: General -->
+      <!-- Tab Content: Arquetipos Rápidos (General) -->
       <div class="tab-content" *ngIf="activeNodeTab === 'general'">
-        <div class="form-group">
-          <label>Modelo de IA</label>
-          <div class="alert alert-secondary py-2 px-3 small d-flex align-items-center gap-2">
-            <span>⚙️</span>
-            <span>Usa la configuración global del comercio.</span>
-          </div>
-          <div class="label-hint">Puedes cambiar el modelo desde **Configuración > IA** en el panel principal.</div>
+        <div class="archetypes-header mb-3">
+          <label class="fw-bold d-block">🎭 Arquetipos Comerciales Preconfigurados</label>
+          <div class="label-hint">Aplica un rol optimizado con sus instrucciones de venta y herramientas automáticas en 1 clic:</div>
         </div>
+
+        <div class="archetypes-grid">
+          <div *ngFor="let arch of aiArchetypes" 
+               class="archetype-card"
+               (click)="applyArchetype(arch.id)">
+            <div class="arch-top">
+              <span class="arch-icon">{{ arch.icon }}</span>
+              <span class="arch-badge">{{ arch.badge }}</span>
+            </div>
+            <div class="arch-title">{{ arch.name }}</div>
+            <div class="arch-summary">{{ arch.summary }}</div>
+            <div class="arch-action">
+              <span>Aplicar arquetipo</span>
+              <span>⚡</span>
+            </div>
+          </div>
+        </div>
+
+        <hr class="my-3 opacity-20">
+
         <div class="form-group">
           <label>Temperatura (Creatividad: {{editingNode.data.temperature}})</label>
           <input type="range" class="form-range" min="0" max="1" step="0.1" [(ngModel)]="editingNode.data.temperature">
           <div class="d-flex justify-content-between small opacity-50">
-            <span>Preciso</span>
-            <span>Creativo</span>
+            <span>Preciso (0.0)</span>
+            <span>Equilibrado (0.5)</span>
+            <span>Creativo (1.0)</span>
           </div>
         </div>
       </div>
@@ -633,15 +668,41 @@
       <div class="tab-content" *ngIf="activeNodeTab === 'instructions'">
         <div class="form-group">
           <label>System Prompt (Instrucciones Base)</label>
-          <div class="label-hint">Define el rol y reglas del agente.</div>
-          <textarea class="form-control" rows="6" [(ngModel)]="editingNode.data.prompt" 
+          <div class="label-hint">Define el rol, reglas de venta y comportamiento del agente.</div>
+          <textarea class="form-control font-monospace text-sm" rows="8" [(ngModel)]="editingNode.data.prompt" 
                     placeholder="Ej: Eres un asistente experto en ventas..."></textarea>
         </div>
         <div class="form-group">
           <label>User Message Template</label>
           <div class="label-hint">Cómo se le envía el mensaje del usuario.</div>
           <input type="text" class="form-control" [(ngModel)]="editingNode.data.user_prompt" 
-                 placeholder="Ej: Mensaje del usuario: [message]">
+                 placeholder="Ej: Mensaje del usuario: {{message}}">
+        </div>
+      </div>
+
+      <!-- Tab Content: Habilidades Activas (Tools) -->
+      <div class="tab-content" *ngIf="activeNodeTab === 'tools'">
+        <div class="skills-manager-header mb-3">
+          <label class="fw-bold d-block">🛠️ Habilidades Conectadas al Agente</label>
+          <div class="label-hint">Activa o desactiva herramientas sin necesidad de cables manuales. El sistema conectará automáticamente los puertos técnicos:</div>
+        </div>
+
+        <div class="skills-toggle-list">
+          <div *ngFor="let s of skillsToggleList" class="skill-toggle-row">
+            <div class="skill-info">
+              <span class="skill-icon">{{ s.icon }}</span>
+              <div class="skill-texts">
+                <span class="skill-title">{{ s.label }}</span>
+                <span class="skill-desc">{{ s.desc }}</span>
+              </div>
+            </div>
+            <label class="switch-toggle">
+              <input type="checkbox" 
+                     [checked]="isSkillActiveOnAgent(s.type)"
+                     (change)="toggleSkillOnAgent(s.type)">
+              <span class="slider round"></span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -649,13 +710,13 @@
       <div class="tab-content" *ngIf="activeNodeTab === 'memory'">
         <div class="form-group">
           <label>Límite de Memoria (Mensajes)</label>
-          <div class="label-hint">Cuántos mensajes previos enviar para contexto.</div>
+          <div class="label-hint">Cuántos mensajes previos enviar para contexto conversacional.</div>
           <div class="d-flex align-items-center gap-3">
-            <input type="number" class="form-control" [(ngModel)]="editingNode.data.memory_limit" min="0" max="20">
-            <span class="small opacity-50">mensajes</span>
+            <input type="number" class="form-control" [(ngModel)]="editingNode.data.memory_limit" min="0" max="20" style="max-width: 120px;">
+            <span class="small opacity-50">turnos de mensaje</span>
           </div>
           <div class="alert alert-info mt-3 py-2 px-3 small">
-            💡 Un límite mayor da más contexto pero consume más tokens.
+            💡 Un límite de 4 a 8 mensajes ofrece el mejor balance entre recordar lo que pidió el cliente y velocidad de respuesta.
           </div>
         </div>
       </div>
