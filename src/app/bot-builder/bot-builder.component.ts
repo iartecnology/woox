@@ -427,7 +427,7 @@ Tu regla inquebrantable:
     this.activeModel = modelKey;
     if (this.merchantId) {
       try {
-        await this.supabase.updateMerchantSettings(this.merchantId, { ai_model: modelKey });
+        await this.supabase.updateMerchant(this.merchantId, { ai_model: modelKey });
         this.notification.show(`Modelo activo cambiado a: ${modelKey}`, 'success');
       } catch (err: any) {
         console.error('Error guardando modelo:', err);

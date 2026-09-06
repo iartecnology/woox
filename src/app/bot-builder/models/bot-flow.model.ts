@@ -13,7 +13,7 @@ export interface FlowNode {
     // Action types para nodos 'action'
     actionType?: 'register_order' | 'create_booking' | 'send_notification' | 'transfer_human' | 'tag_customer' | 'add_to_cart' | 'empty_cart'
                // Skill types para nodos 'ai_skill' (tools del Agente IA)
-               | 'catalog_search' | 'inventory_check' | 'add_to_cart' | 'get_cart' | 'remove_from_cart' | 'register_order' | 'order_status' | 'shopping_cart' | 'transfer_human' | 'knowledge_base';
+               | 'catalog_search' | 'inventory_check' | 'add_to_cart' | 'get_cart' | 'remove_from_cart' | 'register_order' | 'order_status' | 'shopping_cart' | 'transfer_human' | 'knowledge_base' | 'checkout_trigger';
     operator?: '==' | '!=' | 'contains' | '>' | '<' | 'exists';
     value?: string;
     prompt?: string;       // System Prompt del Agente IA
