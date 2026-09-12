@@ -855,6 +855,7 @@ export class SupabaseService {
         merchant_id: string; 
         message: string; 
         context?: string;
+        node_context?: string;
         // Nuevos parámetros para el simulador:
         flow_data?: any;       // El flujo JSON completo
         flow_id?: string;      // ID del flujo
