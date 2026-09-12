@@ -43,6 +43,15 @@ export class BotBuilderComponent implements OnInit {
   editingNode: FlowNode | null = null;
   activeNodeTab: 'general' | 'instructions' | 'memory' | 'tools' = 'general';
   
+  // Palette search & Quick Insert
+  paletteSearchQuery: string = '';
+  
+  // Undo / Redo & Unsaved Changes State
+  undoStack: FlowData[] = [];
+  redoStack: FlowData[] = [];
+  private isApplyingHistory: boolean = false;
+  hasUnsavedChanges: boolean = false;
+  
   // Versioning state
   allFlows: BotFlow[] = [];
   showSaveConfirm = false;
@@ -58,6 +67,7 @@ export class BotBuilderComponent implements OnInit {
   
   // Dragging state
   draggedNode: FlowNode | null = null;
+  private dragInitialPos: { x: number; y: number } | null = null;
   dragOffset = { x: 0, y: 0 };
   
   // Connection state
@@ -506,6 +516,21 @@ Tu regla inquebrantable:
 
   get paletteItems() {
     return this.paletteCategories.reduce((acc, cat) => acc.concat(cat.items), [] as any[]);
+  }
+
+  get filteredPaletteCategories() {
+    const q = this.paletteSearchQuery.trim().toLowerCase();
+    if (!q) return this.paletteCategories;
+    return this.paletteCategories
+      .map(cat => ({
+        ...cat,
+        items: cat.items.filter((item: any) => 
+          item.label.toLowerCase().includes(q) || 
+          item.description.toLowerCase().includes(q) ||
+          item.type.toLowerCase().includes(q)
+        )
+      }))
+      .filter(cat => cat.items.length > 0);
   }
 
   get generatedMcpServerUrl(): string {
@@ -1559,9 +1584,11 @@ Tu responsabilidad:
         const { data, error } = await this.supabase.saveBotFlow(this.botFlow);
         if (error) throw error;
         this.botFlow = data;
+        this.hasUnsavedChanges = false;
         this.notification.show('¡Versión actualizada con éxito! ✅', 'success');
       }
       
+      this.hasUnsavedChanges = false;
       // Refrescar lista de versiones
       await this.loadFlows();
       
@@ -1711,10 +1738,12 @@ Tu responsabilidad:
         email_subject: type === 'send_email' ? 'Confirmación de Pedido' : undefined
       }
     };
+    this.pushHistory();
     this.botFlow.flow_data.nodes.push(newNode);
     this.selectedNode = newNode;
     this.editingNode = newNode;
     this.panelVisible = true;
+    this.hasUnsavedChanges = true;
   }
 
   addSwitchCase() {
@@ -1894,6 +1923,7 @@ Tu responsabilidad:
 
   deleteSelectedNode() {
     if (!this.selectedNode) return;
+    this.pushHistory();
     this.botFlow.flow_data.connections = this.botFlow.flow_data.connections.filter(
       c => c.from !== this.selectedNode!.id && c.to !== this.selectedNode!.id
     );
@@ -1902,10 +1932,13 @@ Tu responsabilidad:
     );
     this.selectedNode = null;
     this.editingNode = null;
+    this.hasUnsavedChanges = true;
   }
 
   deleteConnection(connId: string) {
+    this.pushHistory();
     this.botFlow.flow_data.connections = this.botFlow.flow_data.connections.filter(c => c.id !== connId);
+    this.hasUnsavedChanges = true;
     this.notification.show('Conexión eliminada', 'success');
   }
 
@@ -1952,7 +1985,15 @@ Tu responsabilidad:
 
   @HostListener('mouseup')
   onMouseUp() {
+    if (this.draggedNode && this.dragInitialPos) {
+      const moved = Math.abs(this.draggedNode.position.x - this.dragInitialPos.x) > 3 ||
+                    Math.abs(this.draggedNode.position.y - this.dragInitialPos.y) > 3;
+      if (moved) {
+        this.hasUnsavedChanges = true;
+      }
+    }
     this.draggedNode = null;
+    this.dragInitialPos = null;
     this.isPanning = false;
     if (!this.isConnecting) {
       this.isConnecting = false;
@@ -2091,6 +2132,7 @@ Tu responsabilidad:
     event.stopPropagation();
     this.selectedNode = node;
     this.draggedNode = node;
+    this.dragInitialPos = { x: node.position.x, y: node.position.y };
     const coords = this.getRelativeCoords(event);
     this.dragOffset = {
       x: coords.x - node.position.x,
@@ -2125,6 +2167,7 @@ Tu responsabilidad:
       const isValidSkillConnection = port === 'skills_in' && this.connectionStart.port === 'skill_out';
 
       if (!isSameNode && (isValidStandardConnection || isValidSkillConnection)) {
+        this.pushHistory(); // Guardar historial antes de conectar
         const newConn: FlowConnection = {
           id: `conn_${Date.now()}`,
           from: this.connectionStart.node.id,
@@ -2141,6 +2184,7 @@ Tu responsabilidad:
         }
 
         this.botFlow.flow_data.connections.push(newConn);
+        this.hasUnsavedChanges = true;
       }
     }
     this.isConnecting = false;
@@ -2215,6 +2259,210 @@ Tu responsabilidad:
     }
     
     return { x: node.position.x + 220, y: node.position.y + 40 };
+  }
+
+  // --- HISTORIAL & UNDO / REDO ---
+  pushHistory() {
+    if (this.isApplyingHistory) return;
+    const snapshot = JSON.parse(JSON.stringify(this.botFlow.flow_data));
+    this.undoStack.push(snapshot);
+    if (this.undoStack.length > 30) this.undoStack.shift(); // Límite de 30 pasos
+    this.redoStack = [];
+    this.hasUnsavedChanges = true;
+    this.cdr.detectChanges();
+  }
+
+  undo() {
+    if (this.undoStack.length === 0) return;
+    this.isApplyingHistory = true;
+    const current = JSON.parse(JSON.stringify(this.botFlow.flow_data));
+    this.redoStack.push(current);
+
+    const prev = this.undoStack.pop()!;
+    this.botFlow.flow_data = JSON.parse(JSON.stringify(prev));
+    this.hasUnsavedChanges = true;
+    this.isApplyingHistory = false;
+    this.notification.show('Acción deshecha ↺', 'info');
+    this.cdr.detectChanges();
+  }
+
+  redo() {
+    if (this.redoStack.length === 0) return;
+    this.isApplyingHistory = true;
+    const current = JSON.parse(JSON.stringify(this.botFlow.flow_data));
+    this.undoStack.push(current);
+
+    const next = this.redoStack.pop()!;
+    this.botFlow.flow_data = JSON.parse(JSON.stringify(next));
+    this.hasUnsavedChanges = true;
+    this.isApplyingHistory = false;
+    this.notification.show('Acción rehecha ↻', 'info');
+    this.cdr.detectChanges();
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  handleKeyboardShortcuts(event: KeyboardEvent) {
+    // Si el usuario está escribiendo en un input o textarea, no capturar atajos de canvas
+    const target = event.target as HTMLElement;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      return;
+    }
+
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const ctrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
+
+    // Ctrl+Z / Cmd+Z: Undo
+    if (ctrlOrCmd && event.key.toLowerCase() === 'z' && !event.shiftKey) {
+      event.preventDefault();
+      this.undo();
+      return;
+    }
+
+    // Ctrl+Y / Cmd+Shift+Z: Redo
+    if ((ctrlOrCmd && event.key.toLowerCase() === 'y') || (ctrlOrCmd && event.shiftKey && event.key.toLowerCase() === 'z')) {
+      event.preventDefault();
+      this.redo();
+      return;
+    }
+
+    // Ctrl+S / Cmd+S: Save Flow
+    if (ctrlOrCmd && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      this.saveFlow();
+      return;
+    }
+
+    // Delete o Backspace: Eliminar nodo seleccionado
+    if ((event.key === 'Delete' || event.key === 'Backspace') && this.selectedNode && !this.editingNode) {
+      event.preventDefault();
+      this.deleteSelectedNode();
+      return;
+    }
+
+    // Escape: Deseleccionar
+    if (event.key === 'Escape') {
+      this.selectedNode = null;
+      this.editingNode = null;
+      this.cdr.detectChanges();
+    }
+  }
+
+  // --- ETIQUETAS INTELIGENTES EN CONEXIONES ---
+  getConnectionMidpoint(conn: FlowConnection): { x: number, y: number } {
+    const fromNode = this.botFlow.flow_data.nodes.find(n => n.id === conn.from);
+    const toNode = this.botFlow.flow_data.nodes.find(n => n.id === conn.to);
+    if (!fromNode || !toNode) return { x: 0, y: 0 };
+
+    const start = this.getPortCoords(fromNode, conn.fromPort);
+    const end = this.getPortCoords(toNode, conn.toPort);
+    return {
+      x: (start.x + end.x) / 2,
+      y: (start.y + end.y) / 2
+    };
+  }
+
+  getConnectionLabel(conn: FlowConnection): string | null {
+    const fromNode = this.botFlow.flow_data.nodes.find(n => n.id === conn.from);
+    if (!fromNode) return null;
+
+    if (conn.fromPort === 'agents_out') return 'Sub-agente';
+    if (conn.fromPort === 'skill_out' || conn.toPort === 'skills_in') return 'Tool';
+    if (fromNode.type === 'condition') {
+      if (conn.fromPort === 'yes') return '✓ Sí';
+      if (conn.fromPort === 'no') return '✗ No';
+    }
+    if (fromNode.type === 'business_hours') {
+      if (conn.fromPort === 'open') return '🕒 Abierto';
+      if (conn.fromPort === 'closed') return '🌙 Cerrado';
+    }
+    if (fromNode.type === 'menu' && fromNode.data?.options) {
+      const opt = fromNode.data.options.find((o: any) => o.id === conn.fromPort);
+      if (opt) return opt.text.length > 15 ? opt.text.substring(0, 14) + '…' : opt.text;
+    }
+    if (fromNode.type === 'semantic_router' && fromNode.data?.ai_intents) {
+      const intent = fromNode.data.ai_intents.find((i: any) => i.id === conn.fromPort);
+      if (intent) return `↱ ${intent.name}`;
+    }
+    if (fromNode.type === 'switch' && fromNode.data?.switch_cases) {
+      const c = fromNode.data.switch_cases.find((sc: any) => sc.id === conn.fromPort);
+      if (c) return `⮑ ${c.label}`;
+    }
+    return null;
+  }
+
+  isConnectionRelatedToOrchestrator(conn: FlowConnection): boolean {
+    if (!this.selectedNode || this.selectedNode.type !== 'ai_orchestrator') return false;
+    return conn.from === this.selectedNode.id && (conn.fromPort === 'agents_out' || conn.fromPort === 'output');
+  }
+
+  // --- MINIMAP CALCULATIONS ---
+  get minimapBounds(): { minX: number, maxX: number, minY: number, maxY: number, width: number, height: number } {
+    const nodes = this.botFlow.flow_data.nodes || [];
+    if (nodes.length === 0) {
+      return { minX: 0, maxX: 1000, minY: 0, maxY: 800, width: 1000, height: 800 };
+    }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    nodes.forEach(n => {
+      minX = Math.min(minX, n.position.x);
+      maxX = Math.max(maxX, n.position.x + 220);
+      minY = Math.min(minY, n.position.y);
+      maxY = Math.max(maxY, n.position.y + 100);
+    });
+    const padding = 200;
+    minX -= padding;
+    maxX += padding;
+    minY -= padding;
+    maxY += padding;
+    return {
+      minX,
+      maxX,
+      minY,
+      maxY,
+      width: Math.max(maxX - minX, 600),
+      height: Math.max(maxY - minY, 400)
+    };
+  }
+
+  get minimapViewport(): { x: number, y: number, width: number, height: number } {
+    const parent = this.canvasRef?.nativeElement?.parentElement;
+    const clientW = parent?.clientWidth || 800;
+    const clientH = parent?.clientHeight || 600;
+    const scale = this.viewTransform.scale || 1;
+
+    const visibleX = -this.viewTransform.x / scale;
+    const visibleY = -this.viewTransform.y / scale;
+    const visibleW = clientW / scale;
+    const visibleH = clientH / scale;
+
+    const bounds = this.minimapBounds;
+    const miniW = 160;
+    const miniH = 100;
+
+    const normX = (visibleX - bounds.minX) / bounds.width;
+    const normY = (visibleY - bounds.minY) / bounds.height;
+    const normW = visibleW / bounds.width;
+    const normH = visibleH / bounds.height;
+
+    return {
+      x: Math.max(0, Math.min(miniW, normX * miniW)),
+      y: Math.max(0, Math.min(miniH, normY * miniH)),
+      width: Math.min(miniW, Math.max(12, normW * miniW)),
+      height: Math.min(miniH, Math.max(10, normH * miniH))
+    };
+  }
+
+  getMinimapNodePos(node: FlowNode): { x: number, y: number, width: number, height: number } {
+    const bounds = this.minimapBounds;
+    const miniW = 160;
+    const miniH = 100;
+    const x = ((node.position.x - bounds.minX) / bounds.width) * miniW;
+    const y = ((node.position.y - bounds.minY) / bounds.height) * miniH;
+    return {
+      x: Math.max(0, Math.min(miniW - 8, x)),
+      y: Math.max(0, Math.min(miniH - 4, y)),
+      width: Math.max(4, (220 / bounds.width) * miniW),
+      height: Math.max(3, (80 / bounds.height) * miniH)
+    };
   }
 
   // --- PROPERTIES HELPERS ---
