@@ -154,3 +154,254 @@ REGLAS PRIMORDIALES:
 TONO: Empático, paciente, técnico y resolutivo.',
 ai_menu_context = 'Prioriza la resolución de incidentes técnicos en la plataforma Woox con un tiempo estimado de respuesta de 1 a 2 horas.'
 WHERE id = '77777777-7777-7777-7777-777777777704';
+
+-- ==============================================================================
+-- 3. NUEVA EMPRESA: NOVATECH GLOBAL HUB (MODELO MULTI-AGENTE SWARM ACTIVO)
+-- ==============================================================================
+
+-- A. Registro de la Empresa / Merchant
+INSERT INTO merchants (
+    id,
+    name,
+    slug,
+    industry_type,
+    primary_color,
+    is_active,
+    ai_enabled,
+    bot_mode,
+    ai_provider,
+    ai_model,
+    ai_personality,
+    ai_welcome_message,
+    ai_system_prompt,
+    ai_menu_context,
+    agent_id
+) VALUES (
+    '77777777-7777-7777-7777-777777777705',
+    'NovaTech Global Hub',
+    'novatech-swarm',
+    'retail',
+    '#6366F1',
+    true,
+    true,
+    true,
+    'google_gemini',
+    'gemini-2.0-flash',
+    'Cerebral, ultra-eficiente, orquestador ejecutivo y cordial.',
+    '¡Hola! ⚡ Bienvenido a NovaTech Global Hub. Nuestro enjambre multi-agente está coordinado para atenderte en ventas, soporte y compras.',
+    '=== ADN NOVATECH GLOBAL HUB (ENJAMBRE MULTI-AGENTE) ===
+Eres el Orquestador Ejecutivo del Enjambre de NovaTech. Diriges a los especialistas en Ventas de Hardware, Soporte Técnico RAG y Liquidación/Checkout.',
+    'Hardware premium, estaciones de trabajo de IA, periféricos y soporte empresarial.',
+    '00000000-0000-0000-0000-000000000001'
+) ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    slug = EXCLUDED.slug,
+    bot_mode = true,
+    is_active = true;
+
+-- B. Usuario Administrador del Comercio
+INSERT INTO profiles (email, password, full_name, role, merchant_id, is_active) VALUES
+('swarm@woox.app', 'admin123', 'Director de Enjambre NovaTech', 'merchant_admin', '77777777-7777-7777-7777-777777777705', true)
+ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password, role = EXCLUDED.role, merchant_id = EXCLUDED.merchant_id;
+
+-- C. Categorías de Productos
+INSERT INTO categories (id, merchant_id, name, display_order) VALUES
+('55555555-4444-1111-1111-111111111101', '77777777-7777-7777-7777-777777777705', 'Workstations & IA', 1),
+('55555555-4444-1111-1111-111111111102', '77777777-7777-7777-7777-777777777705', 'Periféricos Pro', 2)
+ON CONFLICT (id) DO NOTHING;
+
+-- D. Productos del Catálogo
+INSERT INTO products (id, merchant_id, category_id, name, price, description, is_available) VALUES
+('55555555-5555-1111-1111-111111111101', '77777777-7777-7777-7777-777777777705', '55555555-4444-1111-1111-111111111101', 'NovaStation AI Rig (RTX 4090)', 3499.00, 'Estación de trabajo optimizada para entrenamiento de LLMs y visión por computador.', true),
+('55555555-5555-1111-1111-111111111102', '77777777-7777-7777-7777-777777777705', '55555555-4444-1111-1111-111111111101', 'NovaBook Ultra M3 Max', 2899.00, 'Portátil de alta gama con 64GB de memoria unificada para ingenieros de IA.', true),
+('55555555-5555-1111-1111-111111111103', '77777777-7777-7777-7777-777777777705', '55555555-4444-1111-1111-111111111102', 'Teclado Mecánico Ergonómico NovaSplit', 189.00, 'Switches ópticos ultra-silenciosos y conectividad inalámbrica tri-modo.', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- E. Base de Conocimiento (Context Blocks)
+INSERT INTO merchant_context_blocks (merchant_id, title, content) VALUES
+('77777777-7777-7777-7777-777777777705', 'Garantía y Ensamblaje', 'Todos los equipos NovaTech cuentan con 3 años de garantía oficial y certificación de estrés térmico.'),
+('77777777-7777-7777-7777-777777777705', 'Envíos Internacionales', 'Despacho express a toda América y Europa en 48-72 horas con seguro todo riesgo.')
+ON CONFLICT DO NOTHING;
+
+-- F. Flujo Multi-Agente Activo en Producción (ADN Swarm Orchestration Flow)
+DELETE FROM bot_flows WHERE merchant_id = '77777777-7777-7777-7777-777777777705';
+
+INSERT INTO bot_flows (
+    merchant_id,
+    name,
+    description,
+    is_active,
+    trigger_type,
+    version,
+    flow_data
+) VALUES (
+    '77777777-7777-7777-7777-777777777705',
+    'Enjambre Autónomo NovaTech (Swarm)',
+    'Arquitectura de enjambre multi-agente: Orquestador Ejecutivo que delega dinámicamente a Especialista en Ventas de Hardware, Especialista en Soporte Técnico RAG y Asesor de Cierre y Liquidación.',
+    true,
+    'always',
+    1,
+    '{
+      "nodes": [
+        {
+          "id": "node_start_swarm",
+          "type": "start",
+          "position": { "x": 400, "y": 60 },
+          "data": {
+            "label": "Inicio Enjambre",
+            "message": "¡Hola! ⚡ Bienvenido a NovaTech Global Hub. Nuestro equipo multi-agente está activo para asesorarte en hardware, resolver dudas técnicas o tramitar tu orden."
+          }
+        },
+        {
+          "id": "node_orchestrator",
+          "type": "ai_orchestrator",
+          "position": { "x": 400, "y": 240 },
+          "data": {
+            "label": "👑 Orquestador Swarm NovaTech",
+            "orchestrator_mode": "routing",
+            "orchestrator_max_turns": 3,
+            "prompt": "Eres el Orquestador Ejecutivo Multi-Agente de NovaTech Global Hub.\nTu misión es clasificar la consulta del usuario y delegar la atención al agente idóneo:\n1. Especialista en Ventas: Preguntas sobre workstations, rigs de IA, precios, especificaciones o intención de compra.\n2. Especialista en Soporte & FAQ: Dudas técnicas, garantías, tiempos de entrega y políticas de ensamblaje.\n3. Especialista en Checkout: Cuando el usuario exprese que quiere pagar o finalizar la orden.",
+            "model": "gemini-2.0-flash",
+            "temperature": 0.2
+          }
+        },
+        {
+          "id": "node_sales_agent",
+          "type": "ai_agent",
+          "position": { "x": 80, "y": 480 },
+          "data": {
+            "label": "🛍️ Especialista en Ventas Hardware",
+            "prompt": "Eres el Asesor de Ventas de Hardware de NovaTech Global Hub.\n1. Usa catalog_search para mostrar opciones de workstations, laptops y periféricos.\n2. Al confirmar interés del cliente, añade de inmediato al carrito con add_to_cart.\n3. Sugiere complementos de productividad antes de finalizar.",
+            "model": "gemini-2.0-flash",
+            "temperature": 0.4
+          }
+        },
+        {
+          "id": "node_skill_catalog",
+          "type": "ai_skill",
+          "position": { "x": -50, "y": 630 },
+          "data": {
+            "label": "🔍 Buscar Catálogo",
+            "actionType": "catalog_search",
+            "message": "Búsqueda en catálogo NovaTech"
+          }
+        },
+        {
+          "id": "node_skill_cart",
+          "type": "ai_skill",
+          "position": { "x": 180, "y": 630 },
+          "data": {
+            "label": "🛒 Añadir al Carrito",
+            "actionType": "add_to_cart",
+            "message": "Añadir hardware al carrito"
+          }
+        },
+        {
+          "id": "node_rag_agent",
+          "type": "ai_agent",
+          "position": { "x": 400, "y": 480 },
+          "data": {
+            "label": "📚 Especialista en Soporte & FAQ",
+            "prompt": "Eres el Ingeniero de Soporte Técnico y Garantías de NovaTech.\n1. Consulta knowledge_base antes de contestar sobre compatibilidad, garantías de 3 años o envíos.\n2. Responde con precisión técnica y concisión.",
+            "model": "gemini-2.0-flash",
+            "temperature": 0.2
+          }
+        },
+        {
+          "id": "node_skill_rag",
+          "type": "ai_skill",
+          "position": { "x": 400, "y": 630 },
+          "data": {
+            "label": "📚 Base de Conocimiento",
+            "actionType": "knowledge_base",
+            "message": "RAG técnico en especificaciones"
+          }
+        },
+        {
+          "id": "node_checkout_agent",
+          "type": "ai_agent",
+          "position": { "x": 720, "y": 480 },
+          "data": {
+            "label": "🏁 Especialista en Cierre & Checkout",
+            "prompt": "Eres el Asesor de Liquidación de NovaTech.\n1. Revisa los items con get_cart.\n2. Cuando el usuario confirme el cierre, ejecuta checkout_trigger para capturar datos de despacho.",
+            "model": "gemini-2.0-flash",
+            "temperature": 0.2
+          }
+        },
+        {
+          "id": "node_skill_checkout",
+          "type": "ai_skill",
+          "position": { "x": 720, "y": 630 },
+          "data": {
+            "label": "✅ Finalizar Pedido",
+            "actionType": "checkout_trigger",
+            "message": "Disparador de checkout"
+          }
+        },
+        {
+          "id": "node_q_name",
+          "type": "question",
+          "position": { "x": 720, "y": 760 },
+          "data": {
+            "label": "Nombre Cliente",
+            "message": "Para coordinar tu despacho premium, ¿a qué nombre registramos la orden?",
+            "variable": "customer_name"
+          }
+        },
+        {
+          "id": "node_q_phone",
+          "type": "question",
+          "position": { "x": 720, "y": 920 },
+          "data": {
+            "label": "Teléfono",
+            "message": "Gracias {{customer_name}}, ¿cuál es tu número de WhatsApp para seguimiento en tiempo real?",
+            "variable": "phone",
+            "validation": "phone"
+          }
+        },
+        {
+          "id": "node_q_addr",
+          "type": "question",
+          "position": { "x": 720, "y": 1080 },
+          "data": {
+            "label": "Dirección",
+            "message": "¿Cuál es la dirección completa de entrega de tus equipos?",
+            "variable": "direccion_entrega"
+          }
+        },
+        {
+          "id": "node_act_order",
+          "type": "action",
+          "position": { "x": 720, "y": 1240 },
+          "data": {
+            "label": "Registrar Pedido",
+            "actionType": "register_order"
+          }
+        },
+        {
+          "id": "node_end_swarm",
+          "type": "end",
+          "position": { "x": 720, "y": 1400 },
+          "data": {
+            "label": "Confirmación y Despacho",
+            "message": "🚀 ¡Excelente! Tu orden {{orderNumber}} ha sido procesada por el enjambre de NovaTech. Tus estaciones de trabajo entrarán a la línea de preparación prioritaria."
+          }
+        }
+      ],
+      "connections": [
+        { "id": "c1", "from": "node_start_swarm", "fromPort": "output", "to": "node_orchestrator", "toPort": "input" },
+        { "id": "c2", "from": "node_orchestrator", "fromPort": "agents_out", "to": "node_sales_agent", "toPort": "input" },
+        { "id": "c3", "from": "node_orchestrator", "fromPort": "agents_out", "to": "node_rag_agent", "toPort": "input" },
+        { "id": "c4", "from": "node_orchestrator", "fromPort": "agents_out", "to": "node_checkout_agent", "toPort": "input" },
+        { "id": "c5", "from": "node_skill_catalog", "fromPort": "skill_out", "to": "node_sales_agent", "toPort": "skills_in" },
+        { "id": "c6", "from": "node_skill_cart", "fromPort": "skill_out", "to": "node_sales_agent", "toPort": "skills_in" },
+        { "id": "c7", "from": "node_skill_rag", "fromPort": "skill_out", "to": "node_rag_agent", "toPort": "skills_in" },
+        { "id": "c8", "from": "node_skill_checkout", "fromPort": "skill_out", "to": "node_checkout_agent", "toPort": "skills_in" },
+        { "id": "c9", "from": "node_checkout_agent", "fromPort": "output", "to": "node_q_name", "toPort": "input" },
+        { "id": "c10", "from": "node_q_name", "fromPort": "output", "to": "node_q_phone", "toPort": "input" },
+        { "id": "c11", "from": "node_q_phone", "fromPort": "output", "to": "node_q_addr", "toPort": "input" },
+        { "id": "c12", "from": "node_q_addr", "fromPort": "output", "to": "node_act_order", "toPort": "input" },
+        { "id": "c13", "from": "node_act_order", "fromPort": "output", "to": "node_end_swarm", "toPort": "input" }
+      ]
+    }'::jsonb
+);
