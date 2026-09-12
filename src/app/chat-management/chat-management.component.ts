@@ -115,20 +115,312 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     showCrmPanel: boolean = true;
     showSnippetsMenu: boolean = false;
 
+    // Slash Commands State
+    showSlashMenu: boolean = false;
+    slashQuery: string = '';
+    slashSelectedIndex: number = 0;
+
+    // AI Copilot State
+    isAICopilotBusy: boolean = false;
+    aiCopilotAction: string = '';
+
+    // File Upload State
+    isUploadingFile: boolean = false;
+
+    // Audio Voice Note State
+    isRecordingVoice: boolean = false;
+    voiceRecordingDuration: number = 0;
+    private mediaRecorder: any = null;
+    private audioChunks: Blob[] = [];
+    private recordingTimer: any = null;
+
     quickSnippets = [
-        { title: '🏦 Datos Bancarios', text: 'Para transferencias: Bancolombia Ahorros #123-456789-00 a nombre de nuestro comercio.' },
-        { title: '⏰ Horarios de Atención', text: 'Nuestro horario de atención es de Lunes a Sábado de 8:00 AM a 8:00 PM.' },
-        { title: '📍 Ubicación y Envíos', text: 'Estamos ubicados en Calle Principal #10-20. Hacemos envíos express a toda la ciudad.' },
-        { title: '🛍️ Catálogo Web', text: 'Puedes consultar todo nuestro catálogo de productos y ordenar en línea desde nuestro enlace oficial.' }
+        { code: 'banco', title: '🏦 Datos Bancarios', text: 'Para transferencias: Bancolombia Ahorros #123-456789-00 a nombre de nuestro comercio.' },
+        { code: 'horario', title: '⏰ Horarios de Atención', text: 'Nuestro horario de atención es de Lunes a Sábado de 8:00 AM a 8:00 PM.' },
+        { code: 'ubicacion', title: '📍 Ubicación y Envíos', text: 'Estamos ubicados en Calle Principal #10-20. Hacemos envíos express a toda la ciudad.' },
+        { code: 'catalogo', title: '🛍️ Catálogo Web', text: 'Puedes consultar todo nuestro catálogo de productos y ordenar en línea desde nuestro enlace oficial.' },
+        { code: 'soporte', title: '🧑‍💻 Contacto con Especialista', text: 'Te he transferido con un asesor especialista para resolver tu solicitud personalizada de inmediato.' },
+        { code: 'pago', title: '💳 Link de Pago Digital', text: 'Puedes completar tu pago en línea de forma segura con tarjeta, PSE o transferencia bancaria.' }
     ];
+
+    get filteredSlashSnippets() {
+        if (!this.slashQuery) return this.quickSnippets;
+        const q = this.slashQuery.toLowerCase();
+        return this.quickSnippets.filter(s => s.code.toLowerCase().includes(q) || s.title.toLowerCase().includes(q) || s.text.toLowerCase().includes(q));
+    }
 
     toggleCrmPanel() {
         this.showCrmPanel = !this.showCrmPanel;
     }
 
     insertSnippet(text: string) {
-        this.newMessage = (this.newMessage ? this.newMessage + ' ' : '') + text;
+        this.newMessage = text;
         this.showSnippetsMenu = false;
+        this.showSlashMenu = false;
+        this.slashQuery = '';
+    }
+
+    selectSlashSnippet(snippet: any) {
+        this.insertSnippet(snippet.text);
+    }
+
+    onInputKeydown(event: KeyboardEvent) {
+        if (this.showSlashMenu && this.filteredSlashSnippets.length > 0) {
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                this.slashSelectedIndex = (this.slashSelectedIndex + 1) % this.filteredSlashSnippets.length;
+                return;
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                this.slashSelectedIndex = (this.slashSelectedIndex - 1 + this.filteredSlashSnippets.length) % this.filteredSlashSnippets.length;
+                return;
+            } else if (event.key === 'Enter' || event.key === 'Tab') {
+                event.preventDefault();
+                this.selectSlashSnippet(this.filteredSlashSnippets[this.slashSelectedIndex]);
+                return;
+            } else if (event.key === 'Escape') {
+                this.showSlashMenu = false;
+                return;
+            }
+        }
+    }
+
+    // Copiloto IA del Agente Humano
+    async triggerAICopilot(mode: 'suggest' | 'rewrite' | 'summarize') {
+        if (!this.selectedConversation || this.isAICopilotBusy) return;
+        this.isAICopilotBusy = true;
+        this.aiCopilotAction = mode;
+
+        try {
+            const lastMsgs = this.selectedConversation.messages.slice(-6).map(m => `${m.sender_type}: ${m.content}`).join('\n');
+            let prompt = '';
+
+            if (mode === 'suggest') {
+                prompt = `Eres el copiloto comercial del agente humano en Woox para el comercio "${this.merchantName}".
+Basándote en el historial de la conversación y las necesidades del cliente, redacta la respuesta recomendada perfecta que el agente humano debe enviar.
+Sé amable, claro, orientado a solucionar y vender. Solo entrega el texto final que el agente enviará al cliente (sin comillas ni explicaciones adicionales).
+Historial reciente:
+${lastMsgs}`;
+            } else if (mode === 'rewrite') {
+                if (!this.newMessage.trim()) {
+                    this.notificationService.show('Escribe primero un borrador en el chat para mejorarlo con IA.', 'info');
+                    this.isAICopilotBusy = false;
+                    return;
+                }
+                prompt = `Eres un editor de comunicaciones comerciales de alto nivel. Toma el siguiente borrador redactado por el asesor para el cliente en WhatsApp y reescríbelo para que sea más claro, empático, profesional y persuasivo, manteniendo la intención original. Solo responde con el texto mejorado:
+Borrador: "${this.newMessage}"`;
+            } else if (mode === 'summarize') {
+                prompt = `Genera un resumen ultra-ejecutivo (máximo 3 bullets clave) del estado de este chat para el equipo interno:
+${lastMsgs}`;
+            }
+
+            const modelName = (this.merchantData?.ai_model || 'gemini-1.5-flash').trim();
+            const apiKey = this.merchantData?.ai_api_key || '';
+
+            let resultText = '';
+
+            if (apiKey) {
+                // Invocación directa rápida
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.6, maxOutputTokens: 300 }
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                }
+            }
+
+            // Fallback con RPC supabase si no hubo apiKey directa
+            if (!resultText) {
+                const { data } = await this.supabaseService.rpc('generate_ai_response', {
+                    p_prompt: prompt,
+                    p_merchant_id: this.merchantId
+                });
+                resultText = data || '';
+            }
+
+            if (resultText) {
+                if (mode === 'summarize') {
+                    // Guardar como nota interna
+                    await this.supabaseService.saveInternalNote(this.selectedConversation.id, `📋 [RESUMEN IA]:\n${resultText}`);
+                    await this.loadFullDeepDetails(this.selectedConversation.id);
+                    this.notificationService.show('Resumen IA guardado en notas internas', 'success');
+                } else {
+                    this.newMessage = resultText;
+                    this.onInputChange();
+                    this.notificationService.show('✨ Borrador generado por Copiloto IA', 'success');
+                }
+            } else {
+                this.notificationService.show('No se pudo generar respuesta con IA.', 'error');
+            }
+        } catch (err) {
+            console.error('Error en triggerAICopilot:', err);
+            this.notificationService.show('Error al procesar con Copiloto IA.', 'error');
+        } finally {
+            this.isAICopilotBusy = false;
+            this.aiCopilotAction = '';
+            this.cdr.detectChanges();
+        }
+    }
+
+    // Subida de Archivos (Imágenes, PDF, Documentos)
+    async onFileUpload(event: Event) {
+        const input = event.target as HTMLInputElement;
+        if (!input.files || input.files.length === 0 || !this.selectedConversation) return;
+
+        const file = input.files[0];
+        const isImage = file.type.startsWith('image/');
+        const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf');
+
+        this.isUploadingFile = true;
+        this.notificationService.show(`Subiendo ${file.name}...`, 'info');
+
+        try {
+            const ext = file.name.split('.').pop();
+            const filePath = `chat_attachments/${this.selectedConversation.id}/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+
+            const { data, error } = await this.supabaseService.uploadFile('merchant-data', filePath, file);
+            if (error) throw error;
+
+            const publicUrl = data.publicUrl;
+            let formattedAttachment = '';
+
+            if (isImage) {
+                formattedAttachment = `[IMAGE:${publicUrl}:${file.name}]`;
+            } else if (isPdf) {
+                formattedAttachment = `[PDF:${publicUrl}:${file.name}]`;
+            } else {
+                formattedAttachment = `📎 Archivo adjunto: [${file.name}](${publicUrl})`;
+            }
+
+            // Enviar inmediatamente como mensaje al cliente o nota
+            if (this.isInternalNote) {
+                await this.supabaseService.saveInternalNote(this.selectedConversation.id, formattedAttachment);
+                await this.loadFullDeepDetails(this.selectedConversation.id);
+            } else {
+                await this.supabaseService.sendHumanMessage(this.selectedConversation.id, formattedAttachment);
+            }
+
+            this.notificationService.show('Archivo enviado con éxito', 'success');
+        } catch (err: any) {
+            console.error('Error subiendo archivo:', err);
+            this.notificationService.show('Error al subir archivo: ' + (err.message || 'Error desconocido'), 'error');
+        } finally {
+            this.isUploadingFile = false;
+            input.value = '';
+            this.cdr.detectChanges();
+        }
+    }
+
+    // Grabación de Notas de Voz
+    async toggleVoiceRecording() {
+        if (this.isRecordingVoice) {
+            this.stopVoiceRecording(true);
+        } else {
+            await this.startVoiceRecording();
+        }
+    }
+
+    async startVoiceRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            this.notificationService.show('Tu navegador no soporta grabación de voz.', 'error');
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.audioChunks = [];
+            this.mediaRecorder = new MediaRecorder(stream);
+
+            this.mediaRecorder.ondataavailable = (e: any) => {
+                if (e.data && e.data.size > 0) {
+                    this.audioChunks.push(e.data);
+                }
+            };
+
+            this.mediaRecorder.onstop = async () => {
+                // Detener todas las pistas de audio del micrófono
+                stream.getTracks().forEach(track => track.stop());
+                clearInterval(this.recordingTimer);
+
+                if (this.audioChunks.length > 0 && this.voiceRecordingDuration >= 1) {
+                    await this.uploadAndSendVoiceNote();
+                }
+                this.voiceRecordingDuration = 0;
+                this.isRecordingVoice = false;
+                this.cdr.detectChanges();
+            };
+
+            this.mediaRecorder.start(200);
+            this.isRecordingVoice = true;
+            this.voiceRecordingDuration = 0;
+
+            this.recordingTimer = setInterval(() => {
+                this.voiceRecordingDuration++;
+                this.cdr.detectChanges();
+            }, 1000);
+
+            this.notificationService.show('Grabando nota de voz... 🎙️ Presiona de nuevo para enviar.', 'info');
+        } catch (err) {
+            console.error('Error accediendo al micrófono:', err);
+            this.notificationService.show('No se pudo acceder al micrófono.', 'error');
+            this.isRecordingVoice = false;
+        }
+    }
+
+    stopVoiceRecording(send: boolean) {
+        if (this.mediaRecorder && this.isRecordingVoice) {
+            if (!send) {
+                this.audioChunks = [];
+            }
+            this.mediaRecorder.stop();
+        }
+    }
+
+    cancelVoiceRecording() {
+        this.stopVoiceRecording(false);
+        this.notificationService.show('Nota de voz cancelada', 'info');
+    }
+
+    private async uploadAndSendVoiceNote() {
+        if (!this.selectedConversation) return;
+
+        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+
+        this.isUploadingFile = true;
+        this.notificationService.show('Enviando nota de voz...', 'info');
+
+        try {
+            const filePath = `voice_notes/${this.selectedConversation.id}/${Date.now()}.webm`;
+            const { data, error } = await this.supabaseService.uploadFile('merchant-data', filePath, audioFile);
+            if (error) throw error;
+
+            const audioUrl = data.publicUrl;
+            const messageText = `[AUDIO:${audioUrl}:Nota de voz (${this.voiceRecordingDuration}s)]`;
+
+            if (this.isInternalNote) {
+                await this.supabaseService.saveInternalNote(this.selectedConversation.id, messageText);
+                await this.loadFullDeepDetails(this.selectedConversation.id);
+            } else {
+                await this.supabaseService.sendHumanMessage(this.selectedConversation.id, messageText);
+            }
+
+            this.notificationService.show('Nota de voz enviada ✅', 'success');
+        } catch (err) {
+            console.error('Error enviando nota de voz:', err);
+            this.notificationService.show('Error al enviar nota de voz', 'error');
+        } finally {
+            this.isUploadingFile = false;
+            this.cdr.detectChanges();
+        }
     }
 
     backToList() {
@@ -181,17 +473,48 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
             html = content; // Fallback
         }
 
-        // 2. Custom Parsing for [PDF:url:caption] AFTER markdown
-        // We use a regex that matches the pattern in the resulting HTML
+        // 2. Custom Parsing for [IMAGE:url:caption]
+        html = html.replace(/\[IMAGE:(.*?)\]/g, (match, inner) => {
+            const parts = inner.split(':');
+            const safeUrl = parts.length > 2 ? parts.slice(0, -1).join(':').trim() : parts[0].trim();
+            const safeCaption = parts.length > 2 ? parts[parts.length - 1].trim() : (parts[1] || 'Imagen adjunta').trim();
+            return `
+                <div class="chat-media-attachment image-attachment" style="margin: 8px 0; max-width: 320px; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; background: #000;">
+                    <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: block;">
+                        <img src="${safeUrl}" alt="${safeCaption}" style="width: 100%; max-height: 260px; object-fit: cover; display: block; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" />
+                    </a>
+                    ${safeCaption ? `<div style="padding: 6px 10px; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.75rem;">${safeCaption}</div>` : ''}
+                </div>
+            `;
+        });
+
+        // 3. Custom Parsing for [AUDIO:url:duration]
+        html = html.replace(/\[AUDIO:(.*?)\]/g, (match, inner) => {
+            const parts = inner.split(':');
+            const safeUrl = parts.length > 2 ? parts.slice(0, -1).join(':').trim() : parts[0].trim();
+            const safeLabel = parts.length > 2 ? parts[parts.length - 1].trim() : (parts[1] || 'Nota de voz').trim();
+            return `
+                <div class="chat-media-attachment audio-attachment" style="margin: 8px 0; padding: 8px 12px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; max-width: 320px; display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #475569;">
+                        <span>🎙️</span> <span>${safeLabel}</span>
+                    </div>
+                    <audio controls style="width: 100%; height: 36px; border-radius: 6px; outline: none;">
+                        <source src="${safeUrl}" type="audio/webm">
+                        <source src="${safeUrl}" type="audio/mp4">
+                        <source src="${safeUrl}" type="audio/mpeg">
+                        Tu navegador no soporta reproducción de audio.
+                    </audio>
+                </div>
+            `;
+        });
+
+        // 4. Custom Parsing for [PDF:url:caption] AFTER markdown
         html = html.replace(/\[PDF:(.*?)\]/g, (match, inner) => {
             let safeUrl = '';
             let safeCaption = 'Documento PDF';
             
-            // Try to find the last colon which separates URL from Caption
-            // Format is [PDF:https://url.com/file.pdf:My Caption]
             const lastColonIdx = inner.lastIndexOf(':');
-            
-            if (lastColonIdx !== -1 && lastColonIdx > 8) { // > 8 to skip https://
+            if (lastColonIdx !== -1 && lastColonIdx > 8) {
                 safeUrl = inner.substring(0, lastColonIdx).trim();
                 safeCaption = inner.substring(lastColonIdx + 1).trim() || 'Documento PDF';
             } else {
@@ -609,6 +932,16 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     onInputChange() {
         if (this.selectedConversation) {
             this.supabaseService.sendTypingIndicator(this.selectedConversation.id, this.newMessage.length > 0);
+        }
+
+        // Detectar Slash Commands
+        if (this.newMessage.startsWith('/')) {
+            this.showSlashMenu = true;
+            this.slashQuery = this.newMessage.substring(1).trim();
+            this.slashSelectedIndex = 0;
+        } else {
+            this.showSlashMenu = false;
+            this.slashQuery = '';
         }
     }
 
