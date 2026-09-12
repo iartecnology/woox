@@ -32,7 +32,46 @@
         <app-info-panel (click)="$event.stopPropagation()" (closePanel)="closeAppInfo()"></app-info-panel>
     </div>
 
-    <section class="merchants-section">
+    <!-- TARJETAS DE KPIS GLOBALES DEL SAAS -->
+    <div class="saas-metrics-grid" *ngIf="!isLoading">
+        <div class="metric-card">
+            <div class="metric-icon-box bg-blue">🏢</div>
+            <div class="metric-content">
+                <span class="metric-label">Empresas Totales</span>
+                <div class="metric-value">{{ merchants.length }}</div>
+                <span class="metric-sub text-success">🟢 {{ activeMerchantsCount }} activas • {{ suspendedMerchantsCount }} inactivas</span>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon-box bg-purple">🤖</div>
+            <div class="metric-content">
+                <span class="metric-label">Interacciones IA (24h)</span>
+                <div class="metric-value">{{ totalMessages24h | number }}</div>
+                <span class="metric-sub text-muted">Mensajes gestionados hoy</span>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon-box bg-emerald">🛒</div>
+            <div class="metric-content">
+                <span class="metric-label">Ventas del Mes</span>
+                <div class="metric-value">{{ totalOrdersMonth | number }}</div>
+                <span class="metric-sub text-muted">Pedidos registrados</span>
+            </div>
+        </div>
+
+        <div class="metric-card" [class.border-warning]="expiringSoonCount > 0">
+            <div class="metric-icon-box bg-amber">⏳</div>
+            <div class="metric-content">
+                <span class="metric-label">Suscripciones por Vencer</span>
+                <div class="metric-value" [class.text-amber]="expiringSoonCount > 0">{{ expiringSoonCount }}</div>
+                <span class="metric-sub text-muted">Próximos 7 días</span>
+            </div>
+        </div>
+    </div>
+
+    <section class="merchants-section" (click)="closeMerchantMenu()">
         <div class="table-card">
             <!-- Loading Spinner -->
             <div *ngIf="isLoading"
@@ -54,10 +93,33 @@
                 </style>
             </div>
             <ng-container *ngIf="!isLoading">
-                <!-- Buscador Global -->
-                <div class="search-bar-container" style="margin-bottom: 20px;">
-                    <input type="text" placeholder="🔍 Buscar comercio por nombre o ID..." class="woox-input"
-                        [(ngModel)]="searchQuery" (input)="updateMerchantsView()" style="width: 100%; max-width: 400px; padding: 10px 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <!-- Barra de Búsqueda y Segmentación por Segmentos (Pills) -->
+                <div class="table-toolbar">
+                    <div class="search-bar-container">
+                        <input type="text" placeholder="🔍 Buscar por nombre, slug o código..." class="woox-input"
+                            [(ngModel)]="searchQuery" (input)="updateMerchantsView()">
+                    </div>
+
+                    <div class="segment-tabs">
+                        <button class="segment-pill" [class.active]="selectedSegment === 'all'" (click)="setSegment('all')">
+                            Todos ({{ merchants.length }})
+                        </button>
+                        <button class="segment-pill" [class.active]="selectedSegment === 'retail'" (click)="setSegment('retail')">
+                            🛒 Retail
+                        </button>
+                        <button class="segment-pill" [class.active]="selectedSegment === 'reservations'" (click)="setSegment('reservations')">
+                            📅 Reservas
+                        </button>
+                        <button class="segment-pill" [class.active]="selectedSegment === 'support'" (click)="setSegment('support')">
+                            🛎️ Soporte
+                        </button>
+                        <button class="segment-pill" [class.active]="selectedSegment === 'expiring'" (click)="setSegment('expiring')">
+                            ⏳ Por Vencer ({{ expiringSoonCount }})
+                        </button>
+                        <button class="segment-pill" [class.active]="selectedSegment === 'inactive'" (click)="setSegment('inactive')">
+                            🔴 Inactivas ({{ suspendedMerchantsCount }})
+                        </button>
+                    </div>
                 </div>
 
                 <!-- VISTA ESCRITORIO: TABLA -->
@@ -66,38 +128,37 @@
                         <tr>
                             <th (click)="toggleSort('name')" class="sortable">
                                 Empresa
-                                <span class="sort-icon" *ngIf="sortKey === 'name'">{{ sortDirection === 'asc' ? '↑' :
-                                    '↓'
-                                    }}</span>
+                                <span class="sort-icon" *ngIf="sortKey === 'name'">{{ sortDirection === 'asc' ? '↑' : '↓' }}</span>
                             </th>
                             <th (click)="toggleSort('ai_provider')" class="sortable">
                                 IA Provider
-                                <span class="sort-icon" *ngIf="sortKey === 'ai_provider'">{{ sortDirection === 'asc' ?
-                                    '↑' :
-                                    '↓' }}</span>
+                                <span class="sort-icon" *ngIf="sortKey === 'ai_provider'">{{ sortDirection === 'asc' ? '↑' : '↓' }}</span>
                             </th>
                             <th (click)="toggleSort('subscription_plan')" class="sortable">
                                 Suscripción
-                                <span class="sort-icon" *ngIf="sortKey === 'subscription_plan'">{{ sortDirection ===
-                                    'asc' ?
-                                    '↑' : '↓' }}</span>
+                                <span class="sort-icon" *ngIf="sortKey === 'subscription_plan'">{{ sortDirection === 'asc' ? '↑' : '↓' }}</span>
                             </th>
                             <th>Performance 📈</th>
                             <th>Estado</th>
-                            <th>Gestión</th>
+                            <th style="text-align: right; padding-right: 32px;">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr *ngFor="let m of viewMerchants">
                             <td>
                                 <div class="merchant-cell">
-                                    <img [src]="m.logo_url" alt="Logo" class="merchant-logo">
+                                    <div class="logo-wrapper">
+                                        <img [src]="m.logo_url" alt="Logo" class="merchant-logo">
+                                        <span class="health-dot" [class.online]="m.is_active" [class.offline]="!m.is_active" [title]="m.is_active ? 'Comercio Activo y Operativo' : 'Comercio Inactivo'"></span>
+                                    </div>
                                     <div class="m-text">
                                         <span class="merchant-name">
-                                            {{ m.industry_type === 'support' ? '🛎️' : (m.industry_type ===
-                                            'reservations' ? '📅' : '🛒') }} {{ m.name }}
+                                            {{ m.industry_type === 'support' ? '🛎️' : (m.industry_type === 'reservations' ? '📅' : '🛒') }} {{ m.name }}
                                         </span>
-                                        <code>/{{ m.slug }}</code>
+                                        <div style="display: flex; gap: 4px; align-items: center; margin-top: 2px;">
+                                            <code>/{{ m.slug }}</code>
+                                            <span *ngIf="m.merchant_code" class="code-badge">{{ m.merchant_code }}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </td>
@@ -109,14 +170,11 @@
                             </td>
                             <td>
                                 <div class="sub-info">
-                                    <span class="plan-badge" [class]="m.subscription_plan">{{ m.subscription_plan |
-                                        uppercase }}</span>
+                                    <span class="plan-badge" [class]="m.subscription_plan">{{ m.subscription_plan | uppercase }}</span>
                                     <span class="expiry-date"
                                         [class.warn]="isSubscriptionNearExpiring(m.subscription_expires_at)"
                                         [class.expired]="isSubscriptionExpired(m.subscription_expires_at)">
-                                        {{ m.subscription_expires_at ? (m.subscription_expires_at | date:'dd MMM yyyy')
-                                        :
-                                        'Sin fecha' }}
+                                        {{ m.subscription_expires_at ? (m.subscription_expires_at | date:'dd MMM yyyy') : 'Sin fecha' }}
                                     </span>
                                 </div>
                             </td>
@@ -142,62 +200,88 @@
                                     {{ m.is_active ? 'Activo' : 'Suspendido' }}
                                 </span>
                             </td>
-                            <td>
-                                <div class="action-toolbar-rows">
-                                    <!-- Fila 1: Acciones Principales -->
-                                    <div class="action-row">
-                                        <div class="action-group">
-                                            <button class="config-icon-btn enter" title="Entrar como empresa"
-                                                (click)="enterAsMerchant(m)">👁️</button>
-                                            <button class="config-icon-btn users" title="Gestionar Usuarios"
-                                                (click)="openUserManager(m)">👤</button>
-                                            <button class="config-icon-btn teams" title="Gestionar Equipos"
-                                                (click)="openTeamManager(m)">👥</button>
-                                            <button class="config-icon-btn stats" title="Analíticas"
-                                                (click)="viewMerchantStats(m)">📊</button>
-                                            <button class="config-icon-btn clone" title="Clonar Comercio"
-                                                (click)="cloneMerchant(m)">📋</button>
-                                        </div>
-                                        <div class="group-separator"></div>
-                                        <div class="action-group highlighted">
-                                            <button class="config-icon-btn ai" title="Configuración de IA"
-                                                (click)="openAIConfig(m)">🤖</button>
-                                            <button class="config-icon-btn bot" title="ADN (Flujos)"
-                                                (click)="goToBotBuilder(m)">🧬</button>
-                                            <button *ngIf="m.industry_type === 'retail'" class="config-icon-btn catalog"
-                                                title="Catálogo" (click)="goToCatalog(m)">🍔</button>
-                                            <button class="config-icon-btn brain"
-                                                title="Cerebro" (click)="goToBrain(m)">🧠</button>
-                                            <button *ngIf="m.industry_type === 'reservations'" class="config-icon-btn res" title="Reservaciones"
-                                                (click)="goToReservations(m)">📅</button>
-                                            <button class="config-icon-btn landing" title="AI Landing Builder"
-                                                (click)="goToLandingBuilder(m)">🪄</button>
-                                            <button class="config-icon-btn test" title="Simulador"
-                                                (click)="testChatSimulator(m)">🚀</button>
-                                        </div>
-                                    </div>
-                                    <!-- Fila 2: Canales, Config & Mantenimiento -->
-                                    <div class="action-row">
-                                        <div class="action-group">
-                                            <button class="config-icon-btn omni" title="Omnicanalidad"
-                                                (click)="openOmniConfig(m)">💬</button>
-                                            <button class="config-icon-btn code" title="Widget Code"
-                                                (click)="generateChatCode(m)">📟</button>
-                                            <button class="config-icon-btn biolink" title="BioLink"
-                                                (click)="openBiolinkConfig(m)">🔗</button>
-                                        </div>
-                                        <div class="group-separator"></div>
-                                        <div class="action-group">
-                                            <button class="config-icon-btn settings" title="Ajustes"
-                                                (click)="openModal(m)">⚙️</button>
-                                            <button class="config-icon-btn live" title="Monitor"
-                                                (click)="openLiveMonitor(m)">🛒</button>
-                                            <button class="config-icon-btn purge" title="Limpiar Datos"
-                                                (click)="openClearDataModal(m)">🧹</button>
-                                            <button class="config-icon-btn folders" title="Inicializar Carpetas"
-                                                (click)="initializeMerchantFolder(m)" style="background:var(--gray-200); color:var(--gray-700)">📁</button>
-                                            <button class="config-icon-btn delete-merchant" title="Eliminar"
-                                                (click)="confirmDeleteMerchant(m)">🗑️</button>
+                            <td style="text-align: right; padding-right: 24px;">
+                                <!-- BARRA DE ACCIONES ERGONÓMICA DE ALTO NIVEL -->
+                                <div class="streamlined-actions">
+                                    <!-- Botón Principal: Entrar al Panel -->
+                                    <button class="primary-enter-btn" (click)="enterAsMerchant(m)" title="Entrar como empresa a gestionar">
+                                        <span>Entrar</span>
+                                        <span class="arrow">→</span>
+                                    </button>
+
+                                    <!-- Acceso Directo: IA & ADN -->
+                                    <button class="quick-icon-btn" (click)="goToBotBuilder(m)" title="Constructor de Flujos ADN">
+                                        🧬
+                                    </button>
+
+                                    <!-- Acceso Directo: Canales Omnicanal -->
+                                    <button class="quick-icon-btn" (click)="openOmniConfig(m)" title="Configurar Canales (WhatsApp/IG/Telegram)">
+                                        💬
+                                    </button>
+
+                                    <!-- Menú Contextual Desplegable 'Más Opciones' (⋮) -->
+                                    <div class="more-options-wrapper">
+                                        <button class="quick-icon-btn more-btn" (click)="toggleMerchantMenu(m.id, $event)" title="Más opciones de gestión">
+                                            ⋮
+                                        </button>
+
+                                        <!-- Menú Flotante Categorizado -->
+                                        <div class="merchant-dropdown-menu" *ngIf="activeMenuMerchantId === m.id" (click)="$event.stopPropagation()">
+                                            <div class="dropdown-section-title">Comercio & Contenido</div>
+                                            <button class="dropdown-item" (click)="openAIConfig(m); closeMerchantMenu()">
+                                                <span>🤖</span> <span>Configuración de IA</span>
+                                            </button>
+                                            <button *ngIf="m.industry_type === 'retail'" class="dropdown-item" (click)="goToCatalog(m); closeMerchantMenu()">
+                                                <span>🍔</span> <span>Catálogo de Productos</span>
+                                            </button>
+                                            <button class="dropdown-item" (click)="goToBrain(m); closeMerchantMenu()">
+                                                <span>🧠</span> <span>Cerebro de Conocimiento</span>
+                                            </button>
+                                            <button *ngIf="m.industry_type === 'reservations'" class="dropdown-item" (click)="goToReservations(m); closeMerchantMenu()">
+                                                <span>📅</span> <span>Motor de Reservas</span>
+                                            </button>
+                                            <button class="dropdown-item" (click)="goToLandingBuilder(m); closeMerchantMenu()">
+                                                <span>🪄</span> <span>AI Landing Builder</span>
+                                            </button>
+                                            <button class="dropdown-item" (click)="openBiolinkConfig(m); closeMerchantMenu()">
+                                                <span>🔗</span> <span>Configurar BioLink</span>
+                                            </button>
+                                            <button class="dropdown-item" (click)="testChatSimulator(m); closeMerchantMenu()">
+                                                <span>🚀</span> <span>Simulador de Chat</span>
+                                            </button>
+
+                                            <div class="dropdown-divider"></div>
+                                            <div class="dropdown-section-title">Equipo & Datos</div>
+                                            <button class="dropdown-item" (click)="openUserManager(m); closeMerchantMenu()">
+                                                <span>👤</span> <span>Usuarios & Accesos</span>
+                                            </button>
+                                            <button class="dropdown-item" (click)="openTeamManager(m); closeMerchantMenu()">
+                                                <span>👥</span> <span>Equipos de Atención</span>
+                                            </button>
+                                            <button class="dropdown-item" (click)="viewMerchantStats(m); closeMerchantMenu()">
+                                                <span>📊</span> <span>Métricas & Analíticas</span>
+                                            </button>
+                                            <button class="dropdown-item" (click)="generateChatCode(m); closeMerchantMenu()">
+                                                <span>📟</span> <span>Código Widget Web</span>
+                                            </button>
+                                            <button class="dropdown-item" (click)="cloneMerchant(m); closeMerchantMenu()">
+                                                <span>📋</span> <span>Clonar Empresa</span>
+                                            </button>
+                                            <button class="dropdown-item" (click)="openModal(m); closeMerchantMenu()">
+                                                <span>⚙️</span> <span>Ajustes Generales</span>
+                                            </button>
+
+                                            <div class="dropdown-divider"></div>
+                                            <div class="dropdown-section-title text-danger">Mantenimiento & Peligro</div>
+                                            <button class="dropdown-item" (click)="initializeMerchantFolder(m); closeMerchantMenu()">
+                                                <span>📁</span> <span>Inicializar Carpetas Storage</span>
+                                            </button>
+                                            <button class="dropdown-item text-amber" (click)="openClearDataModal(m); closeMerchantMenu()">
+                                                <span>🧹</span> <span>Limpiar Datos (Reset)</span>
+                                            </button>
+                                            <button class="dropdown-item text-danger" (click)="confirmDeleteMerchant(m); closeMerchantMenu()">
+                                                <span>🗑️</span> <span>Eliminar Comercio</span>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

@@ -139,10 +139,47 @@ export class SuperAdminComponent implements OnInit {
     sortKey: keyof Merchant = 'name';
     sortDirection: 'asc' | 'desc' = 'asc';
     currentPage: number = 1;
-    itemsPerPage: number = 5;
+    itemsPerPage: number = 10;
     searchQuery: string = '';
+    selectedSegment: 'all' | 'retail' | 'reservations' | 'support' | 'expiring' | 'inactive' = 'all';
+    activeMenuMerchantId: string | null = null;
     viewMerchants: Merchant[] = [];
     Math = Math;
+
+    get activeMerchantsCount(): number {
+        return this.merchants.filter(m => m.is_active).length;
+    }
+
+    get suspendedMerchantsCount(): number {
+        return this.merchants.filter(m => !m.is_active).length;
+    }
+
+    get totalMessages24h(): number {
+        return this.merchants.reduce((sum, m) => sum + (m.stats?.messages_24h || 0), 0);
+    }
+
+    get totalOrdersMonth(): number {
+        return this.merchants.reduce((sum, m) => sum + (m.stats?.orders_month || 0), 0);
+    }
+
+    get expiringSoonCount(): number {
+        return this.merchants.filter(m => this.isSubscriptionNearExpiring(m.subscription_expires_at)).length;
+    }
+
+    toggleMerchantMenu(merchantId: string, event: Event) {
+        event.stopPropagation();
+        this.activeMenuMerchantId = this.activeMenuMerchantId === merchantId ? null : merchantId;
+    }
+
+    closeMerchantMenu() {
+        this.activeMenuMerchantId = null;
+    }
+
+    setSegment(segment: 'all' | 'retail' | 'reservations' | 'support' | 'expiring' | 'inactive') {
+        this.selectedSegment = segment;
+        this.currentPage = 1;
+        this.updateMerchantsView();
+    }
 
     aiProviders = [
         { id: 'openai', name: 'OpenAI (GPT-4o)', icon: '🤖' },
@@ -3189,10 +3226,23 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
 
     updateMerchantsView(): void {
         const query = this.searchQuery.toLowerCase().trim();
-        const filtered = this.merchants.filter(m => 
+        let filtered = this.merchants.filter(m => 
             (m.name || '').toLowerCase().includes(query) || 
-            (m.slug || '').toLowerCase().includes(query)
+            (m.slug || '').toLowerCase().includes(query) ||
+            (m.merchant_code || '').toLowerCase().includes(query)
         );
+
+        if (this.selectedSegment === 'retail') {
+            filtered = filtered.filter(m => m.industry_type === 'retail');
+        } else if (this.selectedSegment === 'reservations') {
+            filtered = filtered.filter(m => m.industry_type === 'reservations');
+        } else if (this.selectedSegment === 'support') {
+            filtered = filtered.filter(m => m.industry_type === 'support');
+        } else if (this.selectedSegment === 'expiring') {
+            filtered = filtered.filter(m => this.isSubscriptionNearExpiring(m.subscription_expires_at));
+        } else if (this.selectedSegment === 'inactive') {
+            filtered = filtered.filter(m => !m.is_active);
+        }
 
         const sorted = [...filtered].sort((a, b) => {
             const valA = a[this.sortKey] || '';
@@ -3209,10 +3259,24 @@ EMPRESA: ${this.selectedMerchant.name || 'esta empresa'}
 
     get totalPages(): number {
         const query = this.searchQuery.toLowerCase().trim();
-        const filtered = this.merchants.filter(m => 
+        let filtered = this.merchants.filter(m => 
             (m.name || '').toLowerCase().includes(query) || 
-            (m.slug || '').toLowerCase().includes(query)
+            (m.slug || '').toLowerCase().includes(query) ||
+            (m.merchant_code || '').toLowerCase().includes(query)
         );
+
+        if (this.selectedSegment === 'retail') {
+            filtered = filtered.filter(m => m.industry_type === 'retail');
+        } else if (this.selectedSegment === 'reservations') {
+            filtered = filtered.filter(m => m.industry_type === 'reservations');
+        } else if (this.selectedSegment === 'support') {
+            filtered = filtered.filter(m => m.industry_type === 'support');
+        } else if (this.selectedSegment === 'expiring') {
+            filtered = filtered.filter(m => this.isSubscriptionNearExpiring(m.subscription_expires_at));
+        } else if (this.selectedSegment === 'inactive') {
+            filtered = filtered.filter(m => !m.is_active);
+        }
+
         return Math.ceil(filtered.length / this.itemsPerPage) || 1;
     }
 
