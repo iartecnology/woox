@@ -470,6 +470,7 @@ Tu regla inquebrantable:
     {
       name: 'Inteligencia Artificial',
       items: [
+        { type: 'ai_orchestrator', label: 'Orquestador Multi-Agente', icon: '👑', description: 'Coordina enjambre de agentes especializados' },
         { type: 'ai_agent', label: 'Agente IA', icon: '🧠', description: 'IA Conversacional' },
         { type: 'n8n_agent', label: 'Agente n8n', icon: '⚙️', description: 'IA Orquestada por n8n' },
         { type: 'ai_skill', label: 'AI Skill', icon: '🛠️', description: 'Tool para Agente IA' },
@@ -747,6 +748,13 @@ Tu regla inquebrantable:
         icon: '🧠',
         category: 'commerce'
       },
+      {
+        id: 'swarm_orchestrator',
+        name: 'Enjambre Multi-Agente (Swarm)',
+        description: 'Arquitectura avanzada OpenClaw/Hermes: Orquestador Central que coordina y delega a Especialistas en Ventas, Soporte RAG y Checkout.',
+        icon: '👑',
+        category: 'commerce'
+      },
       // GRUPO: Reservas / Citas
       {
         id: 'booking_bot',
@@ -844,6 +852,7 @@ Tu regla inquebrantable:
           // IDs nuevos (Tienda / Comercio)
           'store_bot':    () => this.generateProductFlow(),
           'store_ai':     () => this.generateIACatalogFlow(),
+          'swarm_orchestrator': () => this.generateSwarmOrchestratorFlow(),
           // IDs nuevos (Reservas)
           'booking_bot':  () => this.generateServiceFlow(),
           'booking_ai':   () => this.generateRAGFlow(),
@@ -1146,6 +1155,147 @@ FASE 4: VERACIDAD
     this.connectNodes(registerOrderNode.id, 'output', endNode.id, 'input');
 
     this.cdr.detectChanges();
+  }
+
+  // --- GENERADOR DE PLANTILLA: ENJAMBRE MULTI-AGENTE (Swarm Architecture) ---
+  private async generateSwarmOrchestratorFlow() {
+    let x = 400;
+    let y = 60;
+
+    // 1. Nodo Inicio
+    const startNode = this.createSpecificNode('start', x, y, {
+      label: 'Inicio Enjambre',
+      message: '¡Hola! Bienvenido a {{merchantName}}. Nuestro equipo de asistentes inteligentes está listo para atenderte en ventas, consultas y pedidos.'
+    });
+    y += 180;
+
+    // 2. Nodo Orquestador Central (Meta-Agente)
+    const orchestratorNode = this.createSpecificNode('ai_orchestrator', x, y, {
+      label: '👑 Orquestador Swarm',
+      orchestrator_mode: 'routing',
+      orchestrator_max_turns: 3,
+      prompt: `Eres el Orquestador Ejecutivo Multi-Agente de {{merchantName}}.
+Tu responsabilidad:
+1. Analizar la necesidad del cliente y delegar al Agente Especialista adecuado:
+   - Especialista en Ventas: Si pregunta por productos, precios, menú, recomendaciones o quiere comprar.
+   - Especialista en Soporte & FAQ: Si tiene dudas sobre políticas, horarios, envíos, métodos de pago o garantías.
+   - Especialista en Cierre / Checkout: Si dice que ya quiere pagar, terminar su orden o confirmar entrega.
+2. Mantener la coherencia del tono de marca y contexto global.`,
+      model: 'gemini-2.0-flash',
+      temperature: 0.2
+    });
+    this.connectNodes(startNode.id, 'output', orchestratorNode.id, 'input');
+    y += 240;
+
+    // 3. Sub-Agentes Especializados (Worker Swarm)
+    // Especialista 1: Ventas & Catálogo (Izquierda)
+    const salesAgent = this.createSpecificNode('ai_agent', x - 320, y, {
+      label: '🛍️ Especialista en Ventas',
+      prompt: `Eres el Asesor de Ventas de {{merchantName}}.
+1. Busca en el catálogo oficial usando 'catalog_search'.
+2. Muestra precios claros, fotos y disponibilidad.
+3. Cuando el cliente elija un producto, agrégalo de inmediato con 'add_to_cart'.
+4. Si el cliente pregunta de envíos o políticas generales, indícale amablemente y sugiere coordinar el pago.`,
+      temperature: 0.5,
+      model: 'gemini-2.0-flash'
+    });
+    this.connectNodes(orchestratorNode.id, 'agents_out', salesAgent.id, 'input');
+
+    // Skills para Agente Ventas
+    const catSkill = this.createSpecificNode('ai_skill', x - 450, y + 150, {
+      label: '🔍 Buscar Catálogo',
+      actionType: 'catalog_search',
+      message: 'Búsqueda en catálogo'
+    });
+    const addCartSkill = this.createSpecificNode('ai_skill', x - 220, y + 150, {
+      label: '🛒 Añadir al Carrito',
+      actionType: 'add_to_cart',
+      message: 'Añade productos al carrito'
+    });
+    this.connectNodes(catSkill.id, 'skill_out', salesAgent.id, 'skills_in');
+    this.connectNodes(addCartSkill.id, 'skill_out', salesAgent.id, 'skills_in');
+
+    // Especialista 2: Soporte & RAG (Centro)
+    const ragAgent = this.createSpecificNode('ai_agent', x, y, {
+      label: '📚 Especialista en Soporte & FAQ',
+      prompt: `Eres el Asistente de Soporte y Políticas de {{merchantName}}.
+1. Consulta la base de conocimiento con 'knowledge_base' antes de dar respuestas sobre garantías, envíos, métodos de pago o devoluciones.
+2. Responde con precisión, cortesía y brevedad.
+3. Si el usuario desea comprar o necesita un humano, utiliza las herramientas correspondientes.`,
+      temperature: 0.2,
+      model: 'gemini-2.0-flash'
+    });
+    this.connectNodes(orchestratorNode.id, 'agents_out', ragAgent.id, 'input');
+
+    // Skill para Agente RAG
+    const ragSkill = this.createSpecificNode('ai_skill', x, y + 150, {
+      label: '📚 Base de Conocimiento',
+      actionType: 'knowledge_base',
+      message: 'RAG semántico en documentos'
+    });
+    this.connectNodes(ragSkill.id, 'skill_out', ragAgent.id, 'skills_in');
+
+    // Especialista 3: Checkout & Cierre (Derecha)
+    const checkoutAgent = this.createSpecificNode('ai_agent', x + 320, y, {
+      label: '🏁 Especialista en Cierre & Checkout',
+      prompt: `Eres el Asesor de Cierre y Liquidación de {{merchantName}}.
+1. Revisa el carrito con 'get_cart'.
+2. Si el cliente confirma su intención de pago o finalización, ejecuta 'checkout_trigger' para iniciar la captura de entrega y pago.`,
+      temperature: 0.2,
+      model: 'gemini-2.0-flash'
+    });
+    this.connectNodes(orchestratorNode.id, 'agents_out', checkoutAgent.id, 'input');
+
+    // Skill para Agente Checkout
+    const checkoutSkill = this.createSpecificNode('ai_skill', x + 320, y + 150, {
+      label: '✅ Finalizar Pedido',
+      actionType: 'checkout_trigger',
+      message: 'Dispara checkout'
+    });
+    this.connectNodes(checkoutSkill.id, 'skill_out', checkoutAgent.id, 'skills_in');
+
+    // 4. Captura de Datos Híbrida tras Checkout
+    y += 280;
+    const nameNode = this.createSpecificNode('question', x + 320, y, {
+      label: 'Nombre Cliente',
+      message: 'Para coordinar tu despacho, ¿a qué nombre registramos el pedido?',
+      variable: 'customer_name'
+    });
+    this.connectNodes(checkoutAgent.id, 'output', nameNode.id, 'input');
+    y += 160;
+
+    const phoneNode = this.createSpecificNode('question', x + 320, y, {
+      label: 'Teléfono',
+      message: 'Gracias {{customer_name}}, ¿cuál es tu número de WhatsApp para notificarte el despacho?',
+      variable: 'phone',
+      validation: 'phone'
+    });
+    this.connectNodes(nameNode.id, 'output', phoneNode.id, 'input');
+    y += 160;
+
+    const addrNode = this.createSpecificNode('question', x + 320, y, {
+      label: 'Dirección',
+      message: '¿Cuál es la dirección completa de entrega?',
+      variable: 'direccion_entrega'
+    });
+    this.connectNodes(phoneNode.id, 'output', addrNode.id, 'input');
+    y += 160;
+
+    const regNode = this.createSpecificNode('action', x + 320, y, {
+      label: 'Registrar Pedido',
+      actionType: 'register_order'
+    });
+    this.connectNodes(addrNode.id, 'output', regNode.id, 'input');
+    y += 160;
+
+    const endNode = this.createSpecificNode('end', x + 320, y, {
+      label: 'Confirmación y Cierre',
+      message: '🎉 ¡Excelente! Tu orden {{orderNumber}} ha sido generada con éxito por nuestro enjambre de atención. En breve recibirás el seguimiento detallado.'
+    });
+    this.connectNodes(regNode.id, 'output', endNode.id, 'input');
+
+    this.cdr.detectChanges();
+    setTimeout(() => this.organizeFlow(), 120);
   }
 
   private async generateProductFlow() {
@@ -1515,11 +1665,16 @@ FASE 4: VERACIDAD
         operator: type === 'condition' ? '==' : undefined,
         variable: type === 'condition' ? '' : undefined,
         value: type === 'condition' ? '' : undefined,
-        prompt: type === 'ai_agent' ? 'Eres un asistente útil de Servicio al Cliente. Responde dudas de forma natural.' : undefined,
-        user_prompt: type === 'ai_agent' ? 'Mensaje del usuario: {{message}}' : undefined,
-        model: type === 'ai_agent' ? 'gemini-2.0-flash' : undefined,
-        temperature: type === 'ai_agent' ? 0.7 : undefined,
-        memory_limit: type === 'ai_agent' ? 4 : undefined,
+        prompt: (type === 'ai_agent' || type === 'ai_orchestrator') ? (type === 'ai_orchestrator' 
+          ? 'Eres el Orquestador Ejecutivo Multi-Agente de {{merchantName}}. Tu misión es analizar la solicitud del cliente, identificar qué agente especialista debe resolverla (Ventas, Catálogo, RAG o Soporte) y responder o delegar con la mejor experiencia.'
+          : 'Eres un asistente útil de Servicio al Cliente. Responde dudas de forma natural.') : undefined,
+        user_prompt: (type === 'ai_agent' || type === 'ai_orchestrator') ? 'Mensaje del usuario: {{message}}' : undefined,
+        model: (type === 'ai_agent' || type === 'ai_orchestrator') ? 'gemini-2.0-flash' : undefined,
+        temperature: type === 'ai_orchestrator' ? 0.3 : (type === 'ai_agent' ? 0.7 : undefined),
+        memory_limit: (type === 'ai_agent' || type === 'ai_orchestrator') ? 6 : undefined,
+        orchestrator_mode: type === 'ai_orchestrator' ? 'routing' : undefined,
+        orchestrator_max_turns: type === 'ai_orchestrator' ? 3 : undefined,
+        specialists: type === 'ai_orchestrator' ? [] : undefined,
         actionType: type === 'ai_skill' ? 'catalog_search' : (type === 'catalog_search' ? 'catalog_search' : (type === 'cart_summary' ? 'shopping_cart' : (type === 'order_checkout' ? 'register_order' : undefined))),
         params: type === 'ai_skill' ? {} : undefined,
         n8n_webhook_url: type === 'n8n' ? '' : undefined,
@@ -1603,6 +1758,37 @@ FASE 4: VERACIDAD
     this.notification.show('Bloque duplicado', 'success');
   }
 
+  // --- ORQUESTADOR MULTI-AGENTE (Swarm Architecture) ---
+  getConnectedSpecialists(orchestratorId: string): FlowNode[] {
+    const conns = this.botFlow.flow_data.connections || [];
+    const nodes = this.botFlow.flow_data.nodes || [];
+    const outConns = conns.filter(c => c.from === orchestratorId && (c.fromPort === 'agents_out' || c.fromPort === 'output'));
+    return outConns
+      .map(c => nodes.find(n => n.id === c.to))
+      .filter((n): n is FlowNode => !!n && (n.type === 'ai_agent' || n.type === 'n8n_agent'));
+  }
+
+  getAvailableSpecialistAgents(orchestratorId: string): FlowNode[] {
+    const nodes = this.botFlow.flow_data.nodes || [];
+    const connected = this.getConnectedSpecialists(orchestratorId);
+    const connectedIds = new Set(connected.map(n => n.id));
+    return nodes.filter(n => (n.type === 'ai_agent' || n.type === 'n8n_agent') && n.id !== orchestratorId && !connectedIds.has(n.id));
+  }
+
+  connectSpecialistAgent(orchestratorId: string, agentId: string) {
+    this.connectNodes(orchestratorId, 'agents_out', agentId, 'input');
+    this.notification.show('Agente especialista vinculado al Orquestador 👑', 'success');
+  }
+
+  disconnectSpecialistAgent(orchestratorId: string, agentId: string) {
+    this.botFlow.flow_data.connections = (this.botFlow.flow_data.connections || []).filter(c => 
+      !(c.from === orchestratorId && c.to === agentId && (c.fromPort === 'agents_out' || c.fromPort === 'output'))
+    );
+    this.notification.show('Agente especialista desvinculado', 'info');
+    this.cdr.detectChanges();
+  }
+
+
 
   getNodeLabel(type: string): string {
     return this.paletteItems.find(p => p.type === type)?.label || 'Bloque';
@@ -1621,6 +1807,7 @@ FASE 4: VERACIDAD
       start: '#065f46',
       end: '#374151',
       condition: '#1e3a5f',
+      ai_orchestrator: '#4338ca',
       ai_agent: '#581c87',
       ai_skill: '#0891b2',
       action: '#b91c1c',
@@ -1652,6 +1839,9 @@ FASE 4: VERACIDAD
         return `${node.data.variable || '?'} ${node.data.operator || '=='} ${node.data.value || '?'}`;
       case 'send_pdf':
         return `📄 PDF: ${node.data?.pdf_caption || 'Documento PDF'} (${node.data?.pdf_url || 'Sin URL'})`;
+      case 'ai_orchestrator':
+        const specCount = this.getConnectedSpecialists(node.id).length;
+        return `👑 Enjambre: ${specCount} agentes (${node.data?.orchestrator_mode === 'swarm_synthesis' ? 'Síntesis CoT' : 'Enrutador'})`;
       case 'ai_agent':
         return `IA: ${(node.data.prompt || '').substring(0, 30)}...`;
       case 'action':

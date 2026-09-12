@@ -1,6 +1,6 @@
 export interface FlowNode {
   id: string;
-  type: 'start' | 'message' | 'question' | 'menu' | 'condition' | 'action' | 'ai_agent' | 'n8n_agent' | 'end' | 'ai_skill' | 'n8n' | 'mcp' | 'api' | 'memory_extract' | 'db_query' | 'set_variable' | 'switch' | 'delay' | 'business_hours' | 'semantic_router' | 'image_generator' | 'knowledge_query' | 'send_email' | 'transfer_operator' | 'wa_template' | 'catalog_search' | 'cart_summary' | 'order_checkout' | 'reservation_check' | 'reservation_create' | 'calendar_sync' | 'send_pdf';
+  type: 'start' | 'message' | 'question' | 'menu' | 'condition' | 'action' | 'ai_agent' | 'ai_orchestrator' | 'n8n_agent' | 'end' | 'ai_skill' | 'n8n' | 'mcp' | 'api' | 'memory_extract' | 'db_query' | 'set_variable' | 'switch' | 'delay' | 'business_hours' | 'semantic_router' | 'image_generator' | 'knowledge_query' | 'send_email' | 'transfer_operator' | 'wa_template' | 'catalog_search' | 'cart_summary' | 'order_checkout' | 'reservation_check' | 'reservation_create' | 'calendar_sync' | 'send_pdf';
   position: { x: number; y: number };
   data: {
     label: string;
@@ -16,11 +16,15 @@ export interface FlowNode {
                | 'catalog_search' | 'inventory_check' | 'add_to_cart' | 'get_cart' | 'remove_from_cart' | 'register_order' | 'order_status' | 'shopping_cart' | 'transfer_human' | 'knowledge_base' | 'checkout_trigger';
     operator?: '==' | '!=' | 'contains' | '>' | '<' | 'exists';
     value?: string;
-    prompt?: string;       // System Prompt del Agente IA
+    prompt?: string;       // System Prompt del Agente IA / Orquestador
     user_prompt?: string;  // Plantilla del mensaje del usuario
     model?: string;        // Modelo de IA (gemini-1.5-flash, etc.)
     temperature?: number;  // Creatividad del LLM 0-1
     memory_limit?: number; // Cuántos mensajes previos recordar
+    // Propiedades para Orquestador Multi-Agente (Swarm / OpenClaw / Hermes pattern)
+    orchestrator_mode?: 'routing' | 'swarm_synthesis'; // routing: delega a 1 especialista; swarm_synthesis: combina respuestas
+    orchestrator_max_turns?: number;
+    specialists?: { id: string; name: string; role: string; nodeId: string; description: string }[];
     // Propiedades para Integraciones Externas
     n8n_webhook_url?: string;
     n8n_wait_for_response?: boolean;

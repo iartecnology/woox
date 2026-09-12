@@ -245,19 +245,26 @@
 
 
 
-          <!-- Divider para AI Agent -->
-          <line *ngIf="node.type === 'ai_agent'" x1="16" y1="38" x2="200" y2="38" stroke="rgba(255,255,255,0.1)" />
+          <!-- Divider para AI Agent y Orchestrator -->
+          <line *ngIf="node.type === 'ai_agent' || node.type === 'ai_orchestrator'" x1="16" y1="38" x2="200" y2="38" stroke="rgba(255,255,255,0.1)" />
 
           <!-- Previsualización contenido -->
-          <text x="16" [attr.y]="node.type === 'ai_agent' ? 62 : 58" fill="rgba(255,255,255,0.5)" font-size="10" class="no-select">
+          <text x="16" [attr.y]="(node.type === 'ai_agent' || node.type === 'ai_orchestrator') ? 62 : 58" fill="rgba(255,255,255,0.5)" font-size="10" class="no-select">
             {{ getNodePreview(node) }}
           </text>
 
-          <!-- Puerto inferior de Skills (Estilo n8n) -->
+          <!-- Puerto inferior de Skills (Estilo n8n para Agente) -->
           <g *ngIf="node.type === 'ai_agent'">
             <circle cx="110" cy="80" r="8" fill="#0f172a" stroke="#0891b2" stroke-width="2" class="port"
                     (mouseup)="onPortMouseUp($event, node, 'skills_in')"></circle>
             <text x="100" y="95" fill="#0891b2" font-size="8" font-weight="700" class="no-select">TOOLS</text>
+          </g>
+
+          <!-- Puerto de Agentes Especialistas para el Orquestador Multi-Agente -->
+          <g *ngIf="node.type === 'ai_orchestrator'">
+            <circle cx="110" cy="80" r="8" fill="#0f172a" stroke="#fbbf24" stroke-width="2" class="port"
+                    (mousedown)="onPortMouseDown($event, node, 'agents_out')"></circle>
+            <text x="75" y="95" fill="#fbbf24" font-size="8" font-weight="700" class="no-select">SUB-AGENTES</text>
           </g>
 
           <!-- Puerto de Entrada -->
@@ -717,6 +724,93 @@
           </div>
           <div class="alert alert-info mt-3 py-2 px-3 small">
             💡 Un límite de 4 a 8 mensajes ofrece el mejor balance entre recordar lo que pidió el cliente y velocidad de respuesta.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================== -->
+    <!-- PANEL INSPECTOR: ORQUESTADOR MULTI-AGENTE (Swarm / OpenClaw) -->
+    <!-- ========================================================== -->
+    <div *ngIf="editingNode.type === 'ai_orchestrator'" class="ai-orchestrator-properties" style="grid-column: span 2;">
+      <div class="alert alert-primary py-2 px-3 small mb-3" style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px;">
+        <span class="fw-bold">👑 Arquitectura de Enjambre Multi-Agente (Swarm):</span>
+        <div class="text-sm opacity-90 mt-1">
+          Este nodo actúa como Meta-Orquestador (cerebro central). Analiza la intención del usuario y delega la tarea al sub-agente especialista adecuado o sintetiza sus conocimientos en tiempo real.
+        </div>
+      </div>
+
+      <!-- Modo de Orquestación -->
+      <div class="form-group mb-3">
+        <label class="fw-bold">Modo de Coordinación</label>
+        <div class="label-hint">Cómo se ejecutan los agentes especialistas conectados:</div>
+        <select class="form-control" [(ngModel)]="editingNode.data.orchestrator_mode">
+          <option value="routing">🎯 Enrutamiento Directo (Delega a 1 Especialista óptimo)</option>
+          <option value="swarm_synthesis">🧠 Síntesis CoT Enjambre (Consulta especialistas y sintetiza)</option>
+        </select>
+      </div>
+
+      <!-- System Prompt Orquestador -->
+      <div class="form-group mb-3">
+        <label class="fw-bold">System Prompt del Orquestador (Meta-Instrucciones)</label>
+        <div class="label-hint">Define las directrices de coordinación, tono de voz institucional y criterios de delegación:</div>
+        <textarea class="form-control font-monospace text-sm" rows="6" [(ngModel)]="editingNode.data.prompt" 
+                  placeholder="Eres el Orquestador Central..."></textarea>
+      </div>
+
+      <!-- Modelo y Temperatura -->
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <label class="small fw-bold">Modelo LLM</label>
+          <select class="form-control" [(ngModel)]="editingNode.data.model">
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recomendado)</option>
+            <option value="gemini-1.5-pro">Gemini 1.5 Pro (Razonamiento Complejo)</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label class="small fw-bold">Temperatura: {{editingNode.data.temperature}}</label>
+          <input type="range" class="form-range" min="0" max="1" step="0.1" [(ngModel)]="editingNode.data.temperature">
+        </div>
+      </div>
+
+      <!-- Sub-Agentes Conectados -->
+      <div class="specialists-section mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <label class="fw-bold mb-0">🤖 Especialistas Conectados al Enjambre ({{ getConnectedSpecialists(editingNode.id).length }})</label>
+        </div>
+        <div class="label-hint mb-2">Conecta el puerto inferior "SUB-AGENTES" a los nodos de Agente IA que deseas que el Orquestador comande:</div>
+
+        <div *ngIf="getConnectedSpecialists(editingNode.id).length === 0" class="alert alert-warning py-2 small">
+          ⚠️ No hay agentes conectados todavía. Arrastra una conexión desde el puerto "SUB-AGENTES" de este nodo hacia cualquier "Agente IA".
+        </div>
+
+        <div class="specialists-list" *ngIf="getConnectedSpecialists(editingNode.id).length > 0">
+          <div *ngFor="let spec of getConnectedSpecialists(editingNode.id)" class="specialist-item-row p-2 mb-2 rounded border d-flex justify-content-between align-items-center" style="background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1) !important;">
+            <div class="d-flex align-items-center gap-2">
+              <span class="fs-5">🧠</span>
+              <div>
+                <div class="fw-bold text-sm">{{ spec.data.label || 'Agente IA' }}</div>
+                <div class="text-xs opacity-60 text-truncate" style="max-width: 220px;">{{ spec.data.prompt || 'Sin prompt' }}</div>
+              </div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger py-0 px-2" (click)="disconnectSpecialistAgent(editingNode.id, spec.id)" title="Desvincular">
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <!-- Selector rápido para conectar agentes disponibles -->
+        <div *ngIf="getAvailableSpecialistAgents(editingNode.id).length > 0" class="mt-2">
+          <label class="small text-muted mb-1">Vincular agente existente:</label>
+          <div class="d-flex gap-2">
+            <select #specSelect class="form-control form-control-sm">
+              <option *ngFor="let a of getAvailableSpecialistAgents(editingNode.id)" [value]="a.id">
+                {{ a.data.label || 'Agente IA' }} ({{ a.id.substring(0, 8) }})
+              </option>
+            </select>
+            <button class="btn btn-sm btn-primary" (click)="connectSpecialistAgent(editingNode.id, specSelect.value)">
+              + Vincular
+            </button>
           </div>
         </div>
       </div>

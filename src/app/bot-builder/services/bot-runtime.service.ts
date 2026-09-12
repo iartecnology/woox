@@ -192,8 +192,12 @@ export class BotRuntimeService {
             return await this.advanceAndCollect(flowData, nextNode, session, flow, userInput);
         }
 
-        if (currentNode.type === 'ai_agent') {
+        if (currentNode.type === 'ai_agent' || currentNode.type === 'ai_orchestrator') {
             try {
+                if (currentNode.type === 'ai_orchestrator') {
+                    return await this.executeSwarmOrchestrator(flowData, currentNode, userInput, session, flow);
+                }
+
                 const { data: aiResponse, error: aiError } = await this.supabase.processBotAI({
                     conversation_id: session.conversation_id,
                     merchant_id: session.merchant_id,
@@ -435,6 +439,20 @@ export class BotRuntimeService {
                     const nextActNodeId = this.getNextNodeId(flowData, node.id, 'output');
                     node = nodes.find((n: any) => n.id === nextActNodeId);
                     break;
+
+                case 'ai_orchestrator':
+                    tLog.service = 'ai';
+                    tLog.request = {
+                        mode: node.data?.orchestrator_mode || 'routing',
+                        userInput: userInput || '',
+                        prompt: node.data?.prompt
+                    };
+                    const swarmResult = await this.executeSwarmOrchestrator(flowData, node, userInput, session, flow);
+                    messages.push(...swarmResult.messages);
+                    tLog.response = { messages: swarmResult.messages };
+                    if (!session.technicalLogs) session.technicalLogs = [];
+                    session.technicalLogs.push(tLog);
+                    return { messages, session, executionPath, technicalLogs: session.technicalLogs };
 
                 case 'ai_agent':
                 case 'n8n_agent':
@@ -764,6 +782,163 @@ export class BotRuntimeService {
         }
 
         return null;
+    }
+
+    // =========================================================================
+    // MULTI-AGENT SWARM ORCHESTRATION ENGINE (Hermes / OpenClaw Pattern)
+    // =========================================================================
+    private async executeSwarmOrchestrator(
+        flowData: any,
+        orchestratorNode: any,
+        userInput: string,
+        session: any,
+        flow: any
+    ): Promise<BotResponse> {
+        const nodes = flowData?.nodes || [];
+        const connections = flowData?.connections || [];
+
+        // 1. Detectar agentes especialistas conectados al orquestador
+        const specialistConns = connections.filter(
+            (c: any) => c.from === orchestratorNode.id && (c.fromPort === 'agents_out' || c.fromPort === 'output')
+        );
+        const specialistNodes = specialistConns
+            .map((c: any) => nodes.find((n: any) => n.id === c.to))
+            .filter((n: any) => !!n && (n.type === 'ai_agent' || n.type === 'n8n_agent'));
+
+        // Si no hay especialistas conectados, ejecutar como un agente IA estándar
+        if (specialistNodes.length === 0) {
+            const aiPayload = {
+                conversation_id: session.conversation_id,
+                merchant_id: session.merchant_id,
+                message: userInput || '',
+                simulator_mode: true,
+                flow_id: flow?.id || 'simulator',
+                node_context: orchestratorNode.data?.prompt,
+                flow_data: flowData
+            };
+            try {
+                const { data: aiRes, error: aiErr } = await this.supabase.processBotAI(aiPayload);
+                if (aiErr) throw aiErr;
+                const text = aiRes?.choices?.[0]?.message?.content || aiRes?.content || 'El asistente no pudo procesar tu solicitud.';
+                await this.updateSession(session, orchestratorNode.id, 'ai_input');
+                return { messages: [text], session };
+            } catch (err) {
+                return { messages: ['🤖 Asistente no disponible en este momento.'], session };
+            }
+        }
+
+        const mode = orchestratorNode.data?.orchestrator_mode || 'routing';
+        const specialistSpecs = specialistNodes.map((s: any) => ({
+            id: s.id,
+            name: s.data?.label || 'Especialista',
+            promptSnippet: (s.data?.prompt || '').substring(0, 150)
+        }));
+
+        // 2. MODO 1: ENRUTAMIENTO DIRECTO (Hermes Router)
+        if (mode === 'routing') {
+            // Evaluamos la intención para delegar al mejor especialista
+            const routingPrompt = `Eres el Orquestador del Enjambre. Tienes los siguientes agentes especialistas disponibles:
+${specialistSpecs.map((s: any, i: number) => `${i + 1}. ID: "${s.id}" - Nombre: "${s.name}" - Rol: ${s.promptSnippet}`).join('\n')}
+
+Mensaje del usuario: "${userInput}"
+Variables de sesión actuales: ${JSON.stringify(session.variables || {})}
+
+Devuelve ÚNICAMENTE el ID del agente que mejor debe responder a este mensaje. Si ninguno aplica perfectamente, devuelve el ID del primero. No agregues explicaciones, solo el ID.`;
+
+            let chosenAgentId = specialistNodes[0].id;
+            try {
+                const { data: routeRes } = await this.supabase.processBotAI({
+                    conversation_id: session.conversation_id,
+                    merchant_id: session.merchant_id,
+                    message: routingPrompt,
+                    simulator_mode: true
+                });
+                const rawChoice = (routeRes?.choices?.[0]?.message?.content || routeRes?.content || '').trim();
+                const matched = specialistNodes.find((s: any) => rawChoice.includes(s.id));
+                if (matched) {
+                    chosenAgentId = matched.id;
+                }
+            } catch (e) {
+                console.warn('[SwarmOrchestrator] Error enrutando, usando fallback al primer agente:', e);
+            }
+
+            const chosenNode = specialistNodes.find((s: any) => s.id === chosenAgentId) || specialistNodes[0];
+
+            // Ejecutar el agente especialista elegido
+            const agentPayload = {
+                conversation_id: session.conversation_id,
+                merchant_id: session.merchant_id,
+                message: userInput || '',
+                simulator_mode: true,
+                flow_id: flow?.id || 'simulator',
+                node_context: chosenNode.data?.prompt,
+                flow_data: flowData
+            };
+
+            const { data: agentRes } = await this.supabase.processBotAI(agentPayload);
+            const agentReply = agentRes?.choices?.[0]?.message?.content || agentRes?.content || 'El especialista no pudo responder en este momento.';
+
+            // Mantener al usuario en el contexto del orquestador o del especialista
+            await this.updateSession(session, orchestratorNode.id, 'ai_input');
+            return {
+                messages: [agentReply],
+                session
+            };
+        }
+
+        // 3. MODO 2: SÍNTESIS ENJAMBRE (Swarm Synthesis - CoT Multi-Agente)
+        try {
+            // Consultamos concurrentemente a los especialistas con el contexto
+            const agentPromises = specialistNodes.map(async (spec: any) => {
+                const res = await this.supabase.processBotAI({
+                    conversation_id: session.conversation_id,
+                    merchant_id: session.merchant_id,
+                    message: userInput || '',
+                    simulator_mode: true,
+                    flow_id: flow?.id || 'simulator',
+                    node_context: spec.data?.prompt,
+                    flow_data: flowData
+                });
+                return {
+                    name: spec.data?.label || 'Especialista',
+                    content: res?.data?.choices?.[0]?.message?.content || res?.data?.content || ''
+                };
+            });
+
+            const agentResults = await Promise.all(agentPromises);
+            const filteredResults = agentResults.filter(r => r.content.trim().length > 0);
+
+            // El Orquestador sintetiza las respuestas
+            const synthesisPrompt = `Eres el Orquestador Ejecutivo Multi-Agente de ${session.variables?.merchant_name || 'la empresa'}.
+Los agentes especialistas de tu enjambre han respondido a la consulta del usuario:
+${filteredResults.map(r => `--- ${r.name} ---\n${r.content}`).join('\n\n')}
+
+Instrucción de Síntesis:
+${orchestratorNode.data?.prompt || 'Combina las respuestas de manera coherente, fluida y orientada al cliente. Evita contradicciones.'}
+
+Mensaje del usuario: "${userInput}"
+Respuesta final sintetizada para el cliente:`;
+
+            const { data: synRes } = await this.supabase.processBotAI({
+                conversation_id: session.conversation_id,
+                merchant_id: session.merchant_id,
+                message: synthesisPrompt,
+                simulator_mode: true
+            });
+
+            const finalSynthesis = synRes?.choices?.[0]?.message?.content || synRes?.content || (filteredResults[0]?.content || 'Respuesta procesada.');
+            await this.updateSession(session, orchestratorNode.id, 'ai_input');
+            return {
+                messages: [finalSynthesis],
+                session
+            };
+        } catch (synthErr) {
+            console.error('[SwarmOrchestrator] Error en síntesis de enjambre:', synthErr);
+            return {
+                messages: ['🤖 Hubo un inconveniente sintetizando la respuesta del enjambre. ¿Podrías reformular tu consulta?'],
+                session
+            };
+        }
     }
 
     private async updateSession(session: any, nodeId: string, waitingFor: string | null, status: string = 'active') {

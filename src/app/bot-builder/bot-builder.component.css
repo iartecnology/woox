@@ -204,6 +204,7 @@
 .type-end .icon { background: #6b7280; }
 
 .palette-item.type-condition { border-left-color: #3b82f6; } /* Blue */
+.palette-item.type-ai_orchestrator { border-left-color: #4338ca; background: rgba(99, 102, 241, 0.05); } /* Indigo/Swarm */
 .palette-item.type-ai_agent { border-left-color: #8b5cf6; } /* Purple */
 .palette-item.type-ai_skill { border-left-color: #06b6d4; } /* Cyan */
 .palette-item.type-action { border-left-color: #eab308; } /* Yellow */
