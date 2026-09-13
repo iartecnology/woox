@@ -31,14 +31,15 @@
 }
 
 .panel-header {
-  padding: 24px;
+  padding: 16px 20px;
+  flex-shrink: 0;
 }
 
 .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .panel-title {
@@ -139,7 +140,7 @@
 }
 
 .conversation-list {
-  padding-bottom: 110px !important;
+  padding-bottom: 20px !important;
 }
 
 .conversation-item.active {
@@ -212,16 +213,20 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .chat-banner {
-  padding: 16px 32px;
+  padding: 10px 24px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid #f3e8ff;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .customer-info {
@@ -331,12 +336,13 @@ input:checked+.slider:before {
 
 /* Burbujas del Chat */
 .messages-container {
-  flex: 1;
-  padding: 32px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 16px 24px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   background-image: radial-gradient(#f1f5f9 1px, transparent 1px);
   background-size: 20px 20px;
 }
@@ -419,10 +425,11 @@ input:checked+.slider:before {
 
 /* Footer de Entrada */
 .chat-footer {
-  padding: 24px 32px;
+  padding: 12px 24px;
   border-top: 1px solid #f3e8ff;
   background: var(--bg-secondary);
   position: relative;
+  flex-shrink: 0;
 }
 
 /* Botones de Acción del Copiloto IA */
@@ -706,14 +713,18 @@ input:checked+.slider:before {
 /* Panel 3: CRM */
 .panel-crm {
   width: 320px;
-  padding: 24px;
+  padding: 16px;
   border-left: 1px solid #f3e8ff;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .crm-section {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .crm-section-title {
@@ -723,7 +734,7 @@ input:checked+.slider:before {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .info-grid {
