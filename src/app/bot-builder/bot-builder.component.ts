@@ -179,6 +179,21 @@ Tu regla inquebrantable:
       return { status: 'error', message: 'Falta Nodo de Inicio', details: 'Agrega un nodo "Inicio" para comenzar el recorrido.', canRepair: true };
     }
 
+    const hasOrchestrator = nodes.some(n => n.type === 'ai_orchestrator');
+    if (hasOrchestrator) {
+      const orchestrator = nodes.find(n => n.type === 'ai_orchestrator')!;
+      const specialists = this.getConnectedSpecialists(orchestrator.id);
+      if (specialists.length === 0) {
+        return {
+          status: 'warning',
+          message: 'Orquestador sin especialistas',
+          details: 'Vincula al menos un agente especialista al puerto SUB-AGENTES del Orquestador.',
+          canRepair: true
+        };
+      }
+      return { status: 'ok', message: 'Enjambre Operativo', details: `Orquestador con ${specialists.length} especialistas activos`, canRepair: false };
+    }
+
     const aiAgent = nodes.find(n => n.type === 'ai_agent');
     if (aiAgent) {
       const skillsIn = conns.filter(c => c.to === aiAgent.id && c.toPort === 'skills_in');
@@ -2235,8 +2250,8 @@ Tu responsabilidad:
     const start = this.getPortCoords(fromNode, conn.fromPort);
     const end = this.getPortCoords(toNode, conn.toPort);
 
-    // Para conexiones verticales (skills)
-    if (conn.fromPort === 'skill_out' || conn.toPort === 'skills_in') {
+    // Para conexiones verticales (skills y sub-agentes de orquestador)
+    if (conn.fromPort === 'skill_out' || conn.toPort === 'skills_in' || conn.fromPort === 'agents_out') {
       const isUpward = end.y < start.y;
       const verticalOffset = Math.max(Math.abs(end.y - start.y) * 0.5, 50);
       const cp1y = start.y + (isUpward ? -verticalOffset : verticalOffset);
@@ -2274,6 +2289,7 @@ Tu responsabilidad:
     if (port === 'output') return { x: node.position.x + 220, y: node.position.y + 40 };
     if (port === 'skill_out') return { x: node.position.x + 110, y: node.position.y };
     if (port === 'skills_in') return { x: node.position.x + 110, y: node.position.y + 80 };
+    if (port === 'agents_out') return { x: node.position.x + 110, y: node.position.y + 80 };
     
     // Para puertos de menú (múltiples salidas)
     if (node.type === 'menu' && node.data.options) {
