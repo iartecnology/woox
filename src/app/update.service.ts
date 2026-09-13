@@ -6,10 +6,14 @@ import { filter } from 'rxjs';
     providedIn: 'root'
 })
 export class UpdateService {
-    private swUpdate = inject(SwUpdate);
+    private swUpdate = inject(SwUpdate, { optional: true });
     updateAvailable = signal(false);
 
     constructor() {
+        if (!this.swUpdate) {
+            console.log('[UpdateService] SwUpdate no disponible en este entorno.');
+            return;
+        }
         console.log('[UpdateService] Inicializado. SW Enabled:', this.swUpdate.isEnabled);
         if (this.swUpdate.isEnabled) {
             this.swUpdate.versionUpdates.pipe(
@@ -22,7 +26,7 @@ export class UpdateService {
             // Verificar actualizaciones periódicamente (opcional pero recomendado)
             // Cada 6 horas
             setInterval(() => {
-                this.swUpdate.checkForUpdate();
+                this.swUpdate?.checkForUpdate();
             }, 6 * 60 * 60 * 1000);
         }
     }
@@ -30,7 +34,9 @@ export class UpdateService {
     async updateApp() {
         console.log('[UpdateService] Aplicando actualización...');
         try {
-            await this.swUpdate.activateUpdate();
+            if (this.swUpdate) {
+                await this.swUpdate.activateUpdate();
+            }
             document.location.reload();
         } catch (err) {
             console.error('[UpdateService] Error al actualizar:', err);

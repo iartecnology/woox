@@ -33,11 +33,81 @@ export class AiConfigComponent implements OnInit {
         ai_schedule_enabled: false,
         ai_schedule_start: '09:00',
         ai_schedule_end: '18:00',
-        ai_schedule_message: '¡Hola! En este momento estamos descansando 😴. Nuestro horario de atención es de 9:00 AM a 6:00 PM. Déjanos tu mensaje y te responderemos apenas volvamos. 👋'
+        ai_schedule_message: '¡Hola! En este momento estamos descansando 😴. Nuestro horario de atención es de 9:00 AM a 6:00 PM. Déjanos tu mensaje y te responderemos apenas volvamos. 👋',
+        ai_temperature: 0.7,
+        ai_max_tokens: 1024,
+        ai_keys: {}
     };
 
     catalogContext: string = '';
+    showKeyVisible: boolean = false;
+    knowledgeDocsCount: number = 0;
 
+    presets = [
+        {
+            id: 'restaurant',
+            name: '🍔 Restaurante & Gastronomía',
+            badge: 'Menú & Domicilios',
+            icon: '🍕',
+            personality: 'cálido, entusiasta, antojador y servicial',
+            welcome: '¡Hola! 🍽️ Qué delicia tenerte por aquí. ¿Te provoca algo rico de nuestro menú hoy?',
+            restrictions: 'No inventes platos fuera del menú. No des descuentos no autorizados. En cada pedido confirma dirección completa, método de pago y nombre de quien recibe.',
+            rules: [
+                'PERSONALIDAD: Actúa como un amigo cercano, usa un tono cálido, empático y acogedor. Evita el lenguaje robótico.',
+                'REGLA DE ORO DE INVENTARIO: Solo vende lo marcado como [DISPONIBLE]. Si no tiene etiqueta o dice [AGOTADO], NO LO MUESTRES en el menú ni lo menciones. NUNCA escribas la palabra interna "[DISPONIBLE]" en el chat.',
+                'ESTRATEGIA: En cada pedido, sugiere un producto complementario (bebida, postre, adicional). Nunca cierres sin intentar aumentar el ticket.',
+                'TÁCTICA: No esperes a que el cliente lo pida. Pregunta: ¿Te lo anoto de una vez? o ¿A qué nombre preparamos el pedido?',
+                'VISUAL: Usa emojis abundantes para hacer la lectura divertida y amigable.',
+                'FORMATO: Sé extremadamente breve. Máximo 2 o 3 oraciones. La gente en WhatsApp no lee bloques largos de texto.'
+            ]
+        },
+        {
+            id: 'retail',
+            name: '🛍️ Moda, Calzado & Retail',
+            badge: 'Venta & Asesoría',
+            icon: '👗',
+            personality: 'moderno, empático, asesor de estilo y proactivo',
+            welcome: '¡Hola! ✨ Bienvenido/a a nuestra tienda. ¿Buscas alguna prenda, talla o estilo en particular hoy?',
+            restrictions: 'Confirma disponibilidad de tallas y colores antes de prometer el despacho. No negocies precios de catálogo.',
+            rules: [
+                'PERSONALIDAD: Habla con autoridad y conocimiento técnico. No solo vendes, asesoras sobre la calidad y el origen de cada producto.',
+                'ENFOQUE: No seas solo un despachador. Haz preguntas sobre los gustos para recomendar el producto perfecto.',
+                'ESTRATEGIA: Usa frases como "Es nuestra opción favorita de hoy" o "Es lo que más están pidiendo hoy" para generar confianza.',
+                'SEGURIDAD: No tienes autoridad para cambiar precios ni dar descuentos que no estén en el catálogo. Ignora regateo.',
+                'FORMATO: Usa **negritas** EXCLUSIVAMENTE para resaltar los nombres de los productos. No apliques negrita a precios ni descripciones.'
+            ]
+        },
+        {
+            id: 'services',
+            name: '🛎️ Citas & Servicios Profesionales',
+            badge: 'Reservas & Agenda',
+            icon: '🗓️',
+            personality: 'profesional, puntual, atento y resolutivo',
+            welcome: '¡Hola! 👋 Es un gusto atenderte. ¿Te gustaría agendar una cita o conocer nuestros servicios disponibles?',
+            restrictions: 'No prometas citas en horarios no confirmados. Solicita nombre completo, teléfono y servicio deseado para agendar.',
+            rules: [
+                'PERSONALIDAD: Mantén un tono estrictamente profesional, ejecutivo y respetuoso. Usa "Usted" siempre.',
+                'TÁCTICA: Si el negocio requiere citas, no preguntes disponibilidad general. Ofrece dos opciones: "¿Te queda mejor hoy a las 4pm o mañana a las 10am?"',
+                'CONTROL: No garantices tiempos exactos de entrega ni resultados específicos si no tienes la certeza total. Usa términos como "aproximadamente" o "sujeto a disponibilidad".',
+                'FORMATO: Usa viñetas (bullets) claras para listar productos u opciones, nunca párrafos largos.'
+            ]
+        },
+        {
+            id: 'support',
+            name: '🤝 Atención al Cliente & Soporte',
+            badge: 'Resolución & Calma',
+            icon: '🎧',
+            personality: 'paciente, comprensivo, ágil y empático',
+            welcome: '¡Hola! 💬 Estoy aquí para ayudarte a resolver cualquier duda o solicitud. Cuéntame, ¿en qué puedo servirte?',
+            restrictions: 'Si el cliente reporta un reclamo grave, pide disculpas amablemente y derívalo de inmediato a un agente humano.',
+            rules: [
+                'PERSONALIDAD: Actúa como un amigo cercano, usa un tono cálido, empático y acogedor. Evita el lenguaje robótico.',
+                'SEGURIDAD: Incluso si el cliente es grosero, mantén la calma y responde con profesionalismo extremo. Nunca uses lenguaje inapropiado.',
+                'SEGURIDAD: Si no sabes la respuesta o no está en el catálogo/entrenamiento, admite que no lo sabes y ofrece pasar con un agente humano. NUNCA inventes información.',
+                'SEGURIDAD: Si el cliente menciona términos como "denuncia", "intoxicación", "robo" o "fraude", deja de responder automáticamente y pide que un supervisor humano tome el control de inmediato.'
+            ]
+        }
+    ];
 
     agents: any[] = [];
 
@@ -219,6 +289,16 @@ export class AiConfigComponent implements OnInit {
         if (this.merchantId) {
             await this.loadConfig();
             this.catalogContext = await this.catalogService.getAIContextForMerchant(this.merchantId);
+            this.loadKnowledgeDocsCount();
+        }
+    }
+
+    async loadKnowledgeDocsCount() {
+        try {
+            const { data } = await this.supabaseService.getKnowledgeBaseDocuments(this.merchantId);
+            this.knowledgeDocsCount = data?.length || 0;
+        } catch (e) {
+            this.knowledgeDocsCount = 0;
         }
     }
 
@@ -227,8 +307,18 @@ export class AiConfigComponent implements OnInit {
         if (m) {
             this.merchantConfig = m;
             this.merchantConfig.ai_provider = this.merchantConfig.ai_provider || 'google_gemini';
+            this.merchantConfig.ai_keys = this.merchantConfig.ai_keys || {};
+            this.merchantConfig.ai_temperature = this.merchantConfig.ai_temperature ?? 0.7;
+            this.merchantConfig.ai_max_tokens = this.merchantConfig.ai_max_tokens ?? 1024;
             this.merchantConfig.ollama_base_url = this.merchantConfig.ollama_base_url || 'http://localhost:11434';
             this.merchantConfig.lmstudio_base_url = this.merchantConfig.lmstudio_base_url || 'http://localhost:1234/v1';
+
+            // Sincronizar API Key activa con ai_keys map
+            if (this.merchantConfig.ai_keys[this.merchantConfig.ai_provider]) {
+                this.merchantConfig.ai_api_key = this.merchantConfig.ai_keys[this.merchantConfig.ai_provider];
+            } else if (this.merchantConfig.ai_api_key) {
+                this.merchantConfig.ai_keys[this.merchantConfig.ai_provider] = this.merchantConfig.ai_api_key;
+            }
 
             // Normalizar el ID a UUID si era un código
             if (m.id !== this.merchantId) {
@@ -240,6 +330,56 @@ export class AiConfigComponent implements OnInit {
         }
     }
 
+    onProviderChange() {
+        this.aiConnectionStatus = 'none';
+        this.aiConnectionMessage = '';
+        const provider = this.merchantConfig.ai_provider;
+
+        // Recuperar la clave guardada para este proveedor si existe
+        if (this.merchantConfig.ai_keys && this.merchantConfig.ai_keys[provider]) {
+            this.merchantConfig.ai_api_key = this.merchantConfig.ai_keys[provider];
+        } else if (provider !== 'ollama' && provider !== 'lmstudio') {
+            this.merchantConfig.ai_api_key = '';
+        }
+
+        // Sugerir el modelo recomendado por defecto si no es válido para el proveedor
+        const available = this.aiModels[provider] || [];
+        const isCurrentValid = available.some(m => m.id === this.merchantConfig.ai_model);
+        if (!isCurrentValid && available.length > 0) {
+            this.merchantConfig.ai_model = available[0].id;
+        }
+    }
+
+    onApiKeyChange(newVal: string) {
+        this.aiConnectionStatus = 'none';
+        if (!this.merchantConfig.ai_keys) this.merchantConfig.ai_keys = {};
+        this.merchantConfig.ai_keys[this.merchantConfig.ai_provider] = newVal;
+    }
+
+    applyPreset(preset: any) {
+        this.merchantConfig.ai_personality = preset.personality;
+        this.merchantConfig.ai_welcome_message = preset.welcome;
+        this.merchantConfig.ai_restrictions = preset.restrictions;
+
+        // Unir las reglas de oro del preset al prompt del sistema sin duplicados
+        let currentPrompt = this.merchantConfig.ai_system_prompt || '';
+        for (const rule of preset.rules) {
+            if (!currentPrompt.includes(rule)) {
+                const separator = currentPrompt.length > 0 ? '\n\n' : '';
+                currentPrompt += separator + rule;
+            }
+        }
+        this.merchantConfig.ai_system_prompt = currentPrompt.trim();
+        this.notificationService.show(`✨ Plantilla "${preset.name}" aplicada correctamente.`, 'success');
+    }
+
+    get promptLength(): number {
+        return (this.merchantConfig.ai_system_prompt || '').length;
+    }
+
+    get estimatedTokens(): number {
+        return Math.round(this.promptLength / 4);
+    }
 
     setTab(tab: 'general' | 'training' | 'remarketing' | 'schedule') {
         this.activeTab = tab;
@@ -247,6 +387,12 @@ export class AiConfigComponent implements OnInit {
 
     async saveConfig() {
         this.isSaving = true;
+
+        if (!this.merchantConfig.ai_keys) this.merchantConfig.ai_keys = {};
+        if (this.merchantConfig.ai_api_key) {
+            this.merchantConfig.ai_keys[this.merchantConfig.ai_provider] = this.merchantConfig.ai_api_key;
+        }
+
         const updates: any = {
             industry_type: this.merchantConfig.industry_type,
             ai_system_prompt: this.merchantConfig.ai_system_prompt,
@@ -254,14 +400,21 @@ export class AiConfigComponent implements OnInit {
             ai_welcome_message: this.merchantConfig.ai_welcome_message,
             ai_menu_context: this.merchantConfig.ai_menu_context,
             ai_api_key: this.merchantConfig.ai_api_key,
+            ai_keys: this.merchantConfig.ai_keys,
             ai_model: this.merchantConfig.ai_model,
-            ai_restrictions: this.merchantConfig.ai_restrictions,            ai_use_catalog: this.merchantConfig.ai_use_catalog,
+            ai_restrictions: this.merchantConfig.ai_restrictions,
+            ai_use_catalog: this.merchantConfig.ai_use_catalog,
             ai_enabled: this.merchantConfig.ai_enabled,
             remarketing_enabled: this.merchantConfig.remarketing_enabled,
             remarketing_delay_minutes: this.merchantConfig.remarketing_delay_minutes,
             remarketing_message: this.merchantConfig.remarketing_message,
             ai_schedule_message: this.merchantConfig.ai_schedule_message,
+            ai_schedule_enabled: this.merchantConfig.ai_schedule_enabled,
+            ai_schedule_start: this.merchantConfig.ai_schedule_start,
+            ai_schedule_end: this.merchantConfig.ai_schedule_end,
             ai_provider: this.merchantConfig.ai_provider,
+            ai_temperature: this.merchantConfig.ai_temperature,
+            ai_max_tokens: this.merchantConfig.ai_max_tokens,
             ollama_base_url: this.merchantConfig.ollama_base_url,
             lmstudio_base_url: this.merchantConfig.lmstudio_base_url,
             bot_mode: this.merchantConfig.bot_mode
@@ -271,13 +424,11 @@ export class AiConfigComponent implements OnInit {
         if (updates.ai_provider !== 'ollama') delete updates.ollama_base_url;
         if (updates.ai_provider !== 'lmstudio') delete updates.lmstudio_base_url;
 
-
         const { error } = await this.supabaseService.updateMerchant(this.merchantId, updates);
 
         this.isSaving = false;
         if (!error) {
-            this.notificationService.show('✅ Configuración guardada correctamente.', 'success');
-            // Persistir el tipo de industria para el sidebar dinámico
+            this.notificationService.show('✅ Configuración de IA guardada correctamente.', 'success');
             localStorage.setItem('merchant_industry_type', this.merchantConfig.industry_type || 'retail');
         } else {
             this.notificationService.show('Error al guardar: ' + error.message, 'error');
@@ -287,26 +438,64 @@ export class AiConfigComponent implements OnInit {
     async testAIConnection() {
         this.isTestingAI = true;
         this.aiConnectionStatus = 'loading';
-        this.aiConnectionMessage = 'Verificando conectividad...';
+        this.aiConnectionMessage = 'Verificando conectividad con el proveedor...';
 
         try {
             const provider = this.merchantConfig.ai_provider;
+            const key = this.merchantConfig.ai_api_key || '';
             let freshModels: any[] = [];
 
             if (provider === 'openai') {
+                if (!key) throw new Error('Ingresa una API Key de OpenAI (sk-...)');
                 const response = await fetch('https://api.openai.com/v1/models', {
-                    headers: { 'Authorization': `Bearer ${this.merchantConfig.ai_api_key}` }
+                    headers: { 'Authorization': `Bearer ${key}` }
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    freshModels = data.data.filter((m: any) => m.id.startsWith('gpt-') || m.id.startsWith('o1-') || m.id.startsWith('o3-')).map((m: any) => ({
-                        id: m.id,
-                        name: m.id
-                    }));
+                    freshModels = (data.data || [])
+                        .filter((m: any) => m.id.startsWith('gpt-') || m.id.startsWith('o1-') || m.id.startsWith('o3-'))
+                        .map((m: any) => ({ id: m.id, name: m.id }));
                 } else {
-                    const error = await response.json();
-                    throw new Error(error.error?.message || 'API Key de OpenAI inválida');
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error?.message || 'API Key de OpenAI inválida o rechazada');
                 }
+            } else if (provider === 'google_gemini') {
+                if (!key) throw new Error('Ingresa tu API Key de Google AI Studio (AIza...)');
+                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+                const response = await fetch(url);
+                if (response.ok) {
+                    const data = await response.json();
+                    freshModels = (data.models || [])
+                        .filter((m: any) => m.name.includes('gemini') || m.name.includes('gemma'))
+                        .map((m: any) => ({
+                            id: m.name.replace('models/', ''),
+                            name: m.displayName || m.name.replace('models/', '')
+                        }));
+                    if (freshModels.length === 0) {
+                        freshModels = this.aiModels['google_gemini'];
+                    }
+                } else {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error?.message || 'API Key de Google Gemini inválida');
+                }
+            } else if (provider === 'groq') {
+                if (!key) throw new Error('Ingresa tu API Key de Groq (gsk_...)');
+                const response = await fetch('https://api.groq.com/openai/v1/models', {
+                    headers: { 'Authorization': `Bearer ${key}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    freshModels = (data.data || []).map((m: any) => ({ id: m.id, name: m.id }));
+                } else {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error?.message || 'API Key de Groq inválida');
+                }
+            } else if (provider === 'anthropic') {
+                if (!key) throw new Error('Ingresa tu API Key de Anthropic (sk-ant-...)');
+                freshModels = this.aiModels['anthropic'];
+                this.aiConnectionStatus = 'success';
+                this.aiConnectionMessage = `Anthropic configurado con ${freshModels.length} modelos disponibles.`;
+                return;
             } else if (provider === 'ollama') {
                 const baseUrl = this.merchantConfig.ollama_base_url || 'http://localhost:11434';
                 const response = await fetch(`${baseUrl}/api/tags`, {
@@ -344,84 +533,78 @@ export class AiConfigComponent implements OnInit {
                 } else {
                     throw new Error('No se pudo conectar con LM Studio en ' + baseUrl);
                 }
-            } else if (provider === 'google_gemini') {
-                // Gemini no tiene un endpoint simple de listado sin auth compleja, usamos los locales o validación básica
-                if (!this.merchantConfig.ai_api_key) throw new Error('Se requiere API Key de Google');
-                this.aiConnectionStatus = 'success';
-                this.aiConnectionMessage = 'Configuración de Gemini lista.';
-                return;
             } else if (provider === 'openrouter') {
+                if (!key) throw new Error('Ingresa tu API Key de OpenRouter');
                 const response = await fetch('https://openrouter.ai/api/v1/models', {
-                    headers: { 'Authorization': `Bearer ${this.merchantConfig.ai_api_key}` }
+                    headers: { 'Authorization': `Bearer ${key}` }
                 });
                 if (response.ok) {
                     const data = await response.json();
                     freshModels = (data.data || [])
                         .filter((m: any) => !m.id.includes('hf.co'))
+                        .slice(0, 40)
                         .map((m: any) => ({ id: m.id, name: m.id }));
                 } else {
-                    const error = await response.json();
+                    const error = await response.json().catch(() => ({}));
                     throw new Error(error.error?.message || 'API Key de OpenRouter inválida');
                 }
             } else if (provider === 'cerebras') {
+                if (!key) throw new Error('Ingresa tu API Key de Cerebras');
                 const response = await fetch('https://api.cerebras.ai/v1/models', {
-                    headers: { 'Authorization': `Bearer ${this.merchantConfig.ai_api_key}` }
+                    headers: { 'Authorization': `Bearer ${key}` }
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    freshModels = (data.data || [])
-                        .map((m: any) => ({ id: m.id, name: m.id }));
+                    freshModels = (data.data || []).map((m: any) => ({ id: m.id, name: m.id }));
                 } else {
-                    const error = await response.json();
+                    const error = await response.json().catch(() => ({}));
                     throw new Error(error.error?.message || 'API Key de Cerebras inválida');
                 }
             } else if (provider === 'zai') {
                 freshModels = [...this._defaultZaiModels()];
-                try {
-                    const response = await fetch('https://api.z.ai/api/paas/v4/models', {
-                        headers: { 'Authorization': `Bearer ${this.merchantConfig.ai_api_key}` }
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        const modelsList = data.data || data.models || [];
-                        const apiModels = modelsList
-                            .filter((m: any) => m.id && m.id.toLowerCase().startsWith('glm'))
-                            .map((m: any) => ({ id: m.id, name: m.id }));
-                        const existingIds = new Set(freshModels.map(m => m.id));
-                        for (const m of apiModels) {
-                            if (!existingIds.has(m.id)) {
-                                freshModels.push(m);
-                                existingIds.add(m.id);
+                if (key) {
+                    try {
+                        const response = await fetch('https://api.z.ai/api/paas/v4/models', {
+                            headers: { 'Authorization': `Bearer ${key}` }
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            const modelsList = data.data || data.models || [];
+                            const apiModels = modelsList
+                                .filter((m: any) => m.id && m.id.toLowerCase().startsWith('glm'))
+                                .map((m: any) => ({ id: m.id, name: m.id }));
+                            const existingIds = new Set(freshModels.map(m => m.id));
+                            for (const m of apiModels) {
+                                if (!existingIds.has(m.id)) {
+                                    freshModels.push(m);
+                                    existingIds.add(m.id);
+                                }
                             }
                         }
-                    }
-                } catch (e) {
-                    // Models endpoint may not exist, keep static fallback
+                    } catch (e) { }
                 }
-            } else {
-                // Otros proveedores (DeepSeek, Anthropic)
-                if (!this.merchantConfig.ai_api_key) throw new Error('Se requiere API Key');
+            } else if (provider === 'deepseek') {
+                if (!key) throw new Error('Ingresa tu API Key de DeepSeek');
+                freshModels = this.aiModels['deepseek'];
                 this.aiConnectionStatus = 'success';
-                this.aiConnectionMessage = `Proveedor ${provider} validado.`;
+                this.aiConnectionMessage = `DeepSeek validado correctamente.`;
                 return;
             }
 
             if (freshModels.length > 0) {
                 this.aiModels[provider] = freshModels;
                 this.aiConnectionStatus = 'success';
-                this.aiConnectionMessage = `Conexión exitosa. Se encontraron ${freshModels.length} modelos.`;
+                this.aiConnectionMessage = `¡Conexión exitosa! Se verificaron ${freshModels.length} modelos disponibles.`;
             } else {
-                this.aiConnectionStatus = 'warning' as any;
-                this.aiConnectionMessage = 'Conectado, pero no se encontraron modelos disponibles.';
+                this.aiConnectionStatus = 'warning';
+                this.aiConnectionMessage = 'Conectado con éxito, pero la lista de modelos está vacía.';
             }
 
         } catch (error: any) {
             console.error('AI Connection Test Error:', error);
             let userMessage = error.message || 'Error de conexión';
-
-            // Detectar si el error es por respuesta HTML (común en ngrok/local ai mal configurado)
             if (userMessage.includes('Unexpected token') && (userMessage.includes('<') || userMessage.includes('DOCTYPE'))) {
-                userMessage = 'El servidor devolvió una página HTML en lugar de JSON. Verifica la URL de ngrok y que LM Studio esté en modo "Server".';
+                userMessage = 'El servidor devolvió HTML en lugar de JSON. Verifica la URL de ngrok y que el servicio local esté en modo Server.';
             }
 
             this.aiConnectionStatus = 'error';
@@ -437,7 +620,9 @@ export class AiConfigComponent implements OnInit {
     }
 
     onFileUpload(event: any) {
-        this.notificationService.show('📄 Procesando documento... La IA lo tendrá en cuenta.', 'info');
+        const file = event.target?.files?.[0];
+        if (!file) return;
+        this.notificationService.show(`📄 "${file.name}" detectado. Puedes gestionar todos los documentos y vectorización RAG en el módulo de Cerebro.`, 'info');
     }
 
     toggleSimulator() {

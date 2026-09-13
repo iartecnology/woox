@@ -1,18 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { BiolinkAdmin } from './biolink-admin';
+import { BiolinkAdminComponent } from './biolink-admin';
 
-describe('BiolinkAdmin', () => {
-  let component: BiolinkAdmin;
-  let fixture: ComponentFixture<BiolinkAdmin>;
+describe('BiolinkAdminComponent', () => {
+  let component: BiolinkAdminComponent;
+  let fixture: ComponentFixture<BiolinkAdminComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [BiolinkAdmin]
+      imports: [BiolinkAdminComponent]
     })
     .compileComponents();
 
-    fixture = TestBed.createComponent(BiolinkAdmin);
+    fixture = TestBed.createComponent(BiolinkAdminComponent);
     component = fixture.componentInstance;
     await fixture.whenStable();
   });

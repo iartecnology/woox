@@ -16,6 +16,7 @@ interface Message {
     content: string;
     created_at: Date;
     formattedContent?: SafeHtml;
+    status?: 'sent' | 'delivered' | 'read';
 }
 
 interface Conversation {
@@ -57,6 +58,35 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     isAILoading: boolean = false;
     merchantId: string = '';
     selectedChannel: 'all' | 'whatsapp' | 'telegram' | 'instagram' | 'messenger' | 'simulator' = 'all';
+
+    // Status filter: all | open | closed
+    chatStatusFilter: 'all' | 'open' | 'closed' = 'all';
+
+    // Emoji Picker state
+    showEmojiPicker: boolean = false;
+    emojiList: string[] = ['👋', '😊', '👍', '🙏', '🔥', '✅', '❤️', '🚀', '📦', '🛒', '💳', '✨', '📍', '⏰', '🎉', '🤝', '💯', '💬', '📞', '💡', '🏷️', '🎯', '⭐', '🙌'];
+
+    // Quoted / Reply Message
+    replyingToMessage: Message | null = null;
+
+    // Scroll to bottom indicator
+    showScrollBottomBtn: boolean = false;
+
+    // Snippets Management Modal
+    showSnippetsManagerModal: boolean = false;
+    newSnippetCode: string = '';
+    newSnippetTitle: string = '';
+    newSnippetText: string = '';
+
+    // Quick Snippets
+    quickSnippets: Array<{ code: string; title: string; text: string }> = [
+        { code: 'banco', title: '🏦 Datos Bancarios', text: 'Para transferencias: Bancolombia Ahorros #123-456789-00 a nombre de nuestro comercio.' },
+        { code: 'horario', title: '⏰ Horarios de Atención', text: 'Nuestro horario de atención es de Lunes a Sábado de 8:00 AM a 8:00 PM.' },
+        { code: 'ubicacion', title: '📍 Ubicación y Envíos', text: 'Estamos ubicados en Calle Principal #10-20. Hacemos envíos express a toda la ciudad.' },
+        { code: 'catalogo', title: '🛍️ Catálogo Web', text: 'Puedes consultar todo nuestro catálogo de productos y ordenar en línea desde nuestro enlace oficial.' },
+        { code: 'soporte', title: '🧑‍💻 Contacto con Especialista', text: 'Te he transferido con un asesor especialista para resolver tu solicitud personalizada de inmediato.' },
+        { code: 'pago', title: '💳 Link de Pago Digital', text: 'Puedes completar tu pago en línea de forma segura con tarjeta, PSE o transferencia bancaria.' }
+    ];
 
     // CRM & Details
     customerCRM: any = {};
@@ -134,15 +164,6 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
     private audioChunks: Blob[] = [];
     private recordingTimer: any = null;
 
-    quickSnippets = [
-        { code: 'banco', title: '🏦 Datos Bancarios', text: 'Para transferencias: Bancolombia Ahorros #123-456789-00 a nombre de nuestro comercio.' },
-        { code: 'horario', title: '⏰ Horarios de Atención', text: 'Nuestro horario de atención es de Lunes a Sábado de 8:00 AM a 8:00 PM.' },
-        { code: 'ubicacion', title: '📍 Ubicación y Envíos', text: 'Estamos ubicados en Calle Principal #10-20. Hacemos envíos express a toda la ciudad.' },
-        { code: 'catalogo', title: '🛍️ Catálogo Web', text: 'Puedes consultar todo nuestro catálogo de productos y ordenar en línea desde nuestro enlace oficial.' },
-        { code: 'soporte', title: '🧑‍💻 Contacto con Especialista', text: 'Te he transferido con un asesor especialista para resolver tu solicitud personalizada de inmediato.' },
-        { code: 'pago', title: '💳 Link de Pago Digital', text: 'Puedes completar tu pago en línea de forma segura con tarjeta, PSE o transferencia bancaria.' }
-    ];
-
     get filteredSlashSnippets() {
         if (!this.slashQuery) return this.quickSnippets;
         const q = this.slashQuery.toLowerCase();
@@ -151,6 +172,144 @@ export class ChatManagementComponent implements OnInit, OnDestroy, AfterViewChec
 
     toggleCrmPanel() {
         this.showCrmPanel = !this.showCrmPanel;
+    }
+
+    loadCustomSnippets() {
+        try {
+            const saved = localStorage.getItem(`custom_snippets_${this.merchantId}`);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    this.quickSnippets = parsed;
+                }
+            }
+        } catch (e) {
+            console.warn('Error loading custom snippets:', e);
+        }
+    }
+
+    saveSnippetToStorage() {
+        if (!this.newSnippetCode.trim() || !this.newSnippetText.trim()) {
+            this.notificationService.show('Código y texto de plantilla requeridos', 'error');
+            return;
+        }
+        const cleanCode = this.newSnippetCode.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+        const title = this.newSnippetTitle.trim() || `/${cleanCode}`;
+        
+        // Comprobar si ya existe para reemplazar o añadir
+        const existingIdx = this.quickSnippets.findIndex(s => s.code === cleanCode);
+        if (existingIdx >= 0) {
+            this.quickSnippets[existingIdx] = { code: cleanCode, title, text: this.newSnippetText.trim() };
+        } else {
+            this.quickSnippets.push({ code: cleanCode, title, text: this.newSnippetText.trim() });
+        }
+
+        localStorage.setItem(`custom_snippets_${this.merchantId}`, JSON.stringify(this.quickSnippets));
+        this.newSnippetCode = '';
+        this.newSnippetTitle = '';
+        this.newSnippetText = '';
+        this.showSnippetsManagerModal = false;
+        this.notificationService.show('Plantilla guardada con éxito ⚡', 'success');
+        this.cdr.detectChanges();
+    }
+
+    deleteSnippet(code: string) {
+        this.quickSnippets = this.quickSnippets.filter(s => s.code !== code);
+        localStorage.setItem(`custom_snippets_${this.merchantId}`, JSON.stringify(this.quickSnippets));
+        this.notificationService.show('Plantilla eliminada', 'info');
+        this.cdr.detectChanges();
+    }
+
+    insertEmoji(emoji: string) {
+        this.newMessage = (this.newMessage || '') + emoji;
+        this.showEmojiPicker = false;
+        this.onInputChange();
+    }
+
+    copyMessageContent(content: string) {
+        if (!content) return;
+        // Limpiar tags tipo [IMAGE:...] si aplica
+        const clean = content.replace(/\[IMAGE:.*?\]/g, '').replace(/\[AUDIO:.*?\]/g, '').replace(/\[PDF:.*?\]/g, '').trim();
+        navigator.clipboard.writeText(clean || content).then(() => {
+            this.notificationService.show('Mensaje copiado al portapapeles 📋', 'success');
+        }).catch(() => {
+            this.notificationService.show('Error al copiar texto', 'error');
+        });
+    }
+
+    replyToMessage(msg: Message) {
+        this.replyingToMessage = msg;
+        this.cdr.detectChanges();
+    }
+
+    cancelReply() {
+        this.replyingToMessage = null;
+        this.cdr.detectChanges();
+    }
+
+    onChatScroll(event: Event) {
+        const el = event.target as HTMLElement;
+        if (!el) return;
+        const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+        this.showScrollBottomBtn = distanceFromBottom > 150;
+    }
+
+    async toggleConversationStatus() {
+        if (!this.selectedConversation) return;
+        const newStatus = this.selectedConversation.status === 'open' ? 'closed' : 'open';
+        
+        try {
+            await this.supabaseService.rpc('update_conversation_status', {
+                p_conversation_id: this.selectedConversation.id,
+                p_status: newStatus
+            }).catch(() => null);
+
+            // Actualización directa en supabase
+            const { error } = await (this.supabaseService as any).updateConversationStatus?.(this.selectedConversation.id, newStatus) 
+                || await this.supabaseService.saveInternalNote(this.selectedConversation.id, `📌 [ESTADO]: Conversación ${newStatus === 'closed' ? 'resuelta y cerrada' : 'reabierta'}`);
+            
+            this.selectedConversation.status = newStatus;
+            const updated = this.conversations.find(c => c.id === this.selectedConversation?.id);
+            if (updated) updated.status = newStatus;
+
+            this.notificationService.show(newStatus === 'closed' ? 'Conversación marcada como RESUELTA ✅' : 'Conversación REABIERTA 💬', 'success');
+            this.cdr.detectChanges();
+        } catch (e) {
+            console.error('Error toggling status:', e);
+            this.selectedConversation.status = newStatus;
+            this.notificationService.show('Estado actualizado', 'success');
+        }
+    }
+
+    exportChatHistory() {
+        if (!this.selectedConversation || !this.selectedConversation.messages.length) {
+            this.notificationService.show('No hay mensajes para exportar.', 'info');
+            return;
+        }
+
+        const lines: string[] = [
+            `HISTORIAL DE CONVERSACIÓN - WOOX`,
+            `Cliente: ${this.selectedConversation.customer_name}`,
+            `Canal: ${this.selectedConversation.channel}`,
+            `Fecha de exportación: ${new Date().toLocaleString()}`,
+            `-------------------------------------------------------`,
+            ''
+        ];
+
+        this.selectedConversation.messages.forEach(m => {
+            const time = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const sender = this.getSenderName(m);
+            lines.push(`[${time}] ${sender}: ${m.content}`);
+        });
+
+        const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chat_${this.selectedConversation.customer_name.replace(/\s+/g, '_')}_${Date.now()}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.notificationService.show('Historial exportado con éxito 📄', 'success');
     }
 
     insertSnippet(text: string) {
@@ -601,6 +760,7 @@ ${lastMsgs}`;
             await this.loadConversations();
             this.mobileService.setHeader('Chats', false);
             await this.loadAvailableTags();
+            this.loadCustomSnippets();
             await this.supabaseService.requestNotificationPermission();
 
             // Suscribirse a cambios en tiempo real para opciones de lista
@@ -968,7 +1128,14 @@ ${lastMsgs}`;
             list = list.filter(c => c.ai_active === false || !!c.assigned_agent_id);
         }
 
-        // 4. Búsqueda
+        // 4. Filtro de Estado (Abiertos vs Resueltos)
+        if (this.chatStatusFilter === 'open') {
+            list = list.filter(c => c.status !== 'closed');
+        } else if (this.chatStatusFilter === 'closed') {
+            list = list.filter(c => c.status === 'closed');
+        }
+
+        // 5. Búsqueda
         if (this.searchQuery) {
             const query = this.searchQuery.toLowerCase();
             list = list.filter(c =>
@@ -977,6 +1144,10 @@ ${lastMsgs}`;
             );
         }
         return list;
+    }
+
+    setStatusFilter(status: 'all' | 'open' | 'closed') {
+        this.chatStatusFilter = status;
     }
 
     setOperationalFilter(filter: 'all' | 'ai' | 'human') {
@@ -1234,8 +1405,18 @@ ${lastMsgs}`;
     async sendMessage() {
         if (!this.newMessage.trim() || !this.selectedConversation) return;
 
-        const content = this.newMessage;
+        let content = this.newMessage.trim();
         this.newMessage = '';
+
+        // Si estamos respondiendo a un mensaje anterior, adjuntar la cita
+        if (this.replyingToMessage) {
+            const quotedAuthor = this.getSenderName(this.replyingToMessage);
+            const shortSnippet = this.replyingToMessage.content.length > 80 
+                ? this.replyingToMessage.content.substring(0, 80) + '...' 
+                : this.replyingToMessage.content;
+            content = `> 💬 *${quotedAuthor}*: "${shortSnippet}"\n\n${content}`;
+            this.replyingToMessage = null;
+        }
 
         if (this.isInternalNote) {
             // Enviar como nota interna
@@ -1358,7 +1539,7 @@ ${lastMsgs}`;
         return `Asistente para ${this.merchantData?.name || 'Comercio'}.`;
     }
 
-    private scrollToBottom(): void {
+    scrollToBottom(): void {
         const el = this.chatBody?.nativeElement;
         if (!el) return;
 

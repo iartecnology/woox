@@ -285,7 +285,7 @@
 <main class="content-area" [class.no-nav]="isPublicPage"
     [class.sidebar-mode]="!isPublicPage"
     [class.immersive-mode]="isMobile() && isImmersivePage"
-    [class.chat-visible]="isMobile() && router.url.includes('/chats')">
+    [class.chat-visible]="router.url.includes('/chats')">
     <div class="update-banner" *ngIf="updateService.updateAvailable()">
         <div class="update-content">
             <span class="update-icon">✨</span>

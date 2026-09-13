@@ -1,6 +1,13 @@
-/* Layout Maestro de 3 Paneles */
+/* Host & Layout Maestro de 3 Paneles - 100% Width & Height */
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .chat-dashboard {
   display: flex;
+  width: 100%;
   height: 100%;
   margin: 0;
   background: var(--bg-secondary);
@@ -9,7 +16,6 @@
   box-shadow: none;
   font-family: 'Outfit', sans-serif;
   color: var(--text-primary);
-  /* Slate 700 */
 }
 
 /* Panel 1: Lista de Conversaciones */
@@ -20,6 +26,8 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
+  height: 100%;
+  overflow: hidden;
 }
 
 .panel-header {
@@ -1411,6 +1419,227 @@ input:checked+.slider:before {
 .chat-footer.internal-mode .input-box {
   border-color: #fbbf24;
   background: var(--bg-secondary)cf0;
+}
+
+/* ── Modern UI Additions: Status Badges, Message Quotes, Emojis, Scroll Btn ── */
+.status-pill {
+  font-size: 0.7rem;
+  padding: 4px 10px;
+}
+.status-pill.active {
+  background: #059669;
+  color: white;
+}
+
+.conversation-item.is-resolved {
+  opacity: 0.75;
+}
+.conversation-item.is-resolved:hover {
+  opacity: 1;
+}
+
+.status-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  text-transform: uppercase;
+}
+
+.status-badge.closed {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.action-pill-btn {
+  width: auto !important;
+  height: 36px !important;
+  padding: 0 12px !important;
+  border-radius: 10px !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  text-decoration: none;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+.action-pill-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+.action-pill-btn.is-done {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+.action-pill-btn.wa-link {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+}
+
+/* Fila de Burbuja con Botones de Acción Flotantes */
+.bubble-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.sent .bubble-row {
+  flex-direction: row;
+}
+.received .bubble-row {
+  flex-direction: row-reverse;
+}
+
+.bubble-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.bubble-row:hover .bubble-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bubble-btn {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: transform 0.15s;
+}
+.bubble-btn:hover {
+  transform: scale(1.1);
+  background: #f8fafc;
+}
+
+.msg-tick {
+  color: #3b82f6;
+  font-weight: 800;
+  font-size: 0.7rem;
+  letter-spacing: -1px;
+}
+
+/* Botón Flotante Scroll Bottom */
+.scroll-bottom-floating-btn {
+  position: absolute;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: bounceFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.scroll-bottom-floating-btn:hover {
+  background: #0f172a;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+@keyframes bounceFade {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Banner de Cita / Quote */
+.replying-banner {
+  background: #f1f5f9;
+  border-left: 4px solid #7c3aed;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.replying-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.replying-to {
+  font-size: 0.7rem;
+  color: #7c3aed;
+}
+.replying-preview {
+  font-size: 0.75rem;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cancel-reply-btn {
+  background: transparent;
+  border: none;
+  font-size: 0.9rem;
+  color: #94a3b8;
+  cursor: pointer;
+}
+.cancel-reply-btn:hover {
+  color: #ef4444;
+}
+
+/* Emoji Picker Popover */
+.emoji-picker-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 32px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  border: 1px solid #e2e8f0;
+  padding: 10px;
+  z-index: 150;
+  width: 250px;
+  animation: slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.emoji-cell-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px;
+  transition: background 0.15s;
+}
+.emoji-cell-btn:hover {
+  background: #f1f5f9;
+  transform: scale(1.15);
 }
 /* ==========================================================================
    MOBILE-FIRST OVERRIDE (MAX-WIDTH: 767px)

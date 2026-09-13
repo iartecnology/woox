@@ -1084,6 +1084,14 @@ export class SupabaseService {
             .order('created_at', { ascending: false });
     }
 
+    async getBotFlowById(flowId: string) {
+        return await supabase
+            .from('bot_flows')
+            .select('*')
+            .eq('id', flowId)
+            .single();
+    }
+
     async saveBotFlow(flow: any) {
         return await supabase
             .from('bot_flows')

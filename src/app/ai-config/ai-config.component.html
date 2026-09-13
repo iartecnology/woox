@@ -63,7 +63,28 @@
         <!-- Pestaña General -->
         <div *ngIf="activeTab === 'general'" class="tab-pane">
 
-            <!-- 🏢 TIPO DE INDUSTRIA (Primero y más visible) -->
+            <!-- ⚡ PLANTILLAS RÁPIDAS DE IDENTIDAD (1-CLICK PRESETS) -->
+            <section class="config-section highlight" style="border-left: 5px solid #8b5cf6; background: #faf5ff;">
+                <div class="section-header">
+                    <div>
+                        <h3>⚡ Plantillas de Industria (Configuración 1-Click)</h3>
+                        <p class="desc" style="margin-bottom: 8px;">Carga instantáneamente la personalidad, reglas comerciales, restricciones y saludos probados para tu sector.</p>
+                    </div>
+                </div>
+                <div class="presets-grid">
+                    <div *ngFor="let p of presets" class="preset-card" (click)="applyPreset(p)">
+                        <div class="preset-top">
+                            <span class="preset-icon">{{ p.icon }}</span>
+                            <span class="preset-badge">{{ p.badge }}</span>
+                        </div>
+                        <h4>{{ p.name }}</h4>
+                        <p>{{ p.welcome }}</p>
+                        <button class="preset-apply-btn">⚡ Aplicar Plantilla</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 🏢 TIPO DE INDUSTRIA -->
             <section class="config-section highlight"
                 style="border: 2px solid var(--primary-color); margin-bottom: 20px;">
                 <h3>🏢 Tipo de Operación</h3>
@@ -120,11 +141,14 @@
             </section>
 
             <section class="config-section">
-                <h3>Conexión de IA</h3>
+                <div class="section-header">
+                    <h3>Conexión y Modelos de IA</h3>
+                    <span class="provider-tag-badge">{{ getProviderLogo(merchantConfig.ai_provider) }} {{ merchantConfig.ai_provider | uppercase }}</span>
+                </div>
 
                 <div class="form-group mt-15">
                     <label>Proveedor de IA</label>
-                    <select [(ngModel)]="merchantConfig.ai_provider" (change)="aiConnectionStatus = 'none'">
+                    <select [(ngModel)]="merchantConfig.ai_provider" (change)="onProviderChange()">
                         <option *ngFor="let provider of aiProviders" [value]="provider.id">
                             {{ provider.icon }} {{ provider.name }}
                         </option>
@@ -132,10 +156,17 @@
                 </div>
 
                 <div class="form-group mt-15">
-                    <label>API Key del Proveedor</label>
+                    <div class="flex-header-label">
+                        <label>API Key (Se guarda por proveedor automáticamente)</label>
+                        <button type="button" class="btn-toggle-eye" (click)="showKeyVisible = !showKeyVisible">
+                            {{ showKeyVisible ? '🙈 Ocultar' : '👁️ Mostrar' }}
+                        </button>
+                    </div>
                     <div class="input-with-status">
-                        <input type="text" [(ngModel)]="merchantConfig.ai_api_key" placeholder="sk-... o API Key"
-                            (ngModelChange)="aiConnectionStatus = 'none'">
+                        <input [type]="showKeyVisible ? 'text' : 'password'" 
+                            [(ngModel)]="merchantConfig.ai_api_key" 
+                            (ngModelChange)="onApiKeyChange($event)"
+                            placeholder="sk-... o API Key del proveedor seleccionado">
                         <div class="status-indicator" *ngIf="aiConnectionStatus !== 'none'"
                             [class]="aiConnectionStatus">
                             {{ aiConnectionStatus === 'success' ? '✅' : (aiConnectionStatus === 'loading' ? '⌛' :
@@ -147,8 +178,7 @@
                     </div>
                     <small *ngIf="merchantConfig.ai_provider === 'ollama' || merchantConfig.ai_provider === 'lmstudio'"
                         style="color: #6366f1; font-weight: 600;">
-                        🚀 Tu proveedor local no requiere API Key. Puedes dejar este campo vacío o poner cualquier
-                        texto.
+                        🚀 Tu proveedor local no requiere API Key. Puedes dejar este campo vacío o poner cualquier texto.
                     </small>
                 </div>
 
@@ -157,22 +187,22 @@
                     <label>Ollama API URL</label>
                     <input type="text" [(ngModel)]="merchantConfig.ollama_base_url"
                         placeholder="http://localhost:11434">
-                    <small>La dirección donde corre tu instancia de Ollama.</small>
+                    <small>La dirección donde corre tu instancia de Ollama (ej: ngrok o red local).</small>
                 </div>
 
                 <div class="form-group mt-15" *ngIf="merchantConfig.ai_provider === 'lmstudio'">
                     <label>LM Studio API URL</label>
                     <input type="text" [(ngModel)]="merchantConfig.lmstudio_base_url"
                         placeholder="http://localhost:1234/v1">
-                    <small>La dirección donde corre tu instancia de LM Studio.</small>
+                    <small>La dirección donde corre tu instancia de LM Studio (debe incluir /v1).</small>
                 </div>
 
                 <div class="form-group mt-15">
                     <button class="verify-btn" (click)="testAIConnection()"
-                        style="width: 100%; padding: 10px; border-radius: 8px; background: #f3f4f6; color: #374151; font-weight: 600; cursor: pointer; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; gap: 8px;"
+                        style="width: 100%; padding: 12px; border-radius: 10px; background: #f3f4f6; color: #1e293b; font-weight: 700; cursor: pointer; border: 1.5px solid #d1d5db; display: flex; align-items: center; justify-content: center; gap: 8px;"
                         [disabled]="isTestingAI || (!merchantConfig.ai_api_key && merchantConfig.ai_provider !== 'ollama' && merchantConfig.ai_provider !== 'lmstudio')">
-                        <span *ngIf="!isTestingAI">⚡ Verificar Conexión y Listar Modelos</span>
-                        <span *ngIf="isTestingAI">⌛ Conectando...</span>
+                        <span *ngIf="!isTestingAI">⚡ Probar Conexión en Vivo y Listar Modelos</span>
+                        <span *ngIf="isTestingAI">⌛ Conectando con {{ merchantConfig.ai_provider }}...</span>
                     </button>
                 </div>
 
@@ -187,30 +217,59 @@
                                 {{ model.name }}
                             </option>
                         </datalist>
-                        <small>Puedes elegir de la lista o escribir el nombre exacto del modelo.</small>
+                        <small>Puedes elegir de la lista detectada o escribir el nombre exacto del modelo cargado localmente.</small>
                     </ng-container>
                     <ng-template #cloudMerchantModelSelect>
-                        <select [(ngModel)]="merchantConfig.ai_model"
-                            *ngIf="aiConnectionStatus === 'success' || merchantConfig.ai_model">
+                        <select [(ngModel)]="merchantConfig.ai_model">
                             <option value="">Seleccionar modelo...</option>
                             <option *ngFor="let model of aiModels[merchantConfig.ai_provider] || []" [value]="model.id">
                                 {{ model.name }}
                             </option>
                         </select>
                     </ng-template>
-                    <small
-                        *ngIf="merchantConfig.ai_provider !== 'ollama' && merchantConfig.ai_provider !== 'lmstudio'">El
-                        cerebro que procesará tus conversaciones.</small>
+                    <small *ngIf="merchantConfig.ai_provider !== 'ollama' && merchantConfig.ai_provider !== 'lmstudio'">El
+                        cerebro que procesará las conversaciones de tus clientes.</small>
+                </div>
+
+                <!-- 🎛️ PARÁMETROS AVANZADOS DE GENERACIÓN -->
+                <div class="generation-params-box mt-20">
+                    <div class="params-header">
+                        <strong>🎛️ Parámetros de Generación</strong>
+                        <span class="params-subtitle">Ajusta el comportamiento de respuesta</span>
+                    </div>
+
+                    <div class="params-grid">
+                        <div class="param-item">
+                            <div class="param-top">
+                                <label>Creatividad / Temperatura</label>
+                                <span class="param-value-pill">{{ merchantConfig.ai_temperature }}</span>
+                            </div>
+                            <input type="range" min="0" max="1" step="0.05" [(ngModel)]="merchantConfig.ai_temperature">
+                            <div class="param-labels">
+                                <span>0.0 (Preciso / Factual)</span>
+                                <span>1.0 (Creativo)</span>
+                            </div>
+                        </div>
+
+                        <div class="param-item">
+                            <div class="param-top">
+                                <label>Longitud Máxima de Respuesta</label>
+                                <span class="param-value-pill">{{ merchantConfig.ai_max_tokens }} tokens</span>
+                            </div>
+                            <input type="range" min="256" max="2048" step="128" [(ngModel)]="merchantConfig.ai_max_tokens">
+                            <div class="param-labels">
+                                <span>256 (Breve)</span>
+                                <span>2048 (Extenso)</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="warning-text mt-15"
                     *ngIf="!merchantConfig.ai_api_key && merchantConfig.ai_provider !== 'ollama' && merchantConfig.ai_provider !== 'lmstudio'">
-                    ⚠️ IA Desactivada: Configura una API Key para activar el asistente.
+                    ⚠️ IA Desactivada: Configura una API Key para activar el asistente en tiempo real.
                 </div>
             </section>
-
-
-
 
             <section class="config-section highlight" *ngIf="merchantConfig.industry_type !== 'support'">
                 <h3>📚 Fuente de Conocimiento</h3>
@@ -229,8 +288,7 @@
 
             <section class="config-section">
                 <h3>Mensaje de Bienvenida</h3>
-                <p class="desc">Este es el primer mensaje que verán tus clientes. Si lo dejas vacío, se usará el del
-                    Agente.</p>
+                <p class="desc">Este es el primer mensaje que verán tus clientes al iniciar conversación por WhatsApp, Web o Redes.</p>
 
                 <div class="form-group">
                     <textarea [(ngModel)]="merchantConfig.ai_welcome_message" rows="2"
@@ -238,9 +296,13 @@
                 </div>
             </section>
 
-
             <section class="config-section">
-                <h3>Identidad Única de tu Negocio</h3>
+                <div class="section-header">
+                    <h3>Identidad Única de tu Negocio</h3>
+                    <div class="prompt-metrics-pill" [class.warning]="estimatedTokens > 1500">
+                        📏 {{ promptLength }} caracteres (~{{ estimatedTokens }} tokens)
+                    </div>
+                </div>
                 <p class="desc">Personaliza el tono, las reglas de ventas y formatos visuales. Toca los chips para
                     inyectar reglas expertas, o escribe las tuyas propias.</p>
                 <div class="form-group">
@@ -283,7 +345,6 @@
                 <h3>🚫 Restricciones y Prohibiciones</h3>
                 <p class="desc">Define lo que la IA **NUNCA** debe hacer o decir (Límites de seguridad).</p>
 
-
                 <div class="form-group">
                     <label>Restricciones Extra de tu Negocio</label>
                     <textarea [(ngModel)]="merchantConfig.ai_restrictions" rows="4"
@@ -294,24 +355,47 @@
 
         <!-- Pestaña Entrenamiento -->
         <div *ngIf="activeTab === 'training'" class="tab-pane">
+            <section class="config-section highlight" style="border-left: 5px solid #10b981; background: #f0fdf4;">
+                <div class="section-header">
+                    <div>
+                        <h3>🧠 Base de Conocimiento RAG Empresarial</h3>
+                        <p class="desc" style="margin-bottom: 0;">Sube manuales, políticas de garantía, menús en PDF o documentos técnicos para que el motor RAG responda con precisión matemática.</p>
+                    </div>
+                    <div class="docs-count-badge">
+                        📦 {{ knowledgeDocsCount }} Documentos Activos
+                    </div>
+                </div>
 
+                <div class="knowledge-shortcut-card mt-20">
+                    <div class="shortcut-info">
+                        <span class="shortcut-icon">🪄</span>
+                        <div>
+                            <strong>Motor de Ingesta Inteligente (RAG Vectorial)</strong>
+                            <p>El sistema extrae el texto, genera embeddings y permite que la IA busque respuestas exactas sin alucinar.</p>
+                        </div>
+                    </div>
+                    <a routerLink="/merchant-brain" class="btn-goto-brain">
+                        🚀 Abrir Cerebro de la Empresa
+                    </a>
+                </div>
+            </section>
 
             <section class="config-section">
-                <h3>Entrenamiento Base (Manual)</h3>
-                <p class="desc">Sube tu menú en PDF o escribe instrucciones adicionales sobre tus servicios. La IA usará
-                    esto como conocimiento base.</p>
+                <h3>Instrucciones y Servicios Adicionales (Entrenamiento Rápido)</h3>
+                <p class="desc">Información textual complementaria sobre horarios especiales, políticas de entrega o servicios no categorizados en catálogo.</p>
 
                 <div class="upload-box" (click)="fileInput.click()">
-                    <input type="file" #fileInput (change)="onFileUpload($event)" style="display: none">
+                    <input type="file" #fileInput (change)="onFileUpload($event)" accept=".pdf,.txt,.md,.csv,.doc,.docx" style="display: none">
                     <span class="upload-icon">📄</span>
-                    <p>Subir Menú o Catálogo (PDF, Imagen)</p>
+                    <p>Cargar Archivo de Respaldo (PDF, TXT, CSV)</p>
+                    <small style="color: #6366f1; font-weight: 600;">Para vectorización completa usa el módulo Cerebro</small>
                 </div>
 
                 <div class="form-group mt-20">
-                    <label>Información de Entrenamiento / Servicios Adicionales</label>
-                    <textarea [(ngModel)]="merchantConfig.ai_system_prompt" rows="12"
-                        placeholder="Ej: Además de comida, ofrecemos servicio de catering para eventos..."></textarea>
-                    <small>Este contenido se sumará a las instrucciones del agente maestro.</small>
+                    <label>Instrucciones de Conocimiento Local</label>
+                    <textarea [(ngModel)]="merchantConfig.ai_menu_context" rows="10"
+                        placeholder="Ej: Nuestro local cuenta con parqueadero privado vigilado. Los domicilios tardan 35 a 45 minutos. Los sábados tenemos música en vivo..."></textarea>
+                    <small>Este contenido se inyecta de forma limpia y contextual al agente.</small>
                 </div>
             </section>
         </div>

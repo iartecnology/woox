@@ -54,9 +54,16 @@
 
       <!-- Filtro Operativo: IA vs Humano -->
       <div class="channel-filters" style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.08);">
-        <div class="filter-pill" [class.active]="operationalFilter === 'all'" (click)="setOperationalFilter('all')">Todos Estados</div>
-        <div class="filter-pill" [class.active]="operationalFilter === 'ai'" (click)="setOperationalFilter('ai')">🤖 Atendido por IA</div>
-        <div class="filter-pill" [class.active]="operationalFilter === 'human'" (click)="setOperationalFilter('human')">👤 Control Humano</div>
+        <div class="filter-pill" [class.active]="operationalFilter === 'all'" (click)="setOperationalFilter('all')">Todos</div>
+        <div class="filter-pill" [class.active]="operationalFilter === 'ai'" (click)="setOperationalFilter('ai')">🤖 IA</div>
+        <div class="filter-pill" [class.active]="operationalFilter === 'human'" (click)="setOperationalFilter('human')">👤 Humano</div>
+      </div>
+
+      <!-- Filtro de Estado: Abiertos vs Resueltos -->
+      <div class="channel-filters" style="margin-top: 4px; padding-top: 4px;">
+        <div class="filter-pill status-pill" [class.active]="chatStatusFilter === 'all'" (click)="setStatusFilter('all')">Todas</div>
+        <div class="filter-pill status-pill" [class.active]="chatStatusFilter === 'open'" (click)="setStatusFilter('open')">🟢 Abiertos</div>
+        <div class="filter-pill status-pill" [class.active]="chatStatusFilter === 'closed'" (click)="setStatusFilter('closed')">✅ Resueltos</div>
       </div>
     </div>
 
@@ -99,10 +106,14 @@
 
         <div *ngFor="let conv of filteredConversations; trackBy: trackByConversationId" class="conversation-item"
           [class.active]="selectedConversation?.id === conv.id" [class.just-updated]="conv.justUpdated"
+          [class.is-resolved]="conv.status === 'closed'"
           (click)="selectConversation(conv)">
 
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
-            <span style="font-weight: 700; color: #065f46; font-size: 0.95rem;">{{ conv.customer_name }}</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-weight: 700; color: #065f46; font-size: 0.95rem;">{{ conv.customer_name }}</span>
+              <span *ngIf="conv.status === 'closed'" style="font-size: 0.65rem; background: #dcfce7; color: #166534; padding: 1px 6px; border-radius: 10px; font-weight: 800;">✓ Resuelto</span>
+            </div>
             <div style="display: flex; align-items: center; gap: 8px;">
               <button *ngIf="canDelete" type="button"
                 (click)="$event.stopPropagation(); deleteConversation(conv.id, $event)"
@@ -110,8 +121,7 @@
                 onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Eliminar chat">
                 🗑️
               </button>
-              <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">{{ conv.last_message_at | date:'HH:mm'
-                }}</span>
+              <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">{{ conv.last_message_at | date:'HH:mm' }}</span>
             </div>
           </div>
 
@@ -153,11 +163,16 @@
             {{ selectedConversation.customer_name_initial || '?' }}
           </div>
           <div class="customer-details">
-            <h3 class="customer-name">{{ selectedConversation.customer_name || 'Cliente' }}</h3>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3 class="customer-name">{{ selectedConversation.customer_name || 'Cliente' }}</h3>
+              <span class="status-badge" [class.closed]="selectedConversation.status === 'closed'">
+                {{ selectedConversation.status === 'closed' ? 'Resuelto' : 'Activo' }}
+              </span>
+            </div>
             <span class="customer-status">
               {{ (selectedConversation.channel === 'simulator' || selectedConversation.platform === 'simulator') ?
-              'Simulador' : (selectedConversation.channel | titlecase) }} • {{ selectedConversation.status | uppercase
-              }}
+              'Simulador' : (selectedConversation.channel | titlecase) }}
+              <span *ngIf="customerCRM.phone"> • {{ customerCRM.phone }}</span>
               <button *ngIf="!selectedConversation.assigned_agent_id" (click)="claimConversation()"
                 style="margin-left: 8px; font-size: 0.65rem; background: #7c3aed; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: 700;">
                 Tomar control
@@ -166,11 +181,33 @@
           </div>
         </div>
 
-        <div class="chat-actions" style="display: flex; align-items: center; gap: 10px;">
+        <div class="chat-actions" style="display: flex; align-items: center; gap: 8px;">
+          <!-- Marcar Resuelto / Reabrir -->
+          <button (click)="toggleConversationStatus()" class="icon-btn action-pill-btn" [class.is-done]="selectedConversation.status === 'closed'" [title]="selectedConversation.status === 'closed' ? 'Reabrir conversación' : 'Marcar conversación como resuelta'">
+            <span>{{ selectedConversation.status === 'closed' ? '🔄' : '✅' }}</span>
+            <span>{{ selectedConversation.status === 'closed' ? 'Reabrir' : 'Resolver' }}</span>
+          </button>
+
+          <!-- Exportar Chat -->
+          <button (click)="exportChatHistory()" class="icon-btn action-pill-btn" title="Exportar historial completo de mensajes en TXT">
+            <span>📄</span>
+            <span>Exportar</span>
+          </button>
+
+          <!-- Abrir en WhatsApp si tiene teléfono -->
+          <a *ngIf="customerCRM.phone && (selectedConversation.channel === 'whatsapp' || selectedConversation.channel === 'whatsapp_evolution')" 
+             [href]="'https://wa.me/' + customerCRM.phone.replace('+', '')" target="_blank" class="icon-btn action-pill-btn wa-link" title="Abrir en WhatsApp Web">
+            <span>📱</span>
+            <span>WhatsApp</span>
+          </a>
+
+          <!-- Toggle Ficha CRM -->
           <button (click)="toggleCrmPanel()" class="icon-btn" [style.background]="showCrmPanel ? '#ede9fe' : '#f1f5f9'" [style.color]="showCrmPanel ? '#7c3aed' : '#64748b'" title="Mostrar / Ocultar Ficha CRM" style="border: 1px solid var(--border-color); padding: 8px 12px; width: auto; height: 36px; border-radius: 10px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer;">
             <span>ℹ️</span>
             <span>{{ showCrmPanel ? 'Ocultar CRM' : 'Ficha CRM' }}</span>
           </button>
+
+          <!-- Interruptor IA vs Humano -->
           <div class="ai-banner" [style.background]="selectedConversation.ai_active !== false ? 'rgba(99, 102, 241, 0.15)' : 'rgba(245, 158, 11, 0.15)'" style="padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px;">
             <span class="ai-label" style="font-size: 0.8rem; font-weight: 700;">
               {{ selectedConversation.ai_active !== false ? '🤖 IA Activa' : '👤 Humano al Mando' }}
@@ -183,15 +220,25 @@
         </div>
       </header>
 
-      <div class="messages-container" #chatBody>
+      <div class="messages-container" #chatBody (scroll)="onChatScroll($event)">
         <div *ngFor="let msg of selectedConversation.messages" class="msg-wrapper"
           [class.sent]="msg.sender_type !== 'customer'" [class.received]="msg.sender_type === 'customer'">
 
-          <div class="bubble" [class.agent]="msg.sender_type === 'human_agent'" [class.ai]="msg.sender_type === 'ai'"
-            [innerHTML]="msg.formattedContent || msg.content">
+          <div class="bubble-row">
+            <div class="bubble" [class.agent]="msg.sender_type === 'human_agent'" [class.ai]="msg.sender_type === 'ai'"
+              [innerHTML]="msg.formattedContent || msg.content">
+            </div>
+
+            <!-- Acciones flotantes por mensaje (Copiar / Citar) -->
+            <div class="bubble-actions">
+              <button class="bubble-btn" (click)="replyToMessage(msg)" title="Responder / Citar mensaje">↩️</button>
+              <button class="bubble-btn" (click)="copyMessageContent(msg.content)" title="Copiar texto">📋</button>
+            </div>
           </div>
-          <span style="font-size: 0.6rem; color: #94a3b8; margin-top: 4px; font-weight: 600;">
-            {{ msg.created_at | date:'HH:mm' }} • {{ getSenderName(msg) | uppercase }}
+
+          <span class="msg-metadata" style="font-size: 0.65rem; color: #94a3b8; margin-top: 4px; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+            <span>{{ msg.created_at | date:'HH:mm' }} • {{ getSenderName(msg) | uppercase }}</span>
+            <span *ngIf="msg.sender_type !== 'customer'" class="msg-tick" title="Mensaje entregado">✓✓</span>
           </span>
         </div>
 
@@ -204,7 +251,21 @@
         <div #scrollAnchor style="height: 1px; width: 100%;"></div>
       </div>
 
+      <!-- Botón Flotante para ir al Fondo del Chat -->
+      <button *ngIf="showScrollBottomBtn" class="scroll-bottom-floating-btn" (click)="scrollToBottom()" title="Ir al mensaje más reciente">
+        <span>↓ Nuevos mensajes</span>
+      </button>
+
       <footer class="chat-footer" [class.internal-mode]="isInternalNote" [style.background]="isInternalNote ? '#fffbeb' : ''" [style.border-top]="isInternalNote ? '2px solid #f59e0b' : '1px solid var(--border-color)'">
+        <!-- Banner de Cita / Responder Mensaje -->
+        <div *ngIf="replyingToMessage" class="replying-banner">
+          <div class="replying-content">
+            <span class="replying-to">Respondiendo a <strong>{{ getSenderName(replyingToMessage) }}</strong>:</span>
+            <span class="replying-preview">{{ replyingToMessage.content }}</span>
+          </div>
+          <button (click)="cancelReply()" class="cancel-reply-btn" title="Cancelar respuesta">✕</button>
+        </div>
+
         <!-- Banner de Advertencia Modo Nota Privada -->
         <div *ngIf="isInternalNote" style="background: #fef3c7; color: #92400e; padding: 6px 14px; border-radius: 8px; margin-bottom: 10px; font-size: 0.75rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
           <span>🔒 NOTA PRIVADA: Solo visible para ti y tu equipo. El cliente NO recibirá este texto.</span>
@@ -258,10 +319,10 @@
 
               <!-- Popup de Snippets -->
               <div *ngIf="showSnippetsMenu" 
-                style="position: absolute; bottom: calc(100% + 8px); right: 0; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border: 1px solid var(--border-color); width: 290px; z-index: 100; overflow: hidden; animation: fadeIn 0.2s ease-out;">
+                style="position: absolute; bottom: calc(100% + 8px); right: 0; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border: 1px solid var(--border-color); width: 310px; z-index: 100; overflow: hidden; animation: fadeIn 0.2s ease-out;">
                 <div style="padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid var(--border-color); font-size: 0.75rem; font-weight: 800; color: #475569; display: flex; justify-content: space-between; align-items: center;">
                   <span>Plantillas Rápidas</span>
-                  <span style="font-size: 0.65rem; color: #94a3b8; font-weight: normal;">Usa / para buscar</span>
+                  <button (click)="showSnippetsManagerModal = true; showSnippetsMenu = false" style="background: none; border: none; color: #7c3aed; font-weight: 800; cursor: pointer; font-size: 0.7rem;">+ Gestionar</button>
                 </div>
                 <div *ngFor="let s of quickSnippets" (click)="insertSnippet(s.text)" 
                   style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" 
@@ -303,9 +364,21 @@
         <!-- Input File oculto para Adjuntos -->
         <input type="file" #fileInput (change)="onFileUpload($event)" style="display: none;" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" />
 
+        <!-- Popover Picker de Emojis -->
+        <div *ngIf="showEmojiPicker" class="emoji-picker-popover">
+          <div class="emoji-grid">
+            <button *ngFor="let em of emojiList" (click)="insertEmoji(em)" class="emoji-cell-btn">{{ em }}</button>
+          </div>
+        </div>
+
         <!-- Barra de Entrada Principal de Mensaje -->
         <div class="input-box" [style.background]="isInternalNote ? '#fff' : ''" [style.border]="isInternalNote ? '1px solid #f59e0b' : ''">
           
+          <!-- Botón de Emojis -->
+          <button type="button" class="tool-btn" (click)="showEmojiPicker = !showEmojiPicker" title="Insertar Emoji">
+            <span>😊</span>
+          </button>
+
           <!-- Botón de Adjuntar Archivo / Imagen -->
           <button type="button" class="tool-btn" (click)="fileInput.click()" [disabled]="isUploadingFile" title="Adjuntar foto, imagen o documento PDF">
             <span *ngIf="!isUploadingFile">📎</span>
@@ -621,6 +694,43 @@
       <button class="btn-delete" (click)="confirmDelete()" [disabled]="isDeleting">
         {{ isDeleting ? 'Eliminando...' : 'Sí, eliminar' }}
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GESTOR DE PLANTILLAS RÁPIDAS (SNIPPETS) -->
+<div class="order-modal-overlay" *ngIf="showSnippetsManagerModal">
+  <div class="delete-modal" style="max-width: 540px; text-align: left; padding: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;">
+      <h3 style="margin: 0; color: #1e293b; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+        <span>⚡</span> Gestor de Respuestas Rápidas
+      </h3>
+      <button (click)="showSnippetsManagerModal = false" style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: #94a3b8;">×</button>
+    </div>
+
+    <!-- Lista de plantillas existentes -->
+    <div style="max-height: 200px; overflow-y: auto; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px;">
+      <div *ngFor="let snip of quickSnippets" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80%;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #334155;">{{ snip.title }} <span style="color: #7c3aed; font-family: monospace;">/{{ snip.code }}</span></div>
+          <div style="font-size: 0.72rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ snip.text }}</div>
+        </div>
+        <button (click)="deleteSnippet(snip.code)" style="background: #fee2e2; color: #b91c1c; border: none; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 700;">Borrar</button>
+      </div>
+    </div>
+
+    <!-- Formulario Nueva Plantilla -->
+    <div style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 14px;">
+      <div style="font-size: 0.75rem; font-weight: 800; color: #7c3aed; text-transform: uppercase; margin-bottom: 8px;">+ Crear Nueva Plantilla</div>
+      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-bottom: 8px;">
+        <input type="text" [(ngModel)]="newSnippetCode" placeholder="Comando (ej: wifi)" style="padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.8rem;">
+        <input type="text" [(ngModel)]="newSnippetTitle" placeholder="Título (ej: 📶 Clave Wi-Fi)" style="padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.8rem;">
+      </div>
+      <textarea [(ngModel)]="newSnippetText" placeholder="Texto completo que se enviará al cliente..." rows="3" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.8rem; resize: vertical; margin-bottom: 8px;"></textarea>
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button (click)="showSnippetsManagerModal = false" style="background: #f1f5f9; border: 1px solid #e2e8f0; padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Cerrar</button>
+        <button (click)="saveSnippetToStorage()" style="background: #7c3aed; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Guardar Plantilla</button>
+      </div>
     </div>
   </div>
 </div>
