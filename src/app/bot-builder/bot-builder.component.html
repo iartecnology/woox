@@ -73,6 +73,9 @@
     <button *ngIf="isSuperAdmin" class="btn-icon btn-outline" (click)="showSaveTemplateModal = true">
       🎁 Guardar como Plantilla
     </button>
+    <button class="btn-icon" [class.active]="showHeatmap" (click)="toggleHeatmap()" title="Alternar Mapa de Calor y Cuellos de Botella">
+      {{ showHeatmap ? '🔥 Heatmap: ON' : '❄️ Heatmap' }}
+    </button>
     <button class="btn-icon" (click)="toggleChat()" [class.active]="showTestChat">
       {{ showTestChat ? '🚫 Cerrar Pruebas' : '▶ Probar Flujo' }}
     </button>
@@ -246,10 +249,18 @@
           <!-- Fondo del Nodo -->
           <rect width="220" [attr.height]="node.type === 'menu' ? 80 + (node.data.options?.length || 0) * 24 : (node.type === 'switch' ? 80 + (node.data.switch_cases?.length || 0) * 24 : (node.type === 'condition' ? 95 : (node.type === 'business_hours' ? 100 : 80)))" rx="12"
                 class="node-rect"
-                [attr.fill]="getNodeColor(node.type)"
-                [attr.stroke]="selectedNode?.id === node.id ? '#4f46e5' : 'rgba(255,255,255,0.1)'"
-                [attr.stroke-width]="selectedNode?.id === node.id ? 3 : 1"
+                [attr.fill]="showHeatmap ? getNodeHeatmapColor(node.id) : getNodeColor(node.type)"
+                [attr.stroke]="selectedNode?.id === node.id ? '#4f46e5' : (showHeatmap ? '#f59e0b' : 'rgba(255,255,255,0.1)')"
+                [attr.stroke-width]="selectedNode?.id === node.id ? 3 : (showHeatmap ? 2 : 1)"
                 filter="url(#shadow)" />
+
+          <!-- Heatmap Overlay Info (Tasa de Abandono y Tráfico) -->
+          <g *ngIf="showHeatmap" transform="translate(110, -8)">
+            <rect x="-65" y="-10" width="130" height="20" rx="6" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+            <text fill="#fbbf24" font-size="9" font-weight="800" text-anchor="middle" dominant-baseline="central" class="no-select">
+              🔥 {{ getNodeHeatmapPercentage(node.id) }}% tráfico | 🚪 {{ getNodeDropoffRate(node.id) }}% aban
+            </text>
+          </g>
           
           <!-- Título -->
           <text x="16" y="28" fill="white" font-size="13" font-weight="700" class="no-select">
@@ -478,6 +489,9 @@
       <button class="sidebar-tab" [class.active]="activeSidebarTab === 'inspector'" (click)="activeSidebarTab = 'inspector'">
         <i class="fa-solid fa-bug"></i> Inspector
       </button>
+      <button class="sidebar-tab" [class.active]="activeSidebarTab === 'test_suite'" (click)="activeSidebarTab = 'test_suite'">
+        <i class="fa-solid fa-vial-circle-check"></i> Test Suite
+      </button>
     </div>
 
     <!-- Panel Content: Simulator -->
@@ -581,6 +595,64 @@
         <input type="text" class="chat-input" placeholder="¿Cómo quieres cambiar el flujo?..." 
                [(ngModel)]="architectInput" (keyup.enter)="sendArchitectMessage()">
         <button class="btn-send architect-accent" (click)="sendArchitectMessage()"><i class="fa-solid fa-sparkles"></i></button>
+      </div>
+    </div>
+
+    <!-- Panel Content: Test Suite (Regression Tests) -->
+    <div class="tab-panel-content test-suite-mode" *ngIf="activeSidebarTab === 'test_suite'">
+      <div class="chat-header">
+        <div>
+          <h4 style="margin:0; font-size: 0.95rem;">🧪 Suite de Regresión</h4>
+          <span style="font-size: 0.72rem; color: #64748b;">Verifica respuestas ante cambios</span>
+        </div>
+        <button class="btn btn-sm btn-primary" [disabled]="isRunningSuite" (click)="runRegressionTestSuite()">
+          {{ isRunningSuite ? '⏳ Corriendo...' : '▶ Ejecutar Todo' }}
+        </button>
+      </div>
+
+      <!-- Barra de Resumen de Tests -->
+      <div class="test-suite-summary-bar">
+        <div class="summary-stat">
+          <span class="stat-count">{{ testSuite.length }}</span>
+          <span class="stat-lbl">Total</span>
+        </div>
+        <div class="summary-stat text-success">
+          <span class="stat-count">{{ testSuiteProgress.passed }}</span>
+          <span class="stat-lbl">Pasaron</span>
+        </div>
+        <div class="summary-stat text-danger">
+          <span class="stat-count">{{ testSuiteProgress.failed }}</span>
+          <span class="stat-lbl">Fallaron</span>
+        </div>
+      </div>
+
+      <!-- Lista de Tests -->
+      <div class="test-suite-list">
+        <div *ngFor="let tc of testSuite; let i = index" class="test-case-card" [class]="'status-' + (tc.lastStatus || 'pending')">
+          <div class="test-case-header">
+            <div class="test-case-title">
+              <span class="status-indicator-dot" [class]="tc.lastStatus || 'pending'"></span>
+              <strong>#{{ i + 1 }} {{ tc.question }}</strong>
+            </div>
+            <button class="btn-delete-test" (click)="removeTestCase(i)" title="Eliminar prueba">✕</button>
+          </div>
+          <div class="test-case-pattern">
+            <span class="badge-pat">Regex esperado:</span> <code>{{ tc.expectedPattern }}</code>
+            <span *ngIf="tc.responseTimeMs" class="test-latency">⚡ {{ tc.responseTimeMs }}ms</span>
+          </div>
+          <div *ngIf="tc.actualResponse" class="test-case-response" [class.error-res]="tc.lastStatus === 'failed'">
+            <div class="res-label">Última respuesta obtenida:</div>
+            <div class="res-body">{{ tc.actualResponse }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulario Agregar Test -->
+      <div class="add-test-case-box">
+        <div class="add-test-title">➕ Nuevo Caso de Prueba</div>
+        <input type="text" class="form-control form-control-sm mb-2" [(ngModel)]="newTestCase.question" placeholder="Pregunta del cliente (ej. ¿Venden hamburguesas?)" />
+        <input type="text" class="form-control form-control-sm mb-2" [(ngModel)]="newTestCase.expectedPattern" placeholder="Palabra o Regex esperado (ej. hamburguesa|combo)" />
+        <button class="btn btn-sm btn-outline-primary w-100" (click)="addTestCase()">Guardar en la Suite</button>
       </div>
     </div>
 
@@ -1008,6 +1080,21 @@
       <label>Variable de mapeo de respuesta <span style="color:#94a3b8">(opcional)</span></label>
       <input type="text" class="form-control mb-3" [(ngModel)]="editingNode.data.response_mapping" placeholder="ej. api_resultado" />
       <div class="label-hint">Guarda la respuesta en esta variable para usarla luego en el flujo.</div>
+    </div>
+
+    <!-- SUBFLOW CONFIGURATION -->
+    <div *ngIf="editingNode.type === 'subflow'" class="form-group" style="grid-column: span 2;">
+      <label class="fw-bold mb-1">Seleccionar Flujo a Ejecutar (Sub-flujo)</label>
+      <select class="form-control mb-3" [(ngModel)]="editingNode.data.subflow_id" (ngModelChange)="onSubflowSelected($event)">
+        <option value="">-- Elige un flujo del comercio --</option>
+        <option *ngFor="let f of allFlows" [value]="f.id" [disabled]="f.id === botFlow.id">
+          {{ f.name }} (v{{ f.version || 1 }}) {{ f.id === botFlow.id ? '[Flujo actual]' : '' }}
+        </option>
+      </select>
+
+      <div class="alert alert-info small" style="background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.2); color: #0284c7;">
+        💡 <strong>Reutilización Modular:</strong> Al llegar a este bloque, el bot derivará la conversación hacia el inicio del subflujo y al terminar retornará a la salida de este nodo.
+      </div>
     </div>
 
     <div *ngIf="editingNode.type === 'memory_extract'" class="form-group" style="grid-column: span 2;">

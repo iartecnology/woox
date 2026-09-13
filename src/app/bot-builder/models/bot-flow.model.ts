@@ -1,9 +1,11 @@
 export interface FlowNode {
   id: string;
-  type: 'start' | 'message' | 'question' | 'menu' | 'condition' | 'action' | 'ai_agent' | 'ai_orchestrator' | 'n8n_agent' | 'end' | 'ai_skill' | 'n8n' | 'mcp' | 'api' | 'memory_extract' | 'db_query' | 'set_variable' | 'switch' | 'delay' | 'business_hours' | 'semantic_router' | 'image_generator' | 'knowledge_query' | 'send_email' | 'transfer_operator' | 'wa_template' | 'catalog_search' | 'cart_summary' | 'order_checkout' | 'reservation_check' | 'reservation_create' | 'calendar_sync' | 'send_pdf';
+  type: 'start' | 'message' | 'question' | 'menu' | 'condition' | 'action' | 'ai_agent' | 'ai_orchestrator' | 'n8n_agent' | 'end' | 'ai_skill' | 'n8n' | 'mcp' | 'api' | 'memory_extract' | 'db_query' | 'set_variable' | 'switch' | 'delay' | 'business_hours' | 'semantic_router' | 'image_generator' | 'knowledge_query' | 'send_email' | 'transfer_operator' | 'wa_template' | 'catalog_search' | 'cart_summary' | 'order_checkout' | 'reservation_check' | 'reservation_create' | 'calendar_sync' | 'send_pdf' | 'subflow';
   position: { x: number; y: number };
   data: {
     label: string;
+    subflow_id?: string;
+    subflow_name?: string;
     message?: string;
     action?: string;
     params?: any;

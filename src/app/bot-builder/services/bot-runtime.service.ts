@@ -379,6 +379,37 @@ export class BotRuntimeService {
                     node = nodes.find((n: any) => n.id === nextMsgNodeId);
                     break;
 
+                case 'subflow':
+                    tLog.service = 'db';
+                    const subflowId = node.data?.subflow_id;
+                    if (subflowId) {
+                        try {
+                            const { data: targetSubflow } = await this.supabase.getBotFlowById(subflowId);
+                            if (targetSubflow && targetSubflow.flow_data) {
+                                const subNodes = targetSubflow.flow_data.nodes || [];
+                                const subStart = subNodes.find((n: any) => n.type === 'start');
+                                if (subStart) {
+                                    const subNextId = this.getNextNodeId(targetSubflow.flow_data, subStart.id, 'output');
+                                    const subNextNode = subNodes.find((n: any) => n.id === subNextId);
+                                    if (subNextNode) {
+                                        const subRes = await this.advanceAndCollect(targetSubflow.flow_data, subNextNode, session, targetSubflow, userInput);
+                                        messages.push(...subRes.messages);
+                                        if (subRes.executionPath) {
+                                            executionPath.push(...subRes.executionPath);
+                                        }
+                                        tLog.response = { subflow: targetSubflow.name, messagesCount: subRes.messages.length };
+                                    }
+                                }
+                            }
+                        } catch (sErr: any) {
+                            console.warn('[BotRuntime] Error ejecutando subflujo:', sErr);
+                            tLog.response = { error: sErr?.message };
+                        }
+                    }
+                    const nextSubflowNodeId = this.getNextNodeId(flowData, node.id, 'output');
+                    node = nodes.find((n: any) => n.id === nextSubflowNodeId);
+                    break;
+
                 case 'send_pdf':
                     tLog.service = 'db';
                     const pdfUrl = this.resolveVariables(node.data?.pdf_url || '', session.variables, flow);

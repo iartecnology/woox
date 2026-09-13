@@ -456,6 +456,7 @@ Tu regla inquebrantable:
         { type: 'question', label: 'Pregunta', icon: '❓', description: 'Capturar respuesta' },
         { type: 'menu', label: 'Menú', icon: '📋', description: 'Opciones múltiples' },
         { type: 'send_pdf', label: 'Enviar PDF', icon: '📄', description: 'Enviar menú en PDF' },
+        { type: 'subflow', label: 'Sub-Flujo', icon: '🔀', description: 'Ejecutar otro flujo reutilizable' },
         { type: 'end', label: 'Fin', icon: '🛑', description: 'Terminar flujo' }
       ]
     },
@@ -539,7 +540,7 @@ Tu regla inquebrantable:
 
   // Chat Simulator State
   showTestChat: boolean = false;
-  activeSidebarTab: 'simulator' | 'architect' | 'inspector' = 'simulator';
+  activeSidebarTab: 'simulator' | 'architect' | 'inspector' | 'test_suite' = 'simulator';
   executionLogs: { 
     nodeId: string, 
     nodeLabel: string, 
@@ -550,6 +551,26 @@ Tu regla inquebrantable:
     fullPrompt?: string 
   }[] = [];
   selectedLog: any = null;
+
+  // --- ANALYTICS / HEATMAP STATE ---
+  showHeatmap: boolean = false;
+
+  // --- AUTOMATED REGRESSION TEST SUITE STATE ---
+  testSuite: {
+    id: string;
+    question: string;
+    expectedPattern: string;
+    lastStatus?: 'passed' | 'failed' | 'running' | 'pending';
+    actualResponse?: string;
+    responseTimeMs?: number;
+  }[] = [
+    { id: 'test_1', question: '¡Hola! ¿Qué productos tienen?', expectedPattern: 'menú|catálogo|carta|productos|hola', lastStatus: 'pending' },
+    { id: 'test_2', question: '¿Cuál es el horario de atención?', expectedPattern: 'horario|abierto|lunes|atención', lastStatus: 'pending' },
+    { id: 'test_3', question: 'Quiero hacer un pedido', expectedPattern: 'nombre|pedido|dirección|carrito|pedir', lastStatus: 'pending' }
+  ];
+  newTestCase = { question: '', expectedPattern: '' };
+  isRunningSuite: boolean = false;
+  testSuiteProgress: { total: number, passed: number, failed: number } = { total: 0, passed: 0, failed: 0 };
 
   executionCounts: { [nodeId: string]: number } = {};
   currentlyExecuting: string | null = null;
@@ -1734,6 +1755,8 @@ Tu responsabilidad:
         ai_intents: type === 'semantic_router' ? [{ id: `inc_${now}`, name: 'comprar', description: 'El usuario quiere comprar algo' }] : undefined,
         image_prompt: type === 'image_generator' ? 'Una foto realista de un plato de pasta' : undefined,
         image_size: type === 'image_generator' ? '512x512' : undefined,
+        subflow_id: type === 'subflow' ? '' : undefined,
+        subflow_name: type === 'subflow' ? '' : undefined,
         email_to: type === 'send_email' ? '{{customer_email}}' : undefined,
         email_subject: type === 'send_email' ? 'Confirmación de Pedido' : undefined
       }
@@ -1857,13 +1880,16 @@ Tu responsabilidad:
       wa_template: '#15803d',
       catalog_search: '#7c3aed',
       cart_summary: '#db2777',
-      order_checkout: '#059669'
+      order_checkout: '#059669',
+      subflow: '#0284c7'
     };
     return colors[type] || '#1e293b';
   }
 
   getNodePreview(node: FlowNode): string {
     switch (node.type) {
+      case 'subflow':
+        return `🔀 Sub-flujo: ${node.data?.subflow_name || node.data?.subflow_id || 'Sin seleccionar'}`;
       case 'condition': 
         return `${node.data.variable || '?'} ${node.data.operator || '=='} ${node.data.value || '?'}`;
       case 'send_pdf':
@@ -2466,6 +2492,17 @@ Tu responsabilidad:
   }
 
   // --- PROPERTIES HELPERS ---
+  onSubflowSelected(subflowId: string) {
+    if (!this.editingNode || this.editingNode.type !== 'subflow') return;
+    const selectedFlow = this.allFlows.find(f => f.id === subflowId);
+    if (selectedFlow) {
+      this.editingNode.data.subflow_name = selectedFlow.name;
+      this.editingNode.data.label = `🔀 ${selectedFlow.name}`;
+      this.hasUnsavedChanges = true;
+      this.cdr.detectChanges();
+    }
+  }
+
   addMenuOption() {
     if (this.editingNode?.data.options) {
       this.editingNode.data.options.push({
@@ -3126,6 +3163,141 @@ REGLAS:
   /** Obtiene el contador de ejecuciones de un nodo (para usarlo en el template) */
   getNodeExecutionCount(nodeId: string): number {
     return this.nodeExecutionCounts.get(nodeId) || 0;
+  }
+
+  /** --- HEATMAP ANALYTICS HELPERS --- */
+  toggleHeatmap() {
+    this.showHeatmap = !this.showHeatmap;
+    if (this.showHeatmap) {
+      this.notification.show('🔥 Modo Heatmap y Cuellos de Botella activado', 'info');
+    } else {
+      this.notification.show('Modo Heatmap desactivado', 'info');
+    }
+    this.cdr.detectChanges();
+  }
+
+  getNodeHeatmapColor(nodeId: string): string {
+    if (!this.showHeatmap) return '';
+    const count = this.getNodeExecutionCount(nodeId);
+    if (count === 0) return 'rgba(100, 116, 139, 0.2)'; // Frío / Sin tráfico
+    if (count >= 10) return 'rgba(239, 68, 68, 0.85)'; // Caliente / Alto tráfico (Rojo)
+    if (count >= 5) return 'rgba(249, 115, 22, 0.85)';  // Medio-alto (Naranja)
+    if (count >= 2) return 'rgba(234, 179, 8, 0.85)';   // Medio (Amarillo)
+    return 'rgba(16, 185, 129, 0.85)';                  // Entrada / Normal (Verde)
+  }
+
+  getNodeHeatmapPercentage(nodeId: string): number {
+    if (this.totalSessionExecutions === 0) return 0;
+    const count = this.getNodeExecutionCount(nodeId);
+    return Math.round((count / this.totalSessionExecutions) * 100);
+  }
+
+  getNodeDropoffRate(nodeId: string): number {
+    const count = this.getNodeExecutionCount(nodeId);
+    if (count === 0) return 0;
+    
+    // Obtener conexiones salientes
+    const conns = this.botFlow.flow_data.connections?.filter(c => c.from === nodeId) || [];
+    if (conns.length === 0) return 0; // Nodo terminal
+    
+    let totalChildrenExecutions = 0;
+    conns.forEach(c => {
+      totalChildrenExecutions += this.getNodeExecutionCount(c.to);
+    });
+    
+    // Abandono = clientes que llegaron a este nodo pero no continuaron por ninguna salida
+    const dropoff = Math.max(0, count - totalChildrenExecutions);
+    return Math.round((dropoff / count) * 100);
+  }
+
+  /** --- AUTOMATED TEST SUITE RUNNER --- */
+  addTestCase() {
+    if (!this.newTestCase.question.trim()) return;
+    this.testSuite.push({
+      id: `test_${Date.now()}`,
+      question: this.newTestCase.question.trim(),
+      expectedPattern: this.newTestCase.expectedPattern.trim() || '.*',
+      lastStatus: 'pending'
+    });
+    this.newTestCase = { question: '', expectedPattern: '' };
+    this.notification.show('Caso de prueba agregado a la suite', 'success');
+  }
+
+  removeTestCase(index: number) {
+    this.testSuite.splice(index, 1);
+  }
+
+  async runRegressionTestSuite() {
+    if (this.isRunningSuite || this.testSuite.length === 0) return;
+    this.isRunningSuite = true;
+    this.testSuiteProgress = { total: this.testSuite.length, passed: 0, failed: 0 };
+    this.notification.show('🚀 Ejecutando Suite de Pruebas de Regresión...', 'info');
+
+    for (let i = 0; i < this.testSuite.length; i++) {
+      const tc = this.testSuite[i];
+      tc.lastStatus = 'running';
+      this.cdr.detectChanges();
+
+      const startTime = performance.now();
+      try {
+        // Enviar al bot-runtime con override del flujo actual en diseño
+        const testConversationId = `test_conv_${Date.now()}_${tc.id}`;
+        const res = await this.botRuntime.processMessage(
+          testConversationId,
+          this.merchantId,
+          tc.question,
+          this.botFlow
+        );
+
+        const endTime = performance.now();
+        tc.responseTimeMs = Math.round(endTime - startTime);
+
+        const fullReply = (res?.messages || []).join(' ');
+        tc.actualResponse = fullReply;
+
+        // Registrar nodos ejecutados para alimentar también analíticas
+        if (res?.executionPath) {
+          res.executionPath.forEach((p: any) => {
+            const cur = this.nodeExecutionCounts.get(p.id) || 0;
+            this.nodeExecutionCounts.set(p.id, cur + 1);
+            this.totalSessionExecutions++;
+          });
+        }
+
+        // Evaluar si coincide con el patrón esperado (Regex case-insensitive)
+        let matches = false;
+        try {
+          const regex = new RegExp(tc.expectedPattern || '.*', 'i');
+          matches = regex.test(fullReply);
+        } catch {
+          matches = fullReply.toLowerCase().includes((tc.expectedPattern || '').toLowerCase());
+        }
+
+        if (matches && fullReply.trim().length > 0) {
+          tc.lastStatus = 'passed';
+          this.testSuiteProgress.passed++;
+        } else {
+          tc.lastStatus = 'failed';
+          this.testSuiteProgress.failed++;
+        }
+      } catch (err: any) {
+        tc.lastStatus = 'failed';
+        tc.actualResponse = `Error en ejecución: ${err?.message || err}`;
+        this.testSuiteProgress.failed++;
+      }
+
+      this.cdr.detectChanges();
+      // Pequeña pausa para no saturar APIs
+      await new Promise(r => setTimeout(r, 400));
+    }
+
+    this.isRunningSuite = false;
+    if (this.testSuiteProgress.failed === 0) {
+      this.notification.show(`🎉 ¡Todos los tests pasaron exitosamente (${this.testSuiteProgress.passed}/${this.testSuiteProgress.total})!`, 'success');
+    } else {
+      this.notification.show(`⚠️ Suite finalizada: ${this.testSuiteProgress.passed} pasaron, ${this.testSuiteProgress.failed} fallaron.`, 'warning');
+    }
+    this.cdr.detectChanges();
   }
 
   /** Verifica si una conexi\u00f3n est\u00e1 activa (datos viajando por ella) */

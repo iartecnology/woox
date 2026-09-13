@@ -2090,3 +2090,184 @@ input:checked + .slider:before {
   transform: translateX(16px);
 }
 
+/* ======================================================= */
+/* 🧪 TEST SUITE & REGRESSION TESTING STYLES */
+/* ======================================================= */
+.test-suite-mode {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f8fafc;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.test-suite-summary-bar {
+  display: flex;
+  gap: 8px;
+  background: white;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-top: 10px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.summary-stat {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-stat .stat-count {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.summary-stat .stat-lbl {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.test-suite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  margin-bottom: 14px;
+}
+
+.test-case-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: all 0.2s ease;
+}
+
+.test-case-card.status-passed {
+  border-left: 4px solid #10b981;
+}
+
+.test-case-card.status-failed {
+  border-left: 4px solid #ef4444;
+  background: #fffafa;
+}
+
+.test-case-card.status-running {
+  border-left: 4px solid #3b82f6;
+  animation: pulse-border 1.2s infinite;
+}
+
+.test-case-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.test-case-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #1e293b;
+}
+
+.status-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  display: inline-block;
+}
+
+.status-indicator-dot.passed { background: #10b981; }
+.status-indicator-dot.failed { background: #ef4444; }
+.status-indicator-dot.running { background: #3b82f6; }
+
+.btn-delete-test {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.btn-delete-test:hover {
+  color: #ef4444;
+}
+
+.test-case-pattern {
+  font-size: 0.72rem;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.badge-pat {
+  font-weight: 600;
+  color: #64748b;
+}
+
+.test-case-pattern code {
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #0f172a;
+}
+
+.test-latency {
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #059669;
+}
+
+.test-case-response {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.73rem;
+  color: #334155;
+  margin-top: 4px;
+}
+
+.test-case-response.error-res {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.test-case-response .res-label {
+  font-weight: 700;
+  font-size: 0.65rem;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.add-test-case-box {
+  background: white;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.add-test-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+
