@@ -166,6 +166,8 @@ Tu regla inquebrantable:
     { type: 'get_cart', label: 'Ver Carrito', icon: '👁️', desc: 'Resume los productos actuales y total' },
     { type: 'checkout_trigger', label: 'Cierre Híbrido (Checkout)', icon: '✅', desc: 'Pasa a la captura de datos visual al terminar' },
     { type: 'register_order', label: 'Registrar Pedido (Chat)', icon: '📦', desc: 'Cierre autónomo pidiendo datos en la conversación' },
+    { type: 'get_available_slots', label: 'Consultar Horarios', icon: '🗓️', desc: 'Consulta disponibilidad de citas y reservas' },
+    { type: 'create_booking', label: 'Crear Reserva', icon: '📅', desc: 'Genera y confirma la cita en la agenda' },
     { type: 'knowledge_base', label: 'Base de Conocimiento (RAG)', icon: '📚', desc: 'Búsqueda semántica en PDFs y documentos' },
     { type: 'transfer_human', label: 'Transferir a Humano', icon: '👤', desc: 'Pasa el chat a un agente real de soporte' }
   ];
@@ -200,6 +202,8 @@ Tu regla inquebrantable:
       const attachedSkillNodes = skillsIn.map(c => nodes.find(n => n.id === c.from));
       const hasCheckoutTrigger = attachedSkillNodes.some(n => n?.data?.actionType === 'checkout_trigger');
       const hasRegisterOrder = attachedSkillNodes.some(n => n?.data?.actionType === 'register_order');
+      const hasBookingTrigger = attachedSkillNodes.some(n => n?.data?.actionType === 'create_booking');
+      const hasSupportClosure = attachedSkillNodes.some(n => n?.data?.actionType === 'transfer_human' || n?.data?.actionType === 'knowledge_base');
       const hasOutputConn = conns.some(c => c.from === aiAgent.id && (c.fromPort === 'output' || !c.fromPort));
 
       if (hasCheckoutTrigger && !hasOutputConn) {
@@ -210,11 +214,11 @@ Tu regla inquebrantable:
           canRepair: true 
         };
       }
-      if (!hasCheckoutTrigger && !hasRegisterOrder) {
+      if (!hasCheckoutTrigger && !hasRegisterOrder && !hasBookingTrigger && !hasSupportClosure) {
         return { 
           status: 'warning', 
           message: 'IA sin herramienta de cierre', 
-          details: 'Conecta "checkout_trigger" o "register_order" para que el ciclo de venta no quede abierto.',
+          details: 'Conecta "checkout_trigger", "create_booking" o "transfer_human" para completar el ciclo del agente.',
           canRepair: true 
         };
       }
