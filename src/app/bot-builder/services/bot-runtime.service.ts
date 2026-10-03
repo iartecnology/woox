@@ -804,6 +804,33 @@ export class BotRuntimeService {
                 return `✅ ¡Gracias! Tu pedido #${orderNum} ha sido registrado exitosamente por un valor de $${total}.`;
             }
 
+            if (actionType === 'create_booking') {
+                const vars = session.variables || {};
+                const customerName = vars['customer_name'] || vars['nombre'] || vars['full_name'] || 'Cliente de Cita';
+                const customerPhone = vars['phone'] || vars['telefono'] || vars['customer_phone'] || session.phone || '';
+                const startTimeStr = vars['start_time'] || vars['fecha_hora_deseada'] || vars['fecha'] || new Date().toISOString();
+                const resourceId = vars['resource_id'] || vars['selected_product_id'] || null;
+
+                const bookingRes = await this.supabase.createReservation({
+                    merchant_id: session.merchant_id,
+                    customer_id: session.customer_id || null,
+                    resource_id: resourceId,
+                    customer_name: customerName,
+                    customer_phone: customerPhone,
+                    start_time: startTimeStr,
+                    pax: Number(vars['pax']) || 1,
+                    status: 'confirmed'
+                });
+
+                if (bookingRes?.error) {
+                    console.error('Error registrando reserva en bot-runtime:', bookingRes.error);
+                    return `⚠️ No pudimos confirmar la reserva automáticamente: ${bookingRes.error.message || 'Error técnico'}.`;
+                }
+
+                session.variables['booking_id'] = bookingRes?.data?.id || '';
+                return `📅 ¡Excelente! Tu reserva a nombre de ${customerName} ha sido confirmada con éxito.`;
+            }
+
             if (actionType === 'transfer_human') {
                 await this.updateSession(session, session.current_node_id, null, 'transferred');
                 return '👤 Te estamos transfiriendo con un agente humano. Espera un momento...';

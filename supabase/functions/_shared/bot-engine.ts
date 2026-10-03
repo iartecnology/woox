@@ -271,6 +271,38 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
                 variables['last_product_notes_value'] = '';
             }
         }
+    } else if (actionType === 'create_booking') {
+        const resourceId = node.data.params?.resource_id || variables['resource_id'] || variables['selected_product_id'];
+        const startStr = variables['start_time'] || variables['fecha_hora_deseada'] || variables['fecha'] || new Date().toISOString();
+        const pax = Number(variables['pax']) || 1;
+        const name = variables['customer_name'] || variables['nombre_cliente'] || 'Cliente';
+
+        if (resourceId && customerId) {
+            const { data: resInfo } = await supabase.from('reservable_resources').select('duration_minutes, base_price').eq('id', resourceId).maybeSingle();
+            const duration = resInfo?.duration_minutes || 60;
+            const start = new Date(startStr);
+            const end = isNaN(start.getTime()) ? new Date(Date.now() + duration * 60000) : new Date(start.getTime() + duration * 60000);
+
+            const { data: booking, error: bErr } = await supabase.from('bookings').insert({
+                merchant_id: merchantId,
+                customer_id: customerId,
+                resource_id: resourceId,
+                start_time: start.toISOString(),
+                end_time: end.toISOString(),
+                pax: pax,
+                status: 'confirmed',
+                channel: 'whatsapp',
+                total_price: resInfo?.base_price || 0,
+                conversation_id: conversationId,
+                metadata: { customer_name: name, source: 'bot_flow_action' }
+            }).select().single();
+
+            if (!bErr && booking) {
+                variables['booking_id'] = booking.id;
+            } else if (bErr) {
+                console.error('[BOT-ENGINE] Error creando reserva desde action node:', bErr);
+            }
+        }
     }
 }
 
