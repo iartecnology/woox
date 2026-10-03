@@ -920,7 +920,7 @@ Tu regla inquebrantable:
           'swarm_orchestrator': () => this.generateSwarmOrchestratorFlow(),
           // IDs nuevos (Reservas)
           'booking_bot':  () => this.generateServiceFlow(),
-          'booking_ai':   () => this.generateRAGFlow(),
+          'booking_ai':   () => this.generateBookingAIFlow(),
           // IDs nuevos (Herramientas)
           'rag_expert':   () => this.generateRAGFlow(),
           'n8n_master':   () => this.generateN8NFlow(),
@@ -1548,18 +1548,97 @@ Tu responsabilidad:
 
     // 3. Question (Date/Time)
     y += 250;
-    const questionNode = this.createSpecificNode('question', x, y, { label: 'Agendar', message: '¿Para qué fecha y hora deseas tu reserva?', variable: 'booking_datetime', validation: 'text' });
+    const questionNode = this.createSpecificNode('question', x, y, { label: 'Agendar Fecha/Hora', message: '¿Para qué fecha y hora deseas tu reserva? (ej: Mañana a las 10:00 AM)', variable: 'fecha_hora_deseada', validation: 'text' });
     
     resources.slice(0, 10).forEach(res => {
       this.connectNodes(menuNode.id, `res_${res.id}`, questionNode.id, 'input');
     });
 
-    // 4. Action
-    y += 200;
-    const actionNode = this.createSpecificNode('action', x, y, { label: 'Crear Reserva', actionType: 'create_booking' });
-    this.connectNodes(questionNode.id, 'output', actionNode.id, 'input');
+    // 4. Preguntas de Datos (Nombre y Teléfono)
+    y += 180;
+    const nameNode = this.createSpecificNode('question', x, y, { label: 'Nombre Completo', message: '¿A nombre de quién registramos la cita?', variable: 'customer_name' });
+    this.connectNodes(questionNode.id, 'output', nameNode.id, 'input');
+
+    y += 180;
+    const phoneNode = this.createSpecificNode('question', x, y, { label: 'Teléfono de Contacto', message: 'Por favor facilítanos tu número de WhatsApp para confirmar tu recordatorio:', variable: 'phone', validation: 'phone' });
+    this.connectNodes(nameNode.id, 'output', phoneNode.id, 'input');
+
+    // 5. Action
+    y += 180;
+    const actionNode = this.createSpecificNode('action', x, y, { label: 'Confirmar Reserva', actionType: 'create_booking' });
+    this.connectNodes(phoneNode.id, 'output', actionNode.id, 'input');
+
+    // 6. End Node
+    y += 180;
+    const endNode = this.createSpecificNode('end', x, y, { label: 'Cita Agendada', message: '¡Listo {{customer_name}}! Tu reserva ha quedado confirmada. Te esperamos con gusto. ✨' });
+    this.connectNodes(actionNode.id, 'output', endNode.id, 'input');
 
     // Organizar linealmente de forma automática
+    setTimeout(() => this.organizeFlow(), 100);
+  }
+
+  private async generateBookingAIFlow() {
+    let x = 600;
+    let y = 100;
+
+    // 1. Inicio
+    const startNode = this.createSpecificNode('start', x, y, { 
+      label: 'Bienvenida Agenda', 
+      message: '¡Hola! Bienvenido a {{merchantName}}. 👋 Soy tu concierge de citas y reservas. ¿Qué servicio te gustaría agendar?' 
+    });
+    y += 180;
+
+    // 2. Agente IA (Concierge de Citas)
+    const aiAgentNode = this.createSpecificNode('ai_agent', x, y, { 
+      label: 'IA Concierge Reservas', 
+      prompt: `Eres el concierge experto de citas y reservas de {{merchantName}}.
+      
+Tu MISIÓN:
+1. Pregunta amablemente qué servicio desea el usuario y la fecha de preferencia.
+2. Consulta la disponibilidad usando 'get_available_slots'.
+3. Si el usuario escoge un horario, solicita su nombre y teléfono y confirma la cita con 'create_booking'.
+4. Si el cliente tiene dudas complejas o requiere atención personalizada, usa 'transfer_human'.`,
+      user_prompt: '{{message}}',
+      model: 'gemini-1.5-flash',
+      temperature: 0.3,
+      memory_limit: 8
+    });
+    this.connectNodes(startNode.id, 'output', aiAgentNode.id, 'input');
+
+    // 3. Herramienta get_available_slots
+    const slotsSkill = this.createSpecificNode('ai_skill', x - 220, y + 200, { 
+      label: '🗓️ Consultar Horarios', 
+      actionType: 'get_available_slots',
+      message: 'Verifica disponibilidad de turnos y profesionales.'
+    });
+
+    // 4. Herramienta create_booking
+    const bookingSkill = this.createSpecificNode('ai_skill', x - 220, y + 320, { 
+      label: '📅 Crear Reserva', 
+      actionType: 'create_booking',
+      message: 'Registra la reserva confirmada en la agenda del comercio.'
+    });
+
+    // 5. Herramienta Transferencia Humana
+    const humanSkill = this.createSpecificNode('ai_skill', x + 220, y + 260, { 
+      label: '👤 Soporte Humano', 
+      actionType: 'transfer_human',
+      message: 'Transfiere al cliente con un recepcionista humano si es necesario.'
+    });
+
+    // 6. Nodo de Fin
+    const endNode = this.createSpecificNode('end', x, y + 500, {
+      label: 'Confirmación',
+      message: '¡Tu cita está agendada! Te esperamos en {{merchantName}}. ✨'
+    });
+    this.connectNodes(aiAgentNode.id, 'output', endNode.id, 'input');
+
+    // Conectar Skills al Agente IA
+    this.connectNodes(slotsSkill.id, 'skill_out', aiAgentNode.id, 'skills_in');
+    this.connectNodes(bookingSkill.id, 'skill_out', aiAgentNode.id, 'skills_in');
+    this.connectNodes(humanSkill.id, 'skill_out', aiAgentNode.id, 'skills_in');
+
+    this.cdr.detectChanges();
     setTimeout(() => this.organizeFlow(), 100);
   }
 
