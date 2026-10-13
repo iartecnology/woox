@@ -198,15 +198,24 @@ export class BotRuntimeService {
                     return await this.executeSwarmOrchestrator(flowData, currentNode, userInput, session, flow);
                 }
 
-                const { data: aiResponse, error: aiError } = await this.supabase.processBotAI({
-                    conversation_id: session.conversation_id,
-                    merchant_id: session.merchant_id,
-                    message: userInput
-                });
+                let responseText: string | null = null;
+                try {
+                    const { data: aiResponse, error: aiError } = await this.supabase.processBotAI({
+                        conversation_id: session.conversation_id,
+                        merchant_id: session.merchant_id,
+                        message: userInput
+                    });
 
-                if (aiError) throw aiError;
+                    if (aiError) throw aiError;
+                    responseText = aiResponse?.choices?.[0]?.message?.content || aiResponse?.content || null;
+                } catch (edgeFnErr) {
+                    console.warn('[BotRuntime] Edge Function bot-engine falló, intentando llamada directa a proveedor IA...', edgeFnErr);
+                    responseText = await this.callDirectAI(session.merchant_id, userInput, currentNode.data?.prompt);
+                }
 
-                const responseText = aiResponse?.choices?.[0]?.message?.content || aiResponse?.content || 'El asistente no pudo responder en este momento.';
+                if (!responseText) {
+                    responseText = '🤖 El asistente no pudo generar una respuesta. Revisa la configuración del modelo de IA.';
+                }
                 
                 // Actualizar la sesión para que permanezca en el nodo IA esperando más input
                 await this.updateSession(session, currentNode.id, 'ai_input');
@@ -542,12 +551,19 @@ export class BotRuntimeService {
                             if (responseText) messages.push(responseText);
                             else messages.push('🤖 El asistente no pudo generar una respuesta. Revisa la configuración del nodo.');
                         } catch (aiExc: any) {
-                            tLog.response = { error: aiExc.message };
-                            messages.push('🤖 El asistente no está disponible en este momento. Intenta de nuevo.');
-                            await this.updateSession(session, node.id, 'ai_input');
-                            if (!session.technicalLogs) session.technicalLogs = [];
-                            session.technicalLogs.push(tLog);
-                            return { messages, session, executionPath, technicalLogs: session.technicalLogs };
+                            console.warn('[BotRuntime] Edge Function bot-engine falló, intentando llamada directa a proveedor IA...', aiExc);
+                            const directResponse = await this.callDirectAI(session.merchant_id, userInput || '', node.data?.prompt);
+                            if (directResponse) {
+                                tLog.response = { content: directResponse, fallback: true };
+                                messages.push(directResponse);
+                            } else {
+                                tLog.response = { error: aiExc.message };
+                                messages.push('🤖 El asistente no está disponible en este momento. Intenta de nuevo.');
+                                await this.updateSession(session, node.id, 'ai_input');
+                                if (!session.technicalLogs) session.technicalLogs = [];
+                                session.technicalLogs.push(tLog);
+                                return { messages, session, executionPath, technicalLogs: session.technicalLogs };
+                            }
                         }
                         await this.updateSession(session, node.id, 'ai_input');
                     }
@@ -1012,5 +1028,90 @@ Respuesta final sintetizada para el cliente:`;
             session.waiting_for = waitingFor;
             session.status = status;
         }
+    }
+
+    /**
+     * Respaldo directo en cliente: Si la Edge Function 'bot-engine' no responde o falla,
+     * llamamos directamente al proveedor del comercio (OpenRouter, Gemini, Groq, OpenAI).
+     */
+    public async callDirectAI(merchantId: string, userMessage: string, customSystemPrompt?: string): Promise<string | null> {
+        try {
+            const { data: merchant } = await this.supabase.getMerchantById(merchantId);
+            if (!merchant) return null;
+
+            const provider = merchant.ai_provider || 'openrouter';
+            const apiKey = merchant.ai_api_key;
+            const model = merchant.ai_model || (provider === 'openrouter' ? 'nvidia/nemotron-3.5-lightning:free' : 'gemini-1.5-flash');
+
+            if (!apiKey) return null;
+
+            // Obtener prompt compilado y catálogo
+            const [{ data: compiledPrompt }, { data: products }] = await Promise.all([
+                this.supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantId }),
+                this.supabase.getProducts(merchantId)
+            ]);
+
+            let catalogText = '';
+            if (products && products.length > 0) {
+                catalogText = '\n\n### CATÁLOGO DE PRODUCTOS DISPONIBLES:\n' + 
+                    products.filter((p: any) => p.is_available !== false)
+                        .map((p: any) => `- ${p.name}: $${p.price} (ID: ${p.id})`)
+                        .join('\n');
+            }
+
+            const systemPrompt = (customSystemPrompt ? customSystemPrompt + '\n\n' : '') + 
+                (compiledPrompt || `Eres el asistente virtual de ${merchant.name}.`) + 
+                catalogText + 
+                `\n\nSi el cliente desea ordenar, incluye [UPDATE_CART:{"items":[{"id":"...","name":"...","price":...,"quantity":1}]}]`;
+
+            if (provider === 'openrouter' || provider === 'openai' || provider === 'groq' || provider === 'deepseek' || provider === 'cerebras') {
+                let url = 'https://openrouter.ai/api/v1/chat/completions';
+                if (provider === 'openai') url = 'https://api.openai.com/v1/chat/completions';
+                if (provider === 'groq') url = 'https://api.groq.com/openai/v1/chat/completions';
+                if (provider === 'deepseek') url = 'https://api.deepseek.com/v1/chat/completions';
+                if (provider === 'cerebras') url = 'https://api.cerebras.ai/v1/chat/completions';
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: userMessage }
+                        ],
+                        max_tokens: 1024,
+                        temperature: 0.7
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.choices?.[0]?.message?.content || null;
+                }
+            } else if (provider === 'google_gemini') {
+                const modelClean = (model || 'gemini-1.5-flash').replace('models/', '');
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelClean}:generateContent?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        system_instruction: { parts: [{ text: systemPrompt }] },
+                        contents: [{ role: 'user', parts: [{ text: userMessage }] }]
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+                }
+            }
+        } catch (err) {
+            console.warn('[BotRuntime] Error en direct AI fallback:', err);
+        }
+        return null;
     }
 }
