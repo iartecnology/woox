@@ -1330,7 +1330,7 @@ async function _processFlowFromState(
             try {
                 // ── 1. CONSULTAS PARALELAS A BD ────────────────────────────
                 const [merchantRes, platformRes, promptRes, histRes] = await Promise.all([
-                    supabase.from('merchants').select('name, ai_api_key, ai_keys, ai_model, ai_api_url, ai_provider').eq('id', merchantId).single(),
+                    supabase.from('merchants').select('name, ai_api_key, ai_model, ai_provider, ollama_base_url, lmstudio_base_url').eq('id', merchantId).single(),
                     supabase.from('platform_settings').select('ai_api_key, ai_model').eq('id', 'global').maybeSingle(),
                     supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantId }),
                     memoryLimit > 0

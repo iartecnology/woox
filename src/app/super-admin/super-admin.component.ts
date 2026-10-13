@@ -230,6 +230,7 @@ export class SuperAdminComponent implements OnInit {
             { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (R1)' }
         ],
         'openrouter': [
+            { id: 'nvidia/nemotron-3.5-lightning:free', name: 'Nvidia Nemotron 3.5 Lightning (gratis ⚡)' },
             { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (OpenRouter)' },
             { id: 'google/gemini-2.5-flash:free', name: 'Gemini 2.5 Flash (gratis)' },
             { id: 'meta-llama/llama-4-scout:free', name: 'Llama 4 Scout (gratis)' },
@@ -1173,18 +1174,17 @@ export class SuperAdminComponent implements OnInit {
 
         const updates = { ...this.selectedMerchant };
         delete (updates as any).id;
+        delete (updates as any).ai_api_url;
+        delete (updates as any).ai_keys;
+        delete (updates as any).ai_context_blocks;
 
-        // Mapear ollama_base_url / lmstudio_base_url -> ai_api_url (columna que lee el bot-engine)
-        if (updates.ai_provider === 'ollama') {
-            (updates as any).ai_api_url = (updates as any).ollama_base_url || null;
-        } else if (updates.ai_provider === 'lmstudio') {
-            (updates as any).ai_api_url = (updates as any).lmstudio_base_url || null;
-        } else {
-            (updates as any).ai_api_url = null; // Limpiar si cambió de proveedor
+        // Mantener URLs locales solo para sus respectivos proveedores
+        if (updates.ai_provider !== 'ollama') {
+            updates.ollama_base_url = undefined;
         }
-        // Eliminar campos locales que no existen en la BD
-        delete (updates as any).ollama_base_url;
-        delete (updates as any).lmstudio_base_url;
+        if (updates.ai_provider !== 'lmstudio') {
+            updates.lmstudio_base_url = undefined;
+        }
 
         // --- FIXED: Asegurar que agent_id sea un UUID válido o null ---
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

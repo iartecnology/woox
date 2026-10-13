@@ -146,9 +146,9 @@ export function resolveAIConfig(
         apiKey = Deno.env.get(ENV_KEY_MAP[provider] || '') || platform?.ai_api_key || '';
     }
 
-    // 5. Resolver URL base (solo para custom/ollama)
-    let baseUrl = merchant?.ai_api_url || undefined;
-    if (baseUrl) {
+    // 5. Resolver URL base (solo para custom/ollama/lmstudio)
+    let baseUrl = merchant?.ai_api_url || merchant?.ollama_base_url || merchant?.lmstudio_base_url || undefined;
+    if (baseUrl && (provider === 'custom' || provider === 'ollama' || provider === 'lmstudio')) {
         provider = 'custom' as any;
     }
 

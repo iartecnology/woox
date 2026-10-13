@@ -157,6 +157,7 @@ export class AiConfigComponent implements OnInit {
             { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (R1)' }
         ],
         'openrouter': [
+            { id: 'nvidia/nemotron-3.5-lightning:free', name: 'Nvidia Nemotron 3.5 Lightning (gratis ⚡)' },
             { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (OpenRouter)' },
             { id: 'google/gemini-2.5-flash:free', name: 'Gemini 2.5 Flash (gratis)' },
             { id: 'meta-llama/llama-4-scout:free', name: 'Llama 4 Scout (gratis)' },
@@ -400,7 +401,6 @@ export class AiConfigComponent implements OnInit {
             ai_welcome_message: this.merchantConfig.ai_welcome_message,
             ai_menu_context: this.merchantConfig.ai_menu_context,
             ai_api_key: this.merchantConfig.ai_api_key,
-            ai_keys: this.merchantConfig.ai_keys,
             ai_model: this.merchantConfig.ai_model,
             ai_restrictions: this.merchantConfig.ai_restrictions,
             ai_use_catalog: this.merchantConfig.ai_use_catalog,
@@ -413,8 +413,6 @@ export class AiConfigComponent implements OnInit {
             ai_schedule_start: this.merchantConfig.ai_schedule_start,
             ai_schedule_end: this.merchantConfig.ai_schedule_end,
             ai_provider: this.merchantConfig.ai_provider,
-            ai_temperature: this.merchantConfig.ai_temperature,
-            ai_max_tokens: this.merchantConfig.ai_max_tokens,
             ollama_base_url: this.merchantConfig.ollama_base_url,
             lmstudio_base_url: this.merchantConfig.lmstudio_base_url,
             bot_mode: this.merchantConfig.bot_mode
