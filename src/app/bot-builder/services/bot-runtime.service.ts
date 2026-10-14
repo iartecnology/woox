@@ -199,22 +199,66 @@ export class BotRuntimeService {
                 }
 
                 let responseText: string | null = null;
-                try {
-                    const { data: aiResponse, error: aiError } = await this.supabase.processBotAI({
-                        conversation_id: session.conversation_id,
-                        merchant_id: session.merchant_id,
-                        message: userInput
-                    });
-
-                    if (aiError) throw aiError;
-                    responseText = aiResponse?.choices?.[0]?.message?.content || aiResponse?.content || null;
-                } catch (edgeFnErr) {
-                    console.warn('[BotRuntime] Edge Function bot-engine falló, intentando llamada directa a proveedor IA...', edgeFnErr);
+                
+                // Si la Edge Function ya falló previamente, ir directo al proveedor para evitar espera de 10s
+                if (this.isEdgeFunctionAvailable === false) {
                     responseText = await this.callDirectAI(session.merchant_id, userInput, currentNode.data?.prompt);
+                } else {
+                    try {
+                        const { data: aiResponse, error: aiError } = await this.supabase.processBotAI({
+                            conversation_id: session.conversation_id,
+                            merchant_id: session.merchant_id,
+                            message: userInput
+                        });
+
+                        if (aiError) throw aiError;
+                        this.isEdgeFunctionAvailable = true;
+                        responseText = aiResponse?.choices?.[0]?.message?.content || aiResponse?.content || null;
+                    } catch (edgeFnErr) {
+                        this.isEdgeFunctionAvailable = false;
+                        console.warn('[BotRuntime] Edge Function bot-engine falló, pasando a llamada directa...', edgeFnErr);
+                        responseText = await this.callDirectAI(session.merchant_id, userInput, currentNode.data?.prompt);
+                    }
                 }
 
                 if (!responseText) {
                     responseText = '🤖 El asistente no pudo generar una respuesta. Revisa la configuración del modelo de IA.';
+                }
+
+                // Si la IA generó una orden de carrito, actualizar las variables de la sesión
+                const updateCartMatch = responseText.match(/\[UPDATE_CART:(.*?)\]/);
+                if (updateCartMatch) {
+                    try {
+                        const cartPayload = JSON.parse(updateCartMatch[1]);
+                        const existingCart = session.variables?.['cart'] || [];
+                        const newItems = cartPayload.items || [];
+                        session.variables = {
+                            ...(session.variables || {}),
+                            cart: [...existingCart, ...newItems]
+                        };
+                    } catch (pErr) {
+                        console.warn('Error parsing UPDATE_CART payload:', pErr);
+                    }
+                }
+
+                // Detectar si el usuario o la IA solicitan finalizar el pedido / checkout
+                const cleaned = userInput.trim().toLowerCase();
+                const wantsCheckout = responseText.includes('[TRIGGER_CHECKOUT]') || 
+                    ['finalizar', 'cerrar', 'eso es todo', 'nada mas', 'nada más', 'terminar', 'pedir', 'pagar', 'confirmar'].some(kw => cleaned.includes(kw));
+
+                const nextNodeId = this.getNextNodeId(flowData, currentNode.id, 'output');
+                const nextNode = nodes.find((n: any) => n.id === nextNodeId);
+
+                if (wantsCheckout && nextNode) {
+                    // Limpiar etiquetas técnicas del mensaje para el usuario
+                    const cleanedResponseText = responseText.replace(/\[TRIGGER_CHECKOUT\]/g, '').trim();
+                    const advanceRes = await this.advanceAndCollect(flowData, nextNode, session, flow, userInput);
+                    return {
+                        messages: cleanedResponseText ? [cleanedResponseText, ...advanceRes.messages] : advanceRes.messages,
+                        session: advanceRes.session,
+                        executionPath: advanceRes.executionPath,
+                        technicalLogs: advanceRes.technicalLogs
+                    };
                 }
                 
                 // Actualizar la sesión para que permanezca en el nodo IA esperando más input
@@ -525,6 +569,15 @@ export class BotRuntimeService {
                         }
                         await this.updateSession(session, node.id, 'input');
                     } else {
+                        // Si el usuario aún no ha escrito nada (ej: apenas se envió el mensaje de bienvenida START),
+                        // pausamos en el nodo de IA esperando su primer mensaje en lugar de llamar a la IA con mensaje vacío.
+                        if (!userInput || !userInput.trim()) {
+                            await this.updateSession(session, node.id, 'ai_input');
+                            if (!session.technicalLogs) session.technicalLogs = [];
+                            session.technicalLogs.push(tLog);
+                            return { messages, session, executionPath, technicalLogs: session.technicalLogs };
+                        }
+
                         // ✅ MOTOR REAL: Enviar el flujo completo al backend
                         // El backend usa Skills (catalog_search, add_to_cart),
                         // memoria conversacional y soporte multi-proveedor IA
@@ -542,27 +595,55 @@ export class BotRuntimeService {
                             flow_data: `[${(flowData?.nodes?.length || 0)} nodos, ${(flowData?.connections?.length || 0)} conexiones]`
                         };
 
-                        try {
-                            const { data: aiRes, error: aiErr } = await this.supabase.processBotAI(aiPayload);
-                            if (aiErr) throw aiErr;
-
-                            tLog.response = { content: aiRes?.content, success: aiRes?.success };
-                            const responseText = aiRes?.content || '';
-                            if (responseText) messages.push(responseText);
-                            else messages.push('🤖 El asistente no pudo generar una respuesta. Revisa la configuración del nodo.');
-                        } catch (aiExc: any) {
-                            console.warn('[BotRuntime] Edge Function bot-engine falló, intentando llamada directa a proveedor IA...', aiExc);
+                        if (this.isEdgeFunctionAvailable === false) {
                             const directResponse = await this.callDirectAI(session.merchant_id, userInput || '', node.data?.prompt);
                             if (directResponse) {
-                                tLog.response = { content: directResponse, fallback: true };
+                                tLog.response = { content: directResponse, direct: true };
                                 messages.push(directResponse);
+                                const updateCartMatch = directResponse.match(/\[UPDATE_CART:(.*?)\]/);
+                                if (updateCartMatch) {
+                                    try {
+                                        const cartPayload = JSON.parse(updateCartMatch[1]);
+                                        const existingCart = session.variables?.['cart'] || [];
+                                        session.variables = { ...(session.variables || {}), cart: [...existingCart, ...(cartPayload.items || [])] };
+                                    } catch (_) {}
+                                }
                             } else {
-                                tLog.response = { error: aiExc.message };
                                 messages.push('🤖 El asistente no está disponible en este momento. Intenta de nuevo.');
-                                await this.updateSession(session, node.id, 'ai_input');
-                                if (!session.technicalLogs) session.technicalLogs = [];
-                                session.technicalLogs.push(tLog);
-                                return { messages, session, executionPath, technicalLogs: session.technicalLogs };
+                            }
+                        } else {
+                            try {
+                                const { data: aiRes, error: aiErr } = await this.supabase.processBotAI(aiPayload);
+                                if (aiErr) throw aiErr;
+
+                                this.isEdgeFunctionAvailable = true;
+                                tLog.response = { content: aiRes?.content, success: aiRes?.success };
+                                const responseText = aiRes?.content || '';
+                                if (responseText) messages.push(responseText);
+                                else messages.push('🤖 El asistente no pudo generar una respuesta. Revisa la configuración del nodo.');
+                            } catch (aiExc: any) {
+                                this.isEdgeFunctionAvailable = false;
+                                console.warn('[BotRuntime] Edge Function bot-engine falló, pasando a llamada directa...', aiExc);
+                                const directResponse = await this.callDirectAI(session.merchant_id, userInput || '', node.data?.prompt);
+                                if (directResponse) {
+                                    tLog.response = { content: directResponse, fallback: true };
+                                    messages.push(directResponse);
+                                    const updateCartMatch = directResponse.match(/\[UPDATE_CART:(.*?)\]/);
+                                    if (updateCartMatch) {
+                                        try {
+                                            const cartPayload = JSON.parse(updateCartMatch[1]);
+                                            const existingCart = session.variables?.['cart'] || [];
+                                            session.variables = { ...(session.variables || {}), cart: [...existingCart, ...(cartPayload.items || [])] };
+                                        } catch (_) {}
+                                    }
+                                } else {
+                                    tLog.response = { error: aiExc.message };
+                                    messages.push('🤖 El asistente no está disponible en este momento. Intenta de nuevo.');
+                                    await this.updateSession(session, node.id, 'ai_input');
+                                    if (!session.technicalLogs) session.technicalLogs = [];
+                                    session.technicalLogs.push(tLog);
+                                    return { messages, session, executionPath, technicalLogs: session.technicalLogs };
+                                }
                             }
                         }
                         await this.updateSession(session, node.id, 'ai_input');
@@ -765,30 +846,20 @@ export class BotRuntimeService {
                     });
                 }
 
-                // 2. Crear la orden maestra
-                let orderRes = await this.supabase.createOrder({
+                // 2. Crear la orden maestra (usando columnas reales del esquema: merchant_id, customer_id, total, delivery_address, notes, source, closing_agent_type, internal_note)
+                const orderPayload: any = {
                     merchant_id: session.merchant_id,
                     customer_id: session.customer_id || null,
-                    customer_name: customerName,
                     total: total,
                     status: 'pending',
                     source: 'bot_flow',
                     closing_agent_type: 'bot',
                     delivery_address: deliveryAddress,
-                    notes: orderNotes,
-                    internal_note: `Pedido vía Bot Flow. Variables: ${JSON.stringify(vars)}`
-                });
+                    notes: orderNotes ? `${orderNotes} (Cliente: ${customerName}, Tel: ${customerPhone})` : `Cliente: ${customerName}, Tel: ${customerPhone}`,
+                    internal_note: `Cliente: ${customerName} | Tel: ${customerPhone} | Envío: ${deliveryAddress}`
+                };
 
-                if (orderRes.error && (orderRes.error.message.includes('column') || orderRes.error.message.includes('cache'))) {
-                    console.warn('⚠️ [BotRuntime] Detectado esquema local antiguo, reintentando registro básico...');
-                    orderRes = await this.supabase.createOrder({
-                        merchant_id: session.merchant_id,
-                        customer_id: session.customer_id || null,
-                        total: total,
-                        status: 'pending',
-                        delivery_address: deliveryAddress
-                    });
-                }
+                let orderRes = await this.supabase.createOrder(orderPayload);
 
                 const { data: order, error } = orderRes;
 
@@ -1030,9 +1101,11 @@ Respuesta final sintetizada para el cliente:`;
         }
     }
 
+    private isEdgeFunctionAvailable: boolean | null = null;
+
     /**
-     * Respaldo directo en cliente: Si la Edge Function 'bot-engine' no responde o falla,
-     * llamamos directamente al proveedor del comercio (OpenRouter, Gemini, Groq, OpenAI).
+     * Respaldo directo en cliente: Llama directamente al proveedor del comercio
+     * (OpenRouter, Gemini, Groq, OpenAI) con detección rápida de intenciones de menú.
      */
     public async callDirectAI(merchantId: string, userMessage: string, customSystemPrompt?: string): Promise<string | null> {
         try {
@@ -1059,10 +1132,20 @@ Respuesta final sintetizada para el cliente:`;
                         .join('\n');
             }
 
+            const promptRules = `
+INSTRUCCIONES CLAVE DE RESPUESTA:
+1. Sé conciso y directo (máximo 2 a 3 oraciones por respuesta).
+2. Si el cliente menciona un producto del catálogo (por ejemplo "peperoni", "pepperoni", "margherita", "coca cola"), ASUME que desea pedirlo de inmediato.
+3. Al identificar un producto que el cliente quiere ordenar, incluye SIEMPRE la etiqueta técnica de carrito:
+   [UPDATE_CART:{"items":[{"id":"<ID>","name":"<NOMBRE>","price":<PRECIO>,"quantity":1}]}]
+4. Confirma el pedido cordialmente y pregunta por bebida o si desea finalizar su orden.
+5. Si el cliente dice que desea finalizar, pagar, cerrar la orden o "nada más", incluye la etiqueta: [TRIGGER_CHECKOUT]
+6. NO dudes ni preguntes por ingredientes obvios ni debatas el idioma o nombre. Ve directo al servicio.`;
+
             const systemPrompt = (customSystemPrompt ? customSystemPrompt + '\n\n' : '') + 
-                (compiledPrompt || `Eres el asistente virtual de ${merchant.name}.`) + 
+                (compiledPrompt || `Eres el mesero virtual de ${merchant.name}.`) + 
                 catalogText + 
-                `\n\nSi el cliente desea ordenar, incluye [UPDATE_CART:{"items":[{"id":"...","name":"...","price":...,"quantity":1}]}]`;
+                promptRules;
 
             if (provider === 'openrouter' || provider === 'openai' || provider === 'groq' || provider === 'deepseek' || provider === 'cerebras') {
                 let url = 'https://openrouter.ai/api/v1/chat/completions';
@@ -1083,8 +1166,8 @@ Respuesta final sintetizada para el cliente:`;
                             { role: 'system', content: systemPrompt },
                             { role: 'user', content: userMessage }
                         ],
-                        max_tokens: 1024,
-                        temperature: 0.7
+                        max_tokens: 2048,
+                        temperature: 0.5
                     })
                 });
 
@@ -1100,7 +1183,8 @@ Respuesta final sintetizada para el cliente:`;
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         system_instruction: { parts: [{ text: systemPrompt }] },
-                        contents: [{ role: 'user', parts: [{ text: userMessage }] }]
+                        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+                        generationConfig: { maxOutputTokens: 2048, temperature: 0.5 }
                     })
                 });
 

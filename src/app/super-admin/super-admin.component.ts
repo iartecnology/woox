@@ -13,6 +13,7 @@ import { AppInfoPanelComponent } from '../app-info-panel/app-info-panel.componen
 import { MobileService } from '../mobile.service';
 import { PwaService } from '../pwa.service';
 import { supabase } from '../supabase-config';
+import { environment } from '../../environments/environment';
 
 interface Team {
     id: string;
@@ -1029,8 +1030,8 @@ export class SuperAdminComponent implements OnInit {
         use_logo_image: localStorage.getItem('use_logo_image') === 'true',
         currency: localStorage.getItem('platform_currency') || 'COP',
         language: localStorage.getItem('platform_language') || 'es',
-        supabase_url: localStorage.getItem('supabase_url') || 'https://khgegukjrtyjmonhavan.supabase.co',
-        supabase_key: localStorage.getItem('supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoZ2VndWtqcnR5am1vbmhhdmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTQ4MTAsImV4cCI6MjA4NTM3MDgxMH0.V-dc1zSkU5R5hj45ihWsHR-9FWFTP4qxWyVUnTC8qdc',
+        supabase_url: localStorage.getItem('supabase_url') || environment.supabaseUrl,
+        supabase_key: localStorage.getItem('supabase_key') || environment.supabaseAnonKey,
         evolution_api_url: localStorage.getItem('evolution_api_url') || '',
         evolution_api_key: localStorage.getItem('evolution_api_key') || '',
         pwa_icon_url: localStorage.getItem('pwa_icon_url') || '',
@@ -3070,9 +3071,8 @@ export class SuperAdminComponent implements OnInit {
 
     async setupTelegramWebhook(botToken: string, merchantId: string) {
         try {
-            // URL corregida con el PROJECT ID REAL
-            const projectId = 'khgegukjrtyjmonhavan';
-            const webhookUrl = `https://${projectId}.supabase.co/functions/v1/telegram-webhook?merchant_id=${merchantId}`;
+            const baseUrl = this.platformConfig?.supabase_url || environment.supabaseUrl;
+            const webhookUrl = `${baseUrl}/functions/v1/telegram-webhook?merchant_id=${merchantId}`;
 
             const response = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
                 method: 'POST',

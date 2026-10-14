@@ -64,16 +64,17 @@ const ENV_KEY_MAP: Record<string, string> = {
 /**
  * Detecta el proveedor correcto basándose en el nombre del modelo.
  */
-function detectProviderFromModel(model: string): string {
+function detectProviderFromModel(model: string, explicitProvider?: string): string {
     const m = model.toLowerCase();
+    // Si contiene '/' típicamente es OpenRouter (ej: nvidia/nemotron-..., meta-llama/...) o si el proveedor explícito es openrouter
+    if (explicitProvider === 'openrouter' || m.includes('/') || m.includes('openrouter')) return 'openrouter';
     if (m.includes('llama') || m.includes('mixtral') || m.includes('whisper')) return 'groq';
     if (m.includes('gpt-') || m.includes('o1-') || m.includes('o3-')) return 'openai';
     if (m.includes('deepseek')) return 'deepseek';
     if (m.includes('gemini') || m.includes('gemma')) return 'google_gemini';
-    if (m.includes('openrouter')) return 'openrouter';
     if (m.includes('cerebras')) return 'cerebras';
     if (m.includes('glm')) return 'zai';
-    return 'google_gemini'; // default
+    return explicitProvider || 'google_gemini'; // default
 }
 
 /**
@@ -102,14 +103,13 @@ export function resolveAIConfig(
     // 1. Resolver modelo (Comercio > Nodo > Plataforma > Default)
     let model = merchant?.ai_model || nodeData?.model || platform?.ai_model || 'gemini-flash-latest';
 
-    // 2. Resolver proveedor (auto-detectar del modelo tiene prioridad sobre config mal puesta)
-    const detectedProvider = detectProviderFromModel(model);
-    let provider = merchant?.ai_provider || nodeData?.provider || 'google_gemini';
+    // 2. Resolver proveedor
+    const rawProvider = merchant?.ai_provider || nodeData?.provider || 'google_gemini';
+    const detectedProvider = detectProviderFromModel(model, rawProvider);
+    let provider = detectedProvider;
 
-    // Auto-corrección: si el modelo es de un proveedor diferente al configurado, usar el detectado
-    if (detectedProvider !== provider) {
-        console.log(`[AI-ADAPTER] Auto-corrección: proveedor ${provider} → ${detectedProvider} (modelo: ${model})`);
-        provider = detectedProvider;
+    if (rawProvider !== provider) {
+        console.log(`[AI-ADAPTER] Auto-corrección: proveedor ${rawProvider} → ${provider} (modelo: ${model})`);
     }
 
     // 3. Normalizar modelo
@@ -146,9 +146,10 @@ export function resolveAIConfig(
         apiKey = Deno.env.get(ENV_KEY_MAP[provider] || '') || platform?.ai_api_key || '';
     }
 
-    // 5. Resolver URL base (solo para custom/ollama/lmstudio)
-    let baseUrl = merchant?.ai_api_url || merchant?.ollama_base_url || merchant?.lmstudio_base_url || undefined;
-    if (baseUrl && (provider === 'custom' || provider === 'ollama' || provider === 'lmstudio')) {
+    // 5. Resolver URL base (solo si el proveedor explícito es custom, ollama o lmstudio)
+    let baseUrl: string | undefined = undefined;
+    if (provider === 'custom' || provider === 'ollama' || provider === 'lmstudio') {
+        baseUrl = merchant?.ai_api_url || merchant?.ollama_base_url || merchant?.lmstudio_base_url || undefined;
         provider = 'custom' as any;
     }
 
@@ -403,6 +404,10 @@ async function callOpenAICompatibleWithTools(
         max_tokens: config.maxTokens,
         stream: false
     };
+    if (config.provider === 'openrouter') {
+        // En OpenRouter, desactivar tokens de razonamiento superfluos para bots de chat interactivo ultrarrápidos
+        requestBody.reasoning = { max_tokens: 0 };
+    }
     if (oaiTools) {
         requestBody.tools = oaiTools;
         requestBody.tool_choice = 'auto';

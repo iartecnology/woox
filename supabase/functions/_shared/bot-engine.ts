@@ -60,8 +60,8 @@ function evaluateCondition(operator: string, varValue: string, targetValue: stri
 
 function formatPrice(amount: number | string): string {
     const num = Number(amount);
-    if (isNaN(num)) return String(amount);
-    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(num).replace('COP', '').trim();
+    if (isNaN(num)) return String(amount).replace(/^\$+/, '');
+    return num.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 async function createOrderSafe(supabase: any, orderData: any) {
@@ -608,12 +608,41 @@ async function executeAgentTool(
         }
 
         case 'remove_from_cart': {
-            const productName = toolArgs?.product_name || '';
+            const productNameRaw = (toolArgs?.product_name || toolArgs?.query || '').toLowerCase().trim();
+            const quantityToRemove = parseInt(toolArgs?.quantity) || 0;
             const cart = variables['cart'] || [];
-            const before = cart.length;
-            variables['cart'] = cart.filter((it: any) => !it.name.toLowerCase().includes(productName.toLowerCase()));
-            if (variables['cart'].length < before) return `✅ "${productName}" eliminado del carrito.`;
-            return `No encontré "${productName}" en tu carrito.`;
+            if (cart.length === 0) return 'Tu carrito ya está vacío.';
+
+            const cleanTarget = productNameRaw.replace(/^(papas|una|un|el|la|los|las|pizza|pizzas)\s+/i, '').replace(/s$/, '').trim();
+            
+            const itemIndex = cart.findIndex((it: any) => {
+                const name = it.name.toLowerCase();
+                return name.includes(productNameRaw) || name.includes(cleanTarget) || cleanTarget.includes(name.replace(/s$/, ''));
+            });
+
+            if (itemIndex === -1) {
+                return `No encontré "${productNameRaw}" en tu carrito actual.`;
+            }
+
+            const item = cart[itemIndex];
+            if (quantityToRemove > 0 && quantityToRemove < item.qty) {
+                item.qty -= quantityToRemove;
+            } else {
+                // Si la cantidad es 1 y solo hay 1, o no se especificó cantidad, o es mayor/igual a la cantidad actual
+                if (quantityToRemove === 1 && item.qty > 1) {
+                    item.qty -= 1;
+                } else {
+                    cart.splice(itemIndex, 1);
+                }
+            }
+
+            variables['cart'] = cart;
+            const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
+            
+            if (cart.length === 0) {
+                return `✅ Se quitó ${item.name} de tu carrito. Tu carrito ahora está vacío.`;
+            }
+            return `✅ Se actualizó tu carrito. Ahora tienes:\n${cart.map((it: any) => `• ${it.name} x${it.qty} = $${formatPrice(it.price * it.qty)}`).join('\n')}\n\n💰 Total: $${formatPrice(total)}`;
         }
 
         case 'register_order': {
@@ -850,11 +879,12 @@ const TOOL_DEFINITIONS: Record<string, any> = {
     },
     remove_from_cart: {
         name: 'remove_from_cart',
-        description: 'Elimina un producto del carrito del cliente.',
+        description: 'Elimina o disminuye la cantidad de un producto en el carrito del cliente cuando solicite quitarlo o cancelarlo.',
         parameters: {
             type: 'object',
             properties: {
-                product_name: { type: 'string', description: 'Nombre del producto a eliminar del carrito' }
+                product_name: { type: 'string', description: 'Nombre del producto a quitar o reducir del carrito' },
+                quantity: { type: 'number', description: 'Cantidad de unidades a quitar. Si no se especifica o es 1, quita 1 unidad.' }
             },
             required: ['product_name']
         }
@@ -1392,6 +1422,16 @@ async function _processFlowFromState(
                     return null;
                 }).filter((d: any) => d !== null);
 
+                // Auto-inyectar get_cart y remove_from_cart si el agente tiene add_to_cart
+                if (toolDefs.some(t => t.name === 'add_to_cart')) {
+                    if (!toolDefs.some(t => t.name === 'remove_from_cart')) {
+                        toolDefs.push(TOOL_DEFINITIONS['remove_from_cart']);
+                    }
+                    if (!toolDefs.some(t => t.name === 'get_cart')) {
+                        toolDefs.push(TOOL_DEFINITIONS['get_cart']);
+                    }
+                }
+
                 console.log(`[BOT-ENGINE] Skills cargadas: ${toolDefs.map(t => t.name).join(', ') || 'ninguna'}`);
 
                 // ── 5. CONSTRUIR SYSTEM PROMPT ────────────────────────────
@@ -1401,22 +1441,23 @@ ${compiledPrompt || 'Eres un asistente de ventas amigable.'}
 ### INSTRUCCIONES ESPECÍFICAS DE ESTA ETAPA:
 ${node.data.prompt || ''}
 
-### INSTRUCCIONES OPERATIVAS:
-1. USA LAS HERRAMIENTAS NATIVAS: No escribas el nombre de la herramienta en texto ni uses corchetes como [UPDATE_CART]. Usa la función técnica real de function calling.
-2. NO EXPLIQUES TUS ACCIONES: No digas "Voy a usar la herramienta...". Simplemente úsala y presenta los resultados.
-3. PRIORIZA EL CATÁLOGO: Solo ofrece productos que encuentres con catalog_search.
-4. AGREGAR AL CARRITO INMEDIATAMENTE: Si el cliente indica que quiere un producto (ej: 'quiero una real avocado', 'dame 2 clasicas', o afirmativo tras recomendar algo), DEBES llamar a la herramienta 'add_to_cart' de inmediato con su cantidad. No pidas confirmación doble para agregar; ¡agrégalo y confírmale con entusiasmo!
-5. CONFIRMA EL CARRITO ACTUAL: En cada respuesta tras agregar o consultar, menciona claramente qué productos están en el carrito y cuál es el total.
-6. CIERRE INTELIGENTE (HÍBRIDO vs AUTÓNOMO):
-   - Si dispones de la herramienta 'checkout_trigger' (flujo híbrido con formulario visual posterior): cuando el cliente diga 'eso es todo', 'nada más', 'quiero pagar', 'no' o termine de pedir, LLAMA INMEDIATAMENTE A 'checkout_trigger'. NO pidas nombre ni dirección en el chat.
-   - Si NO tienes 'checkout_trigger' pero sí 'register_order' (flujo autónomo): pide amablemente en un solo mensaje Nombre completo, Dirección y Celular. En cuanto te los proporcione, llama a 'register_order'. Tienes prohibido volver a listar el catálogo cuando el cliente ya te está dando sus datos.
-7. RESPUESTAS CORTAS: Sé amable, vendedor y mantén tus respuestas breves (máximo 3 párrafos).
-8. VERACIDAD ABSOLUTA: Toda información de ingredientes y precios debe provenir de 'catalog_search'. Prohibido inventar productos o negociar precios.
-9. MANEJO DE NEGATIVAS ('No'): Si el cliente responde 'no' a tu pregunta de si desea algo más, procede de inmediato a cerrar (usando 'checkout_trigger' si está presente, o pidiendo datos de envío). Nunca muestres el menú completo tras un 'no'.
+### INSTRUCCIONES OPERATIVAS ESTRICTAS:
+1. HERRAMIENTAS TÉCNICAS: NUNCA escribas comandos técnicos en texto plano como "add to cart", "catalog_search", o corchetes [UPDATE_CART]. Úsalas mediante la llamada de funciones del sistema.
+2. NO EXPLIQUES TUS ACCIONES TÉCNICAS: No digas "Voy a agregar...", simplemente ejecuta la herramienta y confirma amablemente el resultado.
+3. ESTRICTAMENTE PROHIBIDO INVENTAR PRODUCTOS O INGREDIENTES: Solo puedes ofrecer o mencionar productos que existan textualmente en 'catalog_search'. Usa únicamente la descripción oficial (no agregues ingredientes inventados como 'verduras seleccionadas').
+4. AGREGAR AL CARRITO INMEDIATAMENTE: Si el cliente pide o confirma un producto (ej: 'quiero dos margaritas', 'si una coca cola', 'agrégala'), LLAMA DE INMEDIATO a 'add_to_cart' con su cantidad. No preguntes si es por separado ni pidas doble confirmación.
+5. QUITAR O MODIFICAR CARRITO: Si el cliente dice 'quita una de pepperoni', 'cancela la bebida', 'elimina X', LLAMA DE INMEDIATO a la herramienta 'remove_from_cart' indicando el nombre y cantidad.
+6. TOTALES EXACTOS DEL CARRITO: El contenido y total del carrito deben ser exactamente los devueltos por las herramientas. No inventes sumas manuales ni agregues signos de dólar duplicados ($$).
+7. CIERRE INTELIGENTE (HÍBRIDO vs AUTÓNOMO):
+   - Si dispones de la herramienta 'checkout_trigger': cuando el cliente diga 'eso es todo', 'nada más', 'quiero pagar', 'no' o termine de pedir, LLAMA INMEDIATAMENTE A 'checkout_trigger'. NO pidas nombre ni dirección en el chat.
+   - Si NO tienes 'checkout_trigger' pero sí 'register_order': pide amablemente en un solo mensaje Nombre completo, Dirección y Celular. En cuanto te los proporcione, llama a 'register_order'. Tienes prohibido volver a listar el catálogo cuando el cliente ya te está dando sus datos.
+8. RESPUESTAS CORTAS Y NATURALES: Sé amable, vendedor y mantén tus respuestas breves. Si ya estás conversando con el cliente, no vuelvas a saludarlo con "Hola de nuevo".
+9. MANEJO DE NEGATIVAS ('No'): Si el cliente responde 'no' a tu pregunta de si desea algo más, procede de inmediato al cierre de compra. Nunca muestres el menú tras una negativa.
+10. NO OFRECER "MÁS OPCIONES" SI YA MOSTRASTE EL MENÚ COMPLETO: Si ya listaste los productos disponibles, NO preguntes "¿te gustaría ver más opciones?". En su lugar, invita al cliente a elegir directamente: "¿Cuál te gustaría pedir hoy?".
 
 ### ESTADO ACTUAL DE LA SESIÓN:
 - Tienda: ${merchant?.name || 'Nuestra tienda'}
-- Carrito del cliente: ${variables['cart']?.length > 0 ? variables['cart'].map((it: any) => it.name + ' x' + it.qty + ' ($' + (it.price * it.qty) + ')').join(', ') : 'vacío'}
+- Carrito del cliente: ${variables['cart']?.length > 0 ? variables['cart'].map((it: any) => it.name + ' x' + it.qty + ' ($' + formatPrice(it.price * it.qty) + ')').join(', ') : 'vacío'}
 - Número de pedido activo: ${variables['orderNumber'] || 'ninguno'}
 - Herramienta de cierre presente: ${toolDefs.some(t => t.name === 'checkout_trigger') ? 'checkout_trigger (Flujo Híbrido -> NO pedir datos en chat)' : (toolDefs.some(t => t.name === 'register_order') ? 'register_order (Cierre Autónomo -> Pedir datos en chat)' : 'ninguna')}
 `;
@@ -1893,7 +1934,13 @@ ${node.data.prompt || ''}
         }
 
         // ── PAUSAR O SEGUIR ──────────────────────────
-        if (node.type === 'question') {
+        if (node.type === 'start') {
+            debugLogs.push(`[START] Mensaje inicial emitido. Esperando respuesta del cliente.`);
+            const conn = connections.find((c: any) => c.from === currentNodeId && (c.fromPort === 'output' || !c.fromPort));
+            currentNodeId = conn ? conn.to : null;
+            waitingFor = 'ai_input';
+            break;
+        } else if (node.type === 'question') {
             debugLogs.push(`[WAIT] Question: ${node.data?.label || node.type}. Waiting for input.`);
             waitingFor = 'input'; break;
         } else if (node.type === 'menu') {

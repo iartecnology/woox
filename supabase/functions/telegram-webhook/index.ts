@@ -23,6 +23,9 @@ function sanitizeMarkdown(text: string): string {
     sanitized = sanitized.replace(/\[IMAGE_URL:.*?\]/gi, "");
     sanitized = sanitized.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*\}\s*\]/g, "");
     sanitized = sanitized.replace(/\[UPDATE[_ ]CART:\s*\{[\s\S]*?\}\s*\]/g, "");
+    sanitized = sanitized.replace(/add\s+to\s+cart\s+product\s+name=[^\n]+/gi, "");
+    sanitized = sanitized.replace(/catalog_search\s+query=[^\n]+/gi, "");
+    sanitized = sanitized.replace(/\${2,}/g, "$");
     
     // 2. Telegram Markdown V1 es muy estricto con los caracteres especiales sin cerrar.
     // Aseguramos que los asteriscos esten balanceados para negrita

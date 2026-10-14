@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../supabase.service';
 import { NotificationService } from '../notification.service';
+import { environment } from '../../environments/environment';
 
 @Component({
     selector: 'app-omnichannel',
@@ -112,19 +113,19 @@ export class OmnichannelComponent implements OnInit, OnDestroy {
 
     // --- WEBHOOK URL GENERATORS ---
     getWhatsAppCloudWebhookUrl(): string {
-        const base = this.platformConfig?.supabase_url || 'https://khgegukjrtyjmonhavan.supabase.co';
+        const base = this.platformConfig?.supabase_url || environment.supabaseUrl;
         const identifier = this.merchant?.merchant_code || this.merchant?.id || this.merchantId;
         return `${base}/functions/v1/whatsapp-webhook?merchant_id=${identifier}`;
     }
 
     getTelegramWebhookUrl(): string {
-        const base = this.platformConfig?.supabase_url || 'https://khgegukjrtyjmonhavan.supabase.co';
+        const base = this.platformConfig?.supabase_url || environment.supabaseUrl;
         const identifier = this.merchant?.merchant_code || this.merchant?.id || this.merchantId;
         return `${base}/functions/v1/telegram-webhook?merchant_id=${identifier}`;
     }
 
     getFacebookWebhookUrl(): string {
-        const base = this.platformConfig?.supabase_url || 'https://khgegukjrtyjmonhavan.supabase.co';
+        const base = this.platformConfig?.supabase_url || environment.supabaseUrl;
         const identifier = this.merchant?.merchant_code || this.merchant?.id || this.merchantId;
         return `${base}/functions/v1/facebook-webhook?merchant_id=${identifier}`;
     }
