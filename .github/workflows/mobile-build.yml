@@ -37,7 +37,7 @@ jobs:
 
       - name: 📦 Instalar dependencias móviles
         working-directory: woox-mobile
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: ⚙️ Expo Prebuild (Generar proyecto Android nativo)
         working-directory: woox-mobile
