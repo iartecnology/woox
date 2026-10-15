@@ -205,10 +205,9 @@ async function executeAction(supabase: any, node: any, variables: any, merchantI
                     product_name: it.name,
                     quantity: it.qty, 
                     unit_price: it.price, 
-                    subtotal: it.price * it.qty,
-                    notes: it.notes || null
+                    subtotal: it.price * it.qty
                 }));
-                await supabase.from('order_items').insert(items);
+                { const { error: itemsErr } = await supabase.from('order_items').insert(items); if (itemsErr) console.error('[BOT-ENGINE] Error guardando order_items:', itemsErr); }
             }
             
             // --- 3. CACHEAR EL RESUMEN DEL CARRITO Y LIMPIAR LA SESIÓN ---
@@ -701,10 +700,9 @@ async function executeAgentTool(
                     product_name: it.name,
                     quantity: it.qty, 
                     unit_price: it.price, 
-                    subtotal: it.price * it.qty,
-                    notes: it.notes || null
+                    subtotal: it.price * it.qty
                 }));
-                await supabase.from('order_items').insert(items);
+                { const { error: itemsErr } = await supabase.from('order_items').insert(items); if (itemsErr) console.error('[BOT-ENGINE] Error guardando order_items:', itemsErr); }
                 variables['cart'] = []; // Limpiar carrito tras registrar
                 
                 // NOTIFICAR SI EL PEDIDO SE CREÓ CORRECTAMENTE
@@ -1512,6 +1510,9 @@ ${node.data.prompt || ''}
 8. SALUDOS Y NUEVOS PEDIDOS: Si el cliente te saluda ("Hola", "Buenas") o solicita hacer un nuevo pedido, salúdalo con calidez y pregúntale qué se le antoja ordenar hoy. NUNCA repitas la despedida o confirmación de un pedido anterior.
 9. MANEJO DE NEGATIVAS ('No'): Si el cliente responde 'no' a tu pregunta de si desea algo más, procede de inmediato al cierre de compra. Nunca muestres el menú tras una negativa.
 10. NO OFRECER "MÁS OPCIONES" SI YA MOSTRASTE EL MENÚ COMPLETO: Si ya listaste los productos disponibles, NO preguntes "¿te gustaría ver más opciones?". En su lugar, invita al cliente a elegir directamente: "¿Cuál te gustaría pedir hoy?".
+11. VER PEDIDO/CARRITO: Si el cliente dice 'muéstrame el pedido', 'ver carrito', 'qué llevo' o similar, LLAMA SIEMPRE a 'get_cart' y muestra su resultado. NUNCA respondas de memoria.
+12. CANTIDADES AMBIGUAS: Si el cliente responde algo ambiguo como 'una y una', 'dos de esas', NO adivines ni agregues productos que no mencionó; pregunta cuáles productos y cantidades exactas.
+13. DATOS DE ENTREGA: Si el cliente responde 'no' o 'ok' cuando ya pediste nombre, dirección y teléfono, vuelve a pedirlos brevemente en lugar de reiniciar la conversación.
 
 ### ESTADO ACTUAL DE LA SESIÓN:
 - Tienda: ${merchant?.name || 'Nuestra tienda'}
@@ -1566,7 +1567,7 @@ ${node.data.prompt || ''}
                     } else if (/^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches)/i.test(messageText.trim())) {
                         finalCleanResponse = `¡Benvenuto a ${merchant?.name || 'La Piazza Pizzería'}! 🍕 Tu pizzería artesanal italiana. ¿En qué podemos deleitarte hoy?`;
                     } else {
-                        finalCleanResponse = `¡Entendido! Con gusto te colaboro con tu orden en ${merchant?.name || 'nuestro restaurante'}. ¿Qué plato o pizza te gustaría añadir a tu pedido? 🍕`;
+                        finalCleanResponse = `Disculpa, no logré entender bien tu mensaje. ¿Me lo repites o me indicas qué te gustaría pedir? 🍕`;
                     }
                 }
 
