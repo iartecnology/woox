@@ -1,3 +1,4 @@
+import { formatOrderNumber } from '../../../src/lib/orderNumber';
 import React, { useState } from 'react';
 import {
   View,
@@ -112,7 +113,7 @@ export default function OrdersScreen() {
         <View style={styles.cardHeader}>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.orderNumber}>Orden #{item.id.slice(0, 6).toUpperCase()}</Text>
+              <Text style={styles.orderNumber}>Orden #{formatOrderNumber(item)}</Text>
               <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
             </View>
             <Text style={styles.customerName}>

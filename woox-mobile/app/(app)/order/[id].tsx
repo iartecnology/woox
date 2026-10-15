@@ -1,3 +1,4 @@
+import { formatOrderNumber } from '../../../src/lib/orderNumber';
 import React, { useState } from 'react';
 import {
   View,
@@ -122,7 +123,7 @@ export default function OrderDetailScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Stack.Screen
         options={{
-          title: `Pedido #${order.id.slice(0, 6).toUpperCase()}`,
+          title: `Pedido #${formatOrderNumber(order)}`,
           headerShown: true,
           headerStyle: { backgroundColor: Colors.bgSecondary },
           headerTintColor: Colors.textPrimary,
@@ -134,7 +135,7 @@ export default function OrderDetailScreen() {
       <View style={styles.card}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.orderIdText}>ORDEN #{order.id.slice(0, 8).toUpperCase()}</Text>
+            <Text style={styles.orderIdText}>ORDEN #{formatOrderNumber(order, 8)}</Text>
             <Text style={styles.dateText}>
               {new Date(order.created_at).toLocaleDateString()} • {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>

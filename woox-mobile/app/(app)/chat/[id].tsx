@@ -1,3 +1,4 @@
+import { formatOrderNumber } from '../../../src/lib/orderNumber';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -217,7 +218,7 @@ export default function ChatDetailScreen() {
                   <View style={styles.snippetHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Text style={styles.snippetOrderNumber}>
-                        #{ord.id.slice(0, 6).toUpperCase()}
+                        #{formatOrderNumber(ord)}
                       </Text>
                       {isLatest && (
                         <View style={styles.latestBadge}>

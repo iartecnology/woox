@@ -42,6 +42,7 @@ export interface Customer {
 
 export interface Order {
   id: string;
+  order_number?: number;
   merchant_id: string;
   customer_id?: string;
   conversation_id?: string;
