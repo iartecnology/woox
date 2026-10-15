@@ -73,7 +73,7 @@ export default function ChatDetailScreen() {
         >
           {isAi && (
             <View style={styles.botBadge}>
-              <Ionicons name="sparkles" size={12} color="#059669" />
+              <Ionicons name="sparkles" size={12} color="#FFFFFF" />
               <Text style={styles.botBadgeText}>Respuesta IA</Text>
             </View>
           )}
@@ -85,7 +85,7 @@ export default function ChatDetailScreen() {
           )}
           {isCustomer && (
             <View style={styles.customerBadge}>
-              <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textMuted} />
+              <Ionicons name="chatbubble-ellipses-outline" size={12} color="#047857" />
               <Text style={styles.customerBadgeText}>Cliente</Text>
             </View>
           )}
@@ -93,7 +93,8 @@ export default function ChatDetailScreen() {
           <Text
             style={[
               styles.messageText,
-              isHumanAgent && styles.messageTextInverse,
+              (isAi || isHumanAgent) && styles.messageTextInverse,
+              isCustomer && styles.messageTextCustomer,
             ]}
           >
             {item.content}
@@ -102,7 +103,8 @@ export default function ChatDetailScreen() {
           <Text
             style={[
               styles.messageTime,
-              isHumanAgent && styles.messageTimeInverse,
+              (isAi || isHumanAgent) && styles.messageTimeInverse,
+              isCustomer && styles.messageTimeCustomer,
             ]}
           >
             {item.created_at
@@ -458,13 +460,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   bubbleCustomer: {
-    backgroundColor: Colors.bgSecondary,
+    backgroundColor: '#ECFDF5',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-    shadowColor: '#000',
+    borderColor: '#A7F3D0',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
@@ -473,10 +475,13 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   bubbleAi: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#72148F',
     borderBottomRightRadius: 4,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    shadowColor: '#72148F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
   },
   botBadge: {
     flexDirection: 'row',
@@ -487,7 +492,7 @@ const styles = StyleSheet.create({
   botBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#059669',
+    color: '#F5D0FE',
   },
   customerBadge: {
     flexDirection: 'row',
@@ -497,8 +502,8 @@ const styles = StyleSheet.create({
   },
   customerBadgeText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: Colors.textMuted,
+    fontWeight: '800',
+    color: '#047857',
   },
   messageText: {
     color: Colors.textPrimary,
@@ -508,6 +513,10 @@ const styles = StyleSheet.create({
   messageTextInverse: {
     color: '#FFFFFF',
   },
+  messageTextCustomer: {
+    color: '#064E3B',
+    fontWeight: '500',
+  },
   messageTime: {
     color: Colors.textMuted,
     fontSize: 10,
@@ -516,6 +525,9 @@ const styles = StyleSheet.create({
   },
   messageTimeInverse: {
     color: 'rgba(255, 255, 255, 0.75)',
+  },
+  messageTimeCustomer: {
+    color: '#047857',
   },
   inputContainer: {
     flexDirection: 'row',
