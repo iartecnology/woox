@@ -30,7 +30,7 @@ export default function OrdersScreen() {
   const router = useRouter();
   const { merchant } = useAuthStore();
   const { orders, isLoading, updateStatus, isUpdating, hasNewPendingOrder, acknowledgeAlert } = useOrders(merchant?.id);
-  type FilterType = 'all' | 'active' | 'completed' | 'pending' | 'preparing' | 'delivered';
+  type FilterType = 'all' | 'active' | 'completed' | 'pending' | 'preparing' | 'ready' | 'delivered';
   const [filter, setFilter] = useState<FilterType>('active');
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
@@ -49,6 +49,7 @@ export default function OrdersScreen() {
     if (filter === 'completed') return ['delivered', 'cancelled'].includes(o.status);
     if (filter === 'pending') return o.status === 'pending';
     if (filter === 'preparing') return o.status === 'preparing' || o.status === 'confirmed';
+    if (filter === 'ready') return o.status === 'ready';
     if (filter === 'delivered') return o.status === 'delivered';
     return true;
   });
@@ -252,6 +253,18 @@ export default function OrdersScreen() {
             style={[
               styles.statBox,
               { borderLeftWidth: 1, borderColor: Colors.borderSubtle },
+              filter === 'ready' && styles.statBoxActive,
+            ]}
+            onPress={() => setFilter(filter === 'ready' ? 'active' : 'ready')}
+          >
+            <Text style={[styles.statNumber, { color: '#4F46E5' }]}>{readyCount}</Text>
+            <Text style={styles.statLabel}>Listos</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.statBox,
+              { borderLeftWidth: 1, borderColor: Colors.borderSubtle },
               filter === 'delivered' && styles.statBoxActive,
             ]}
             onPress={() => setFilter(filter === 'delivered' ? 'active' : 'delivered')}
@@ -260,6 +273,45 @@ export default function OrdersScreen() {
             <Text style={styles.statLabel}>Entregados</Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* TABS DE FILTRADO RÁPIDO */}
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'active' && styles.filterTabActive]}
+          onPress={() => setFilter('active')}
+        >
+          <Text style={[styles.filterTabText, filter === 'active' && styles.filterTabTextActive]}>
+            Activos ({pendingCount + preparingCount + readyCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'preparing' && styles.filterTabActive]}
+          onPress={() => setFilter('preparing')}
+        >
+          <Text style={[styles.filterTabText, filter === 'preparing' && styles.filterTabTextActive]}>
+            Cocina ({preparingCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'ready' && styles.filterTabActive]}
+          onPress={() => setFilter('ready')}
+        >
+          <Text style={[styles.filterTabText, filter === 'ready' && styles.filterTabTextActive]}>
+            Listos ({readyCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'delivered' && styles.filterTabActive]}
+          onPress={() => setFilter('delivered')}
+        >
+          <Text style={[styles.filterTabText, filter === 'delivered' && styles.filterTabTextActive]}>
+            Entregados ({deliveredCount})
+          </Text>
+        </TouchableOpacity>
       </View>
 
 
