@@ -1391,7 +1391,20 @@ async function _processFlowFromState(
                     waitingFor = 'ai_input'; break;
                 }
 
-                // ── 3. GUARDAR MENSAJE DEL USUARIO EN HISTORIAL ───────────
+                // ── 3. DETECTAR SI ES UN NUEVO SALUDO / NUEVO PEDIDO TRAS UNA ORDEN COMPLETADA ──
+                const cleanMsg = messageText.trim().toLowerCase();
+                const isGreetingOrReset = /^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches|inicio|empezar|ordenar|menu|menú|nuevo pedido|otra vez|quiero pedir|pedir)$/i.test(cleanMsg);
+                
+                if (variables['orderNumber'] && isGreetingOrReset) {
+                    console.log(`[BOT-ENGINE] Nuevo ciclo detectado tras orden completada (${variables['orderNumber']}). Limpiando variables de orden previa.`);
+                    delete variables['orderNumber'];
+                    variables['cart'] = [];
+                    // Limpiar historial de la sesión previa para que el modelo no se quede pegado repitiendo la despedida
+                    await supabase.from('bot_flow_history').delete().eq('session_id', session.id);
+                    history.length = 0;
+                }
+
+                // ── 4. GUARDAR MENSAJE DEL USUARIO EN HISTORIAL (SIN DUPLICADOS) ───────────
                 const { data: lastHist } = await supabase.from('bot_flow_history')
                     .select('role, content')
                     .eq('session_id', session.id)
@@ -1414,7 +1427,7 @@ async function _processFlowFromState(
                     if (newHist) history.push(...newHist.reverse());
                 }
 
-                // ── 4. CARGAR SKILLS (HERRAMIENTAS) ───────────────────────
+                // ── 5. CARGAR SKILLS (HERRAMIENTAS) ───────────────────────
                 const skillConns = connections.filter((c: any) => c.to === node.id && c.toPort === 'skills_in');
                 const skills = skillConns.map((c: any) => nodes.find((n: any) => n.id === c.from)).filter((n: any) => n?.type === 'ai_skill');
                 const toolDefs: AIToolDef[] = skills.map((s: any) => {
@@ -1439,7 +1452,7 @@ async function _processFlowFromState(
 
                 console.log(`[BOT-ENGINE] Skills cargadas: ${toolDefs.map(t => t.name).join(', ') || 'ninguna'}`);
 
-                // ── 5. CONSTRUIR SYSTEM PROMPT ────────────────────────────
+                // ── 6. CONSTRUIR SYSTEM PROMPT ────────────────────────────
                 const systemPrompt = `
 ${compiledPrompt || 'Eres un asistente de ventas amigable.'}
 
@@ -1456,7 +1469,7 @@ ${node.data.prompt || ''}
 7. CIERRE INTELIGENTE (HÍBRIDO vs AUTÓNOMO):
    - Si dispones de la herramienta 'checkout_trigger': cuando el cliente diga 'eso es todo', 'nada más', 'quiero pagar', 'no' o termine de pedir, LLAMA INMEDIATAMENTE A 'checkout_trigger'. NO pidas nombre ni dirección en el chat.
    - Si NO tienes 'checkout_trigger' pero sí 'register_order': para registrar el pedido necesitas Nombre, Celular y Dirección de entrega. Pídelos en un solo mensaje o recopílalos. ¡OBLIGATORIO Y ESTRICTO!: En el momento exacto en que tengas los datos de entrega (o el cliente te dé su dirección final), TIENES PROHIBIDO confirmar el pedido con texto inventado. DEBES LLAMAR INMEDIATAMENTE A LA HERRAMIENTA 'register_order' pasándole address, customer_name y customer_phone. La herramienta generará y te devolverá el número de orden oficial (#ORD-...). Jamás inventes que el pedido está marchando sin haber llamado a 'register_order'.
-8. RESPUESTAS CORTAS Y NATURALES: Sé amable, vendedor y mantén tus respuestas breves. Si ya estás conversando con el cliente, no vuelvas a saludarlo con "Hola de nuevo".
+8. SALUDOS Y NUEVOS PEDIDOS: Si el cliente te saluda ("Hola", "Buenas") o solicita hacer un nuevo pedido, salúdalo con calidez y pregúntale qué se le antoja ordenar hoy. NUNCA repitas la despedida o confirmación de un pedido anterior.
 9. MANEJO DE NEGATIVAS ('No'): Si el cliente responde 'no' a tu pregunta de si desea algo más, procede de inmediato al cierre de compra. Nunca muestres el menú tras una negativa.
 10. NO OFRECER "MÁS OPCIONES" SI YA MOSTRASTE EL MENÚ COMPLETO: Si ya listaste los productos disponibles, NO preguntes "¿te gustaría ver más opciones?". En su lugar, invita al cliente a elegir directamente: "¿Cuál te gustaría pedir hoy?".
 
@@ -1469,7 +1482,7 @@ ${node.data.prompt || ''}
 `;
                 const finalUserMessage = userTemplate.replace('{{message}}', messageText);
 
-                // ── 6. CONSTRUIR HISTORIAL EN FORMATO UNIVERSAL ───────────
+                // ── 7. CONSTRUIR HISTORIAL EN FORMATO UNIVERSAL ───────────
                 const aiMessages: AIMessage[] = [
                     { role: 'system', content: systemPrompt }
                 ];
