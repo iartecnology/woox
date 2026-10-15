@@ -138,8 +138,8 @@ const styles = StyleSheet.create({
   },
   brandLogo: {
     width: '100%',
-    maxWidth: 140,
-    height: 38,
+    maxWidth: 210,
+    height: 56,
     marginBottom: 8,
   },
   subtitle: {
