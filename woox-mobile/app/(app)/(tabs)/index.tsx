@@ -20,7 +20,7 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: str
   pending: { label: 'Pendiente', color: '#DC2626', bg: '#FEE2E2' },
   confirmed: { label: 'Confirmado', color: '#2563EB', bg: '#EFF6FF' },
   preparing: { label: 'En Cocina', color: '#D97706', bg: '#FEF3C7' },
-  ready: { label: 'Listo p/ Entrega', color: '#72148F', bg: '#F7EDFA' },
+  ready: { label: 'Listo p/ Entrega', color: '#4F46E5', bg: '#EEF2FF' },
   delivered: { label: 'Entregado', color: '#059669', bg: '#D1FAE5' },
   cancelled: { label: 'Cancelado', color: '#4B5563', bg: '#F3F4F6' },
 };

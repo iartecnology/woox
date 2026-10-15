@@ -19,7 +19,7 @@
     "android": {
       "package": "com.woox.merchant",
       "adaptiveIcon": {
-        "backgroundColor": "#72148F",
+        "backgroundColor": "#4F46E5",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false

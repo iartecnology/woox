@@ -475,9 +475,9 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   bubbleAi: {
-    backgroundColor: '#72148F',
+    backgroundColor: '#4F46E5',
     borderBottomRightRadius: 4,
-    shadowColor: '#72148F',
+    shadowColor: '#4F46E5',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.15,
     shadowRadius: 3,
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   botBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#F5D0FE',
+    color: '#C7D2FE',
   },
   customerBadge: {
     flexDirection: 'row',
