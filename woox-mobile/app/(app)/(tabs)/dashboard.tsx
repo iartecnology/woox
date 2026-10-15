@@ -16,6 +16,7 @@ import { useCatalogManagement } from '../../../src/hooks/useCatalogManagement';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../src/constants/theme';
 import { useRouter } from 'expo-router';
+import { AnalyticsCharts } from '../../../src/components/AnalyticsCharts';
 
 export default function DashboardScreen() {
   const { merchant } = useAuthStore();
@@ -138,6 +139,9 @@ export default function DashboardScreen() {
               <Text style={styles.kpiSub}>Histórico registrado</Text>
             </TouchableOpacity>
           </View>
+
+          {/* GRÁFICAS DE VENTAS Y PEDIDOS POR DÍAS Y MESES */}
+          <AnalyticsCharts orders={orders} />
 
           {/* SECCIÓN 2: ATENCIÓN OMNICANAL & IA */}
           <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
