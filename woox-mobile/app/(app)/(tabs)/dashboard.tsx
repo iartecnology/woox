@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAuthStore } from '../../../src/stores/useAuthStore';
+import { useSettingsStore } from '../../../src/stores/useSettingsStore';
 import { useOrders } from '../../../src/hooks/useOrders';
 import { useConversations } from '../../../src/hooks/useConversations';
 import { useReservations } from '../../../src/hooks/useCatalogAndBooking';
@@ -18,7 +19,12 @@ import { useRouter } from 'expo-router';
 
 export default function DashboardScreen() {
   const { merchant } = useAuthStore();
+  const { showReservationsMenu, loadSettings } = useSettingsStore();
   const router = useRouter();
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
 
   const { orders, isLoading: loadingOrders } = useOrders(merchant?.id);
   const { conversations, isLoading: loadingConvs } = useConversations(merchant?.id);
@@ -211,32 +217,36 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* SECCIÓN 4: AGENDA DE RESERVAS */}
-          <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
-            <View style={styles.sectionTitleGroup}>
-              <Ionicons name="calendar" size={18} color="#9333EA" />
-              <Text style={styles.sectionTitle}>Reservas & Citas</Text>
-            </View>
-            <TouchableOpacity onPress={() => router.push('/(app)/(tabs)/reservations' as any)}>
-              <Text style={styles.viewDetailLink}>Ver Agenda ➔</Text>
-            </TouchableOpacity>
-          </View>
+          {/* SECCIÓN 4: AGENDA DE RESERVAS (Solo si está activo en Ajustes) */}
+          {showReservationsMenu && (
+            <>
+              <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
+                <View style={styles.sectionTitleGroup}>
+                  <Ionicons name="calendar" size={18} color="#9333EA" />
+                  <Text style={styles.sectionTitle}>Reservas & Citas</Text>
+                </View>
+                <TouchableOpacity onPress={() => router.push('/(app)/(tabs)/reservations' as any)}>
+                  <Text style={styles.viewDetailLink}>Ver Agenda ➔</Text>
+                </TouchableOpacity>
+              </View>
 
-          <TouchableOpacity
-            style={styles.reservationsBanner}
-            onPress={() => router.push('/(app)/(tabs)/reservations' as any)}
-          >
-            <View style={styles.resIconBox}>
-              <Ionicons name="calendar-outline" size={28} color="#9333EA" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.resBannerTitle}>{totalBookings} Citas Registradas</Text>
-              <Text style={styles.resBannerSub}>
-                {confirmedBookings} confirmadas • {pendingBookings} por confirmar
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.reservationsBanner}
+                onPress={() => router.push('/(app)/(tabs)/reservations' as any)}
+              >
+                <View style={styles.resIconBox}>
+                  <Ionicons name="calendar-outline" size={28} color="#9333EA" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.resBannerTitle}>{totalBookings} Citas Registradas</Text>
+                  <Text style={styles.resBannerSub}>
+                    {confirmedBookings} confirmadas • {pendingBookings} por confirmar
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       )}
     </ScrollView>
