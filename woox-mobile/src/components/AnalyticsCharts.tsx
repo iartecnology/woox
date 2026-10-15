@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
 import { Order } from '../types/domain';
@@ -15,7 +16,6 @@ interface AnalyticsChartsProps {
 }
 
 type Period = 'days' | 'months';
-type Metric = 'sales' | 'orders';
 
 interface ChartPoint {
   label: string;
@@ -27,16 +27,14 @@ interface ChartPoint {
 
 export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
   const [period, setPeriod] = useState<Period>('days');
-  const [metric, setMetric] = useState<Metric>('sales');
   const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Procesamiento de datos agrupados por Días (últimos 30 días) o Meses (últimos 12 meses)
+  // Procesamiento de datos: 30 Días o 12 Meses
   const chartData: ChartPoint[] = useMemo(() => {
     const validOrders = orders.filter((o) => o.status !== 'cancelled');
 
     if (period === 'days') {
-      // Últimos 30 días cronológicos (desde hace 29 días hasta hoy)
       const daysList: ChartPoint[] = [];
       const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -68,7 +66,6 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
       }
       return daysList;
     } else {
-      // Últimos 12 meses cronológicos (desde hace 11 meses hasta el mes en curso)
       const monthsList: ChartPoint[] = [];
       const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -103,7 +100,49 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
     }
   }, [orders, period]);
 
-  // Al cambiar de período o cargar, desplazar automáticamente hacia el final (datos más recientes)
+  // Dimensiones de cada columna
+  const colWidth = period === 'days' ? 44 : 54;
+  const chartHeight = 175;
+  const plotHeight = 110; // Espacio vertical para las barras y la línea de pedidos
+  const topPadding = 25; // Espacio para etiquetas superiores
+  const totalWidth = chartData.length * colWidth + 16;
+
+  // Escalas máximas
+  const maxSales = Math.max(...chartData.map((d) => d.salesTotal), 50);
+  const maxOrders = Math.max(...chartData.map((d) => d.ordersCount), 5);
+
+  const totalPeriodSales = chartData.reduce((acc, d) => acc + d.salesTotal, 0);
+  const totalPeriodOrders = chartData.reduce((acc, d) => acc + d.ordersCount, 0);
+
+  // Calcular puntos (X, Y) para la línea SVG de pedidos
+  const points = useMemo(() => {
+    return chartData.map((item, idx) => {
+      const x = 8 + idx * colWidth + colWidth / 2;
+      const orderRatio = maxOrders > 0 ? item.ordersCount / maxOrders : 0;
+      // Invertido: 0 pedidos en la base (topPadding + plotHeight), maxOrders arriba (topPadding)
+      const y = topPadding + plotHeight - orderRatio * (plotHeight - 15);
+      return { x, y, ordersCount: item.ordersCount, salesTotal: item.salesTotal };
+    });
+  }, [chartData, colWidth, maxOrders, plotHeight, topPadding]);
+
+  // Generar path continuo SVG
+  const linePath = useMemo(() => {
+    if (points.length === 0) return '';
+    return points.reduce((acc, pt, idx) => {
+      return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
+    }, '');
+  }, [points]);
+
+  // Generar área sombreada bajo la línea de pedidos
+  const areaPath = useMemo(() => {
+    if (points.length === 0) return '';
+    const firstX = points[0].x;
+    const lastX = points[points.length - 1].x;
+    const baseY = topPadding + plotHeight;
+    return `${linePath} L ${lastX} ${baseY} L ${firstX} ${baseY} Z`;
+  }, [linePath, points, topPadding, plotHeight]);
+
+  // Auto-scroll al final para ver los datos más recientes
   useEffect(() => {
     const timer = setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -111,37 +150,25 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
     return () => clearTimeout(timer);
   }, [period]);
 
-  // Totales y picos
-  const values = chartData.map((d) => (metric === 'sales' ? d.salesTotal : d.ordersCount));
-  const maxVal = Math.max(...values, metric === 'sales' ? 50 : 5);
-  const totalPeriodSales = chartData.reduce((acc, d) => acc + d.salesTotal, 0);
-  const totalPeriodOrders = chartData.reduce((acc, d) => acc + d.ordersCount, 0);
-
   const selectedData = selectedBarIndex !== null ? chartData[selectedBarIndex] : null;
 
   return (
     <View style={styles.card}>
-      {/* Header con Título y Selectores */}
+      {/* Header con Título y Toggle de Período */}
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <View style={[styles.iconCircle, { backgroundColor: metric === 'sales' ? '#DCFCE7' : '#DBEAFE' }]}>
-            <Ionicons
-              name={metric === 'sales' ? 'cash-outline' : 'bar-chart-outline'}
-              size={18}
-              color={metric === 'sales' ? '#059669' : '#2563EB'}
-            />
+          <View style={styles.iconCircle}>
+            <Ionicons name="stats-chart" size={18} color="#4F46E5" />
           </View>
           <View>
-            <Text style={styles.cardTitle}>
-              {metric === 'sales' ? 'Gráfica de Ventas' : 'Gráfica de Pedidos'}
-            </Text>
+            <Text style={styles.cardTitle}>Ventas & Pedidos Combinados</Text>
             <Text style={styles.cardSubtitle}>
-              {period === 'days' ? 'Últimos 30 días (deslizable)' : 'Últimos 12 meses (deslizable)'}
+              {period === 'days' ? 'Últimos 30 días (Barras + Línea)' : 'Últimos 12 meses (Barras + Línea)'}
             </Text>
           </View>
         </View>
 
-        {/* Toggle Días (30D) / Meses (12M) */}
+        {/* Toggle Días / Meses */}
         <View style={styles.periodToggle}>
           <TouchableOpacity
             style={[styles.periodButton, period === 'days' && styles.periodButtonActive]}
@@ -168,40 +195,31 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
         </View>
       </View>
 
-      {/* Selector de Métrica: Ventas ($) vs Pedidos (#) */}
-      <View style={styles.metricSwitchRow}>
-        <TouchableOpacity
-          style={[
-            styles.metricTab,
-            metric === 'sales' && styles.metricTabActiveSales,
-          ]}
-          onPress={() => setMetric('sales')}
-        >
-          <Text style={[styles.metricLabel, metric === 'sales' && styles.metricLabelActiveSales]}>
-            Ventas Acumuladas
-          </Text>
-          <Text style={[styles.metricValue, metric === 'sales' && styles.metricValueActiveSales]}>
+      {/* Tarjetas de Resumen & Leyenda */}
+      <View style={styles.legendRow}>
+        <View style={[styles.legendBox, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' }]}>
+          <View style={styles.legendIndicatorRow}>
+            <View style={[styles.legendSquare, { backgroundColor: '#10B981' }]} />
+            <Text style={styles.legendLabelText}>Barras de Ventas</Text>
+          </View>
+          <Text style={[styles.legendValueText, { color: '#047857' }]}>
             ${totalPeriodSales.toFixed(2)}
           </Text>
-        </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity
-          style={[
-            styles.metricTab,
-            metric === 'orders' && styles.metricTabActiveOrders,
-          ]}
-          onPress={() => setMetric('orders')}
-        >
-          <Text style={[styles.metricLabel, metric === 'orders' && styles.metricLabelActiveOrders]}>
-            Pedidos Acumulados
-          </Text>
-          <Text style={[styles.metricValue, metric === 'orders' && styles.metricValueActiveOrders]}>
+        <View style={[styles.legendBox, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]}>
+          <View style={styles.legendIndicatorRow}>
+            <View style={[styles.legendLineDot, { backgroundColor: '#4F46E5' }]} />
+            <View style={[styles.legendLineBar, { backgroundColor: '#4F46E5' }]} />
+            <Text style={styles.legendLabelText}>Línea de Pedidos</Text>
+          </View>
+          <Text style={[styles.legendValueText, { color: '#3730A3' }]}>
             {totalPeriodOrders} {totalPeriodOrders === 1 ? 'pedido' : 'pedidos'}
           </Text>
-        </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Tooltip Interactivo de Barra Seleccionada o Pista de Desplazamiento */}
+      {/* Tooltip Interactivo o Tip de Navegación */}
       {selectedData ? (
         <View style={styles.interactiveTooltip}>
           <Text style={styles.tooltipTitle}>
@@ -209,14 +227,14 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
           </Text>
           <View style={styles.tooltipDetailsRow}>
             <Text style={styles.tooltipStat}>
-              <Text style={{ fontWeight: '700', color: '#059669' }}>
+              <Text style={{ fontWeight: '800', color: '#059669' }}>
                 ${selectedData.salesTotal.toFixed(2)}
               </Text>{' '}
               en ventas
             </Text>
             <Text style={styles.tooltipBullet}>•</Text>
             <Text style={styles.tooltipStat}>
-              <Text style={{ fontWeight: '700', color: '#2563EB' }}>
+              <Text style={{ fontWeight: '800', color: '#4F46E5' }}>
                 {selectedData.ordersCount}
               </Text>{' '}
               {selectedData.ordersCount === 1 ? 'pedido' : 'pedidos'}
@@ -227,13 +245,13 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
         <View style={styles.scrollHintRow}>
           <Ionicons name="swap-horizontal" size={14} color={Colors.textMuted} />
           <Text style={styles.chartTip}>
-            Desliza horizontalmente para navegar el historial ({chartData.length} períodos)
+            Desliza horizontalmente y toca cualquier columna para inspeccionar
           </Text>
         </View>
       )}
 
-      {/* Lienzo del Gráfico Deslizable Horizontalmente */}
-      <View style={styles.chartContainer}>
+      {/* Gráfico Combinado: Barras (Ventas) + Svg Línea (Pedidos) */}
+      <View style={[styles.chartContainer, { height: chartHeight }]}>
         {/* Líneas guía de fondo */}
         <View style={styles.gridLinesContainer}>
           <View style={styles.gridLine} />
@@ -241,93 +259,142 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
           <View style={styles.gridLine} />
         </View>
 
-        {/* Scroll Horizontal de Barras */}
         <ScrollView
           ref={scrollViewRef}
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContentContainer}
+          contentContainerStyle={[styles.scrollContentContainer, { width: totalWidth }]}
           decelerationRate="normal"
         >
-          {chartData.map((item, idx) => {
-            const rawVal = metric === 'sales' ? item.salesTotal : item.ordersCount;
-            const heightPercent = maxVal > 0 ? Math.max((rawVal / maxVal) * 100, 4) : 4;
-            const isSelected = selectedBarIndex === idx;
+          {/* Capa 1: Barras de Ventas con Interacción */}
+          <View style={styles.barsLayer}>
+            {chartData.map((item, idx) => {
+              const salesRatio = maxSales > 0 ? item.salesTotal / maxSales : 0;
+              const barHeight = Math.max(salesRatio * plotHeight, 4);
+              const isSelected = selectedBarIndex === idx;
 
-            // Paleta según métrica
-            const barBgColor =
-              metric === 'sales'
-                ? isSelected
-                  ? '#059669'
-                  : item.isTodayOrCurrent
-                  ? '#10B981'
-                  : '#A7F3D0'
-                : isSelected
-                ? '#2563EB'
+              const barBgColor = isSelected
+                ? '#059669'
                 : item.isTodayOrCurrent
-                ? '#3B82F6'
-                : '#BFDBFE';
+                ? '#10B981'
+                : '#A7F3D0';
 
-            return (
-              <TouchableOpacity
-                key={`${item.label}-${item.subLabel}-${idx}`}
-                style={[
-                  styles.barColumn,
-                  period === 'days' ? styles.barColumnDays : styles.barColumnMonths,
-                ]}
-                activeOpacity={0.7}
-                onPress={() => setSelectedBarIndex(isSelected ? null : idx)}
-              >
-                {/* Etiqueta superior sobre la barra si está activa */}
-                <View style={styles.barTopLabelContainer}>
-                  {rawVal > 0 && (
-                    <Text
-                      style={[
-                        styles.barValueText,
-                        isSelected && { fontWeight: '900', color: Colors.textPrimary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {metric === 'sales' ? `$${Math.round(rawVal)}` : rawVal}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Columna de la Barra */}
-                <View style={styles.barTrack}>
-                  <View
-                    style={[
-                      styles.barFill,
-                      {
-                        height: `${heightPercent}%`,
-                        backgroundColor: barBgColor,
-                        borderTopLeftRadius: 6,
-                        borderTopRightRadius: 6,
-                      },
-                      isSelected && styles.barFillSelected,
-                    ]}
-                  />
-                </View>
-
-                {/* Etiquetas inferiores X */}
-                <Text
-                  style={[
-                    styles.barLabel,
-                    item.isTodayOrCurrent && styles.barLabelHighlight,
-                    isSelected && { fontWeight: '800', color: Colors.primaryDark },
-                  ]}
-                  numberOfLines={1}
+              return (
+                <TouchableOpacity
+                  key={`col-${item.label}-${idx}`}
+                  style={[styles.barColumn, { width: colWidth }]}
+                  activeOpacity={0.7}
+                  onPress={() => setSelectedBarIndex(isSelected ? null : idx)}
                 >
-                  {item.label}
-                </Text>
-                {item.subLabel ? (
-                  <Text style={styles.barSubLabel} numberOfLines={1}>
-                    {item.subLabel}
+                  {/* Etiqueta de valor de venta si tiene ventas */}
+                  <View style={styles.barTopLabelContainer}>
+                    {item.salesTotal > 0 && (
+                      <Text
+                        style={[
+                          styles.barSalesValueText,
+                          isSelected && { fontWeight: '900', color: Colors.textPrimary },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        ${Math.round(item.salesTotal)}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Barra de Ventas */}
+                  <View style={[styles.barTrack, { height: plotHeight }]}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        {
+                          height: barHeight,
+                          backgroundColor: barBgColor,
+                          borderTopLeftRadius: 6,
+                          borderTopRightRadius: 6,
+                        },
+                        isSelected && styles.barFillSelected,
+                      ]}
+                    />
+                  </View>
+
+                  {/* Etiquetas del eje X */}
+                  <Text
+                    style={[
+                      styles.barLabel,
+                      item.isTodayOrCurrent && styles.barLabelHighlight,
+                      isSelected && { fontWeight: '800', color: Colors.primaryDark },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.label}
                   </Text>
-                ) : null}
-              </TouchableOpacity>
-            );
-          })}
+                  {item.subLabel ? (
+                    <Text style={styles.barSubLabel} numberOfLines={1}>
+                      {item.subLabel}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Capa 2: SVG Superpuesto con Línea y Puntos de Pedidos */}
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Svg width={totalWidth} height={chartHeight}>
+              <Defs>
+                <LinearGradient id="orderGrad" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor="#4F46E5" stopOpacity="0.25" />
+                  <Stop offset="100%" stopColor="#4F46E5" stopOpacity="0.0" />
+                </LinearGradient>
+              </Defs>
+
+              {/* Área degradada bajo la curva de pedidos */}
+              {areaPath ? <Path d={areaPath} fill="url(#orderGrad)" /> : null}
+
+              {/* Trazo continuo de pedidos */}
+              {linePath ? (
+                <Path
+                  d={linePath}
+                  fill="none"
+                  stroke="#4F46E5"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ) : null}
+
+              {/* Puntos y nodos en cada pedido */}
+              {points.map((pt, idx) => {
+                const isSelected = selectedBarIndex === idx;
+                const hasOrders = pt.ordersCount > 0;
+
+                return (
+                  <React.Fragment key={`pt-${idx}`}>
+                    {/* Anillo exterior si está seleccionado */}
+                    {isSelected && (
+                      <Circle
+                        cx={pt.x}
+                        cy={pt.y}
+                        r={7}
+                        fill="#EEF2FF"
+                        stroke="#4F46E5"
+                        strokeWidth="2"
+                      />
+                    )}
+                    {/* Punto principal */}
+                    <Circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={hasOrders ? 4 : 2.5}
+                      fill={hasOrders ? '#4F46E5' : '#A5B4FC'}
+                      stroke="#FFFFFF"
+                      strokeWidth="1.5"
+                    />
+                  </React.Fragment>
+                );
+              })}
+            </Svg>
+          </View>
         </ScrollView>
       </View>
     </View>
@@ -364,6 +431,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
+    backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -407,51 +475,47 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: '800',
   },
-  metricSwitchRow: {
+  legendRow: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 10,
   },
-  metricTab: {
+  legendBox: {
     flex: 1,
     padding: 10,
     borderRadius: 12,
-    backgroundColor: Colors.bgPrimary,
     borderWidth: 1,
-    borderColor: 'transparent',
   },
-  metricTabActiveSales: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#86EFAC',
+  legendIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  metricTabActiveOrders: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#93C5FD',
+  legendSquare: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
   },
-  metricLabel: {
+  legendLineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  legendLineBar: {
+    width: 10,
+    height: 2.5,
+    borderRadius: 1,
+    marginLeft: -2,
+  },
+  legendLabelText: {
     fontSize: 11,
-    color: Colors.textMuted,
     fontWeight: '600',
+    color: Colors.textSecondary,
   },
-  metricLabelActiveSales: {
-    color: '#059669',
-    fontWeight: '700',
-  },
-  metricLabelActiveOrders: {
-    color: '#2563EB',
-    fontWeight: '700',
-  },
-  metricValue: {
-    fontSize: 16,
+  legendValueText: {
+    fontSize: 15,
     fontWeight: '800',
-    color: Colors.textPrimary,
-    marginTop: 2,
-  },
-  metricValueActiveSales: {
-    color: '#047857',
-  },
-  metricValueActiveOrders: {
-    color: '#1D4ED8',
+    marginTop: 4,
   },
   interactiveTooltip: {
     backgroundColor: Colors.bgPrimary,
@@ -495,14 +559,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   chartContainer: {
-    height: 165,
     position: 'relative',
     marginTop: 6,
   },
   gridLinesContainer: {
     position: 'absolute',
-    top: 20,
-    bottom: 35,
+    top: 25,
+    bottom: 40,
     left: 0,
     right: 0,
     justifyContent: 'space-between',
@@ -514,9 +577,14 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   scrollContentContainer: {
+    height: '100%',
+    position: 'relative',
+  },
+  barsLayer: {
+    flexDirection: 'row',
+    height: '100%',
     alignItems: 'flex-end',
-    paddingHorizontal: 6,
-    zIndex: 1,
+    paddingHorizontal: 8,
   },
   barColumn: {
     height: '100%',
@@ -524,24 +592,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingHorizontal: 2,
   },
-  barColumnDays: {
-    width: 42,
-  },
-  barColumnMonths: {
-    width: 52,
-  },
   barTopLabelContainer: {
     height: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  barValueText: {
+  barSalesValueText: {
     fontSize: 9,
     fontWeight: '700',
-    color: Colors.textMuted,
+    color: '#059669',
   },
   barTrack: {
-    flex: 1,
     width: '100%',
     maxWidth: 22,
     justifyContent: 'flex-end',
