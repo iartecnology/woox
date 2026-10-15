@@ -59,7 +59,7 @@ export default function LoginScreen() {
             style={styles.brandLogo}
             resizeMode="contain"
           />
-          <Text style={styles.subtitle}>Comercio Conversacional & Operaciones</Text>
+          <Text style={styles.subtitle}>El futuro de tus ventas con Inteligencia Artificial</Text>
         </View>
 
         <View style={styles.form}>
