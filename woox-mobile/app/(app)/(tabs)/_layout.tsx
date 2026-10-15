@@ -182,8 +182,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   headerLogo: {
-    width: 160,
-    height: 42,
+    width: 112,
+    height: 29,
   },
   bellBtn: {
     marginRight: 16,
