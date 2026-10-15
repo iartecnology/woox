@@ -275,44 +275,6 @@ export default function OrdersScreen() {
         </View>
       </View>
 
-      {/* TABS DE FILTRADO RÁPIDO */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterTab, filter === 'active' && styles.filterTabActive]}
-          onPress={() => setFilter('active')}
-        >
-          <Text style={[styles.filterTabText, filter === 'active' && styles.filterTabTextActive]}>
-            Activos ({pendingCount + preparingCount + readyCount})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filterTab, filter === 'preparing' && styles.filterTabActive]}
-          onPress={() => setFilter('preparing')}
-        >
-          <Text style={[styles.filterTabText, filter === 'preparing' && styles.filterTabTextActive]}>
-            Cocina ({preparingCount})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filterTab, filter === 'ready' && styles.filterTabActive]}
-          onPress={() => setFilter('ready')}
-        >
-          <Text style={[styles.filterTabText, filter === 'ready' && styles.filterTabTextActive]}>
-            Listos ({readyCount})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filterTab, filter === 'delivered' && styles.filterTabActive]}
-          onPress={() => setFilter('delivered')}
-        >
-          <Text style={[styles.filterTabText, filter === 'delivered' && styles.filterTabTextActive]}>
-            Entregados ({deliveredCount})
-          </Text>
-        </TouchableOpacity>
-      </View>
 
 
 
