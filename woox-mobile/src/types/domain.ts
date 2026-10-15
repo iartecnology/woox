@@ -13,9 +13,11 @@ export interface Merchant {
   slug: string;
   industry_type?: string;
   phone?: string;
+  address?: string;
   is_active: boolean;
   currency?: string;
   logo_url?: string;
+  ai_welcome_message?: string;
   schedule_mode?: 'manual' | 'automatic';
   is_open_manual?: boolean;
   weekly_schedule?: {

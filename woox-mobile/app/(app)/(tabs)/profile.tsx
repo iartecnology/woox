@@ -46,6 +46,13 @@ export default function ProfileScreen() {
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [isLoadingStoreStatus, setIsLoadingStoreStatus] = useState(true);
 
+  // Estados de Edición de Información del Comercio
+  const [storeName, setStoreName] = useState(merchant?.name || '');
+  const [storePhone, setStorePhone] = useState(merchant?.phone || '');
+  const [storeAddress, setStoreAddress] = useState(merchant?.address || '');
+  const [welcomeMessage, setWelcomeMessage] = useState('');
+  const [isSavingMerchantInfo, setIsSavingMerchantInfo] = useState(false);
+
   useEffect(() => {
     loadSettings();
     loadStoreStatus();
@@ -57,11 +64,15 @@ export default function ProfileScreen() {
       setIsLoadingStoreStatus(true);
       const { data, error } = await supabase
         .from('merchants')
-        .select('schedule_mode, is_open_manual, weekly_schedule')
+        .select('name, phone, address, ai_welcome_message, schedule_mode, is_open_manual, weekly_schedule')
         .eq('id', merchant.id)
         .single();
 
       if (!error && data) {
+        if (data.name) setStoreName(data.name);
+        if (data.phone) setStorePhone(data.phone);
+        if (data.address) setStoreAddress(data.address);
+        if (data.ai_welcome_message) setWelcomeMessage(data.ai_welcome_message);
         if (data.schedule_mode) setScheduleMode(data.schedule_mode as any);
         if (typeof data.is_open_manual === 'boolean') setIsOpenManual(data.is_open_manual);
         if (Array.isArray(data.weekly_schedule) && data.weekly_schedule.length > 0) {
@@ -72,6 +83,34 @@ export default function ProfileScreen() {
       console.error('Error loading store status:', e);
     } finally {
       setIsLoadingStoreStatus(false);
+    }
+  };
+
+  const handleSaveMerchantInfo = async () => {
+    if (!merchant?.id) return;
+    if (!storeName.trim()) {
+      Alert.alert('Campo requerido', 'El nombre del comercio no puede estar vacío.');
+      return;
+    }
+    try {
+      setIsSavingMerchantInfo(true);
+      const { error } = await supabase
+        .from('merchants')
+        .update({
+          name: storeName.trim(),
+          phone: storePhone.trim() || null,
+          address: storeAddress.trim() || null,
+          ai_welcome_message: welcomeMessage.trim() || null,
+        })
+        .eq('id', merchant.id);
+
+      if (error) throw error;
+      Alert.alert('¡Información Actualizada!', 'Los datos del comercio y de atención se guardaron exitosamente.');
+    } catch (e) {
+      console.error('Error saving merchant info:', e);
+      Alert.alert('Error', 'No se pudo guardar la información del comercio.');
+    } finally {
+      setIsSavingMerchantInfo(false);
     }
   };
 
@@ -171,6 +210,91 @@ export default function ProfileScreen() {
         <View style={styles.badge}>
           <Text style={styles.badgeText}>Plan Merchant Activo</Text>
         </View>
+      </View>
+
+      {/* 🏬 INFORMACIÓN DEL COMERCIO (EDITABLE) */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeaderRow}>
+          <View>
+            <Text style={styles.sectionTitle}>Datos del Comercio</Text>
+            <Text style={styles.sectionSubtitle}>
+              Actualiza el nombre, teléfono y dirección que ven tus clientes.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Nombre del Negocio</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="business-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={styles.textInput}
+              value={storeName}
+              onChangeText={setStoreName}
+              placeholder="Ej. La Piazza Pizzería"
+              placeholderTextColor={Colors.textMuted}
+            />
+          </View>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Teléfono / WhatsApp de Contacto</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="call-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={styles.textInput}
+              value={storePhone}
+              onChangeText={setStorePhone}
+              placeholder="Ej. +57 314 258 3525"
+              placeholderTextColor={Colors.textMuted}
+              keyboardType="phone-pad"
+            />
+          </View>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Dirección del Local</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="location-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={styles.textInput}
+              value={storeAddress}
+              onChangeText={setStoreAddress}
+              placeholder="Ej. Cra 15 # 85-30, Bogotá"
+              placeholderTextColor={Colors.textMuted}
+            />
+          </View>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Mensaje de Bienvenida del Bot</Text>
+          <View style={[styles.inputContainer, { height: 74, alignItems: 'flex-start', paddingTop: 8 }]}>
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.textMuted} style={[styles.inputIcon, { marginTop: 2 }]} />
+            <TextInput
+              style={[styles.textInput, { height: 60, textAlignVertical: 'top' }]}
+              value={welcomeMessage}
+              onChangeText={setWelcomeMessage}
+              placeholder="Mensaje inicial con el que saluda la IA..."
+              placeholderTextColor={Colors.textMuted}
+              multiline
+            />
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.saveMerchantBtn}
+          onPress={handleSaveMerchantInfo}
+          disabled={isSavingMerchantInfo}
+        >
+          {isSavingMerchantInfo ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.saveMerchantBtnText}>Guardar Datos del Comercio</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* 🟢 SECCIÓN: APERTURA Y CIERRE DEL COMERCIO */}
@@ -607,6 +731,48 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   saveScheduleBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  formGroup: {
+    gap: 4,
+  },
+  formLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.bgPrimary,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textPrimary,
+    paddingVertical: 4,
+  },
+  saveMerchantBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryDark,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 8,
+    marginTop: 6,
+  },
+  saveMerchantBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,

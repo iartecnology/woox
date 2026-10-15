@@ -23,22 +23,32 @@ export default function TabsLayout() {
   const unreadChatsCount = conversations.reduce((acc, c) => acc + (Number(c.unread_count) || 0), 0);
   const totalNotifications = pendingOrdersCount + unreadChatsCount;
 
-  // Header Bell Component
-  const NotificationBell = () => (
-    <TouchableOpacity
-      style={styles.bellBtn}
-      onPress={() => router.push('/(app)/(tabs)/dashboard' as any)}
-      activeOpacity={0.7}
-    >
-      <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
-      {totalNotifications > 0 && (
-        <View style={styles.bellBadge}>
-          <Text style={styles.bellBadgeText}>
-            {totalNotifications > 99 ? '99+' : totalNotifications}
-          </Text>
-        </View>
-      )}
-    </TouchableOpacity>
+  // Header Right Actions (Bell + Profile Avatar)
+  const HeaderRightActions = () => (
+    <View style={styles.headerRightContainer}>
+      <TouchableOpacity
+        style={styles.bellBtn}
+        onPress={() => router.push('/(app)/(tabs)/dashboard' as any)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="notifications-outline" size={20} color={Colors.textPrimary} />
+        {totalNotifications > 0 && (
+          <View style={styles.bellBadge}>
+            <Text style={styles.bellBadgeText}>
+              {totalNotifications > 99 ? '99+' : totalNotifications}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.profileBtn}
+        onPress={() => router.push('/(app)/(tabs)/profile' as any)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="person-circle" size={32} color={Colors.primaryDark} />
+      </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -60,7 +70,7 @@ export default function TabsLayout() {
           />
         ),
         headerShadowVisible: false,
-        headerRight: () => <NotificationBell />,
+        headerRight: () => <HeaderRightActions />,
         tabBarStyle: {
           backgroundColor: Colors.bgSecondary,
           borderTopColor: Colors.borderSubtle,
@@ -196,16 +206,27 @@ const styles = StyleSheet.create({
     width: 118,
     height: 35,
   },
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 14,
+    gap: 8,
+  },
   bellBtn: {
-    marginRight: 16,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.bgPrimary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.borderSubtle,
+  },
+  profileBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bellBadge: {
     position: 'absolute',
