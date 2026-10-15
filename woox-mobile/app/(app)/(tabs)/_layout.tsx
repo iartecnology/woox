@@ -85,27 +85,33 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: Colors.bgSecondary,
           borderTopColor: Colors.borderSubtle,
-          height: 64,
+          height: 68,
           paddingBottom: 10,
           paddingTop: 8,
-          elevation: 4,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 8,
+          elevation: 6,
+          shadowColor: '#0F172A',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.06,
+          shadowRadius: 10,
         },
         tabBarActiveTintColor: Colors.primaryDark,
         tabBarInactiveTintColor: Colors.textMuted,
-        tabBarLabelStyle: { fontWeight: '600', fontSize: 11 },
+        tabBarLabelStyle: { fontWeight: '700', fontSize: 11, marginTop: 2 },
       }}
     >
       {/* 1. Dashboard General */}
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="pie-chart-outline" size={size} color={color} />
+          title: 'Panel',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <Ionicons
+                name={focused ? 'grid' : 'grid-outline'}
+                size={22}
+                color={focused ? Colors.primaryDark : color}
+              />
+            </View>
           ),
         }}
       />
@@ -116,9 +122,13 @@ export default function TabsLayout() {
         options={{
           title: 'Pedidos',
           href: showOrdersMenu ? '/(app)/(tabs)/' : null,
-          tabBarIcon: ({ color, size }) => (
-            <View>
-              <Ionicons name="receipt-outline" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <Ionicons
+                name={focused ? 'receipt' : 'receipt-outline'}
+                size={22}
+                color={focused ? Colors.primaryDark : color}
+              />
               {pendingOrdersCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{pendingOrdersCount}</Text>
@@ -129,14 +139,18 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* 3. Chats Omnicanal (Nombre cambiado de Mensajes a Chats) */}
+      {/* 3. Chats Omnicanal */}
       <Tabs.Screen
         name="chats"
         options={{
           title: 'Chats',
-          tabBarIcon: ({ color, size }) => (
-            <View>
-              <Ionicons name="chatbubbles-outline" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <Ionicons
+                name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
+                size={22}
+                color={focused ? Colors.primaryDark : color}
+              />
               {unreadChatsCount > 0 && (
                 <View style={[styles.badge, { backgroundColor: Colors.primaryDark }]}>
                   <Text style={styles.badgeText}>{unreadChatsCount}</Text>
@@ -152,8 +166,14 @@ export default function TabsLayout() {
         name="crm"
         options={{
           title: 'CRM',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <Ionicons
+                name={focused ? 'people' : 'people-outline'}
+                size={22}
+                color={focused ? Colors.primaryDark : color}
+              />
+            </View>
           ),
         }}
       />
@@ -164,30 +184,48 @@ export default function TabsLayout() {
         options={{
           title: 'Reservas',
           href: showReservationsMenu ? '/(app)/(tabs)/reservations' : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <Ionicons
+                name={focused ? 'calendar' : 'calendar-outline'}
+                size={22}
+                color={focused ? Colors.primaryDark : color}
+              />
+            </View>
           ),
         }}
       />
 
-      {/* 5. Catálogo y Stock */}
+      {/* 6. Catálogo y Stock */}
       <Tabs.Screen
         name="catalog"
         options={{
-          title: 'Stock',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cube-outline" size={size} color={color} />
+          title: 'Catálogo',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <Ionicons
+                name={focused ? 'fast-food' : 'fast-food-outline'}
+                size={22}
+                color={focused ? Colors.primaryDark : color}
+              />
+            </View>
           ),
         }}
       />
 
-      {/* 6. Ajustes de Perfil */}
+      {/* 7. Ajustes */}
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Ajustes',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.tabIconContainerActive]}>
+              <Ionicons
+                name={focused ? 'settings' : 'settings-outline'}
+                size={22}
+                color={focused ? Colors.primaryDark : color}
+              />
+            </View>
           ),
         }}
       />
@@ -196,6 +234,17 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
+  tabIconContainer: {
+    width: 40,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  tabIconContainerActive: {
+    backgroundColor: '#EEF2FF',
+  },
   badge: {
     position: 'absolute',
     right: -6,
