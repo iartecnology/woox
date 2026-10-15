@@ -8,11 +8,11 @@ export const Colors = {
   bgSecondary: '#FFFFFF',  // Tarjetas y elementos elevados
   bgElevated: '#FFFFFF',
 
-  // Colores de Acento (Morado / Índigo Woox)
-  primary: '#6366F1',      // Indigo 500
-  primaryDark: '#4F46E5',  // Indigo 600
-  primaryHover: '#4338CA', // Indigo 700
-  primarySubtle: '#EEF2FF',// Indigo 50 (fondo suave para badges y selección)
+  // Colores de Acento (Morado Woox Oficial #72148f)
+  primary: '#72148F',      // Woox Purple Oficial
+  primaryDark: '#5B0F72',  // Woox Purple Dark
+  primaryHover: '#4C0D5F', // Woox Purple Deep
+  primarySubtle: '#F7EDFA',// Purple 50 (fondo suave para badges y selección)
 
   // Tipografía
   textPrimary: '#0F172A',  // Slate 900: Máximo contraste
@@ -23,7 +23,7 @@ export const Colors = {
   // Bordes y separadores
   borderSubtle: '#E2E8F0', // Slate 200
   borderColor: '#CBD5E1',  // Slate 300
-  borderFocus: '#6366F1',
+  borderFocus: '#72148F',
 
   // Estados
   success: '#10B981',
