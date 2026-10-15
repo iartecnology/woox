@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  PanResponder,
 } from 'react-native';
 import { useAuthStore } from '../../../src/stores/useAuthStore';
 import { useOrders } from '../../../src/hooks/useOrders';
@@ -33,6 +34,46 @@ export default function OrdersScreen() {
   type FilterType = 'all' | 'active' | 'completed' | 'pending' | 'preparing' | 'ready' | 'delivered';
   const [filter, setFilter] = useState<FilterType>('active');
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+
+  // Secuencia de pestañas para navegación por deslizamiento (Swipe)
+  const SWIPE_SEQUENCE: FilterType[] = ['all', 'pending', 'preparing', 'ready', 'delivered'];
+
+  const handleSwipe = (direction: 'left' | 'right') => {
+    setFilter((currentFilter) => {
+      const currentIndex = SWIPE_SEQUENCE.indexOf(currentFilter);
+      if (currentIndex === -1) {
+        return direction === 'left' ? 'pending' : 'all';
+      }
+      if (direction === 'left' && currentIndex < SWIPE_SEQUENCE.length - 1) {
+        return SWIPE_SEQUENCE[currentIndex + 1];
+      }
+      if (direction === 'right' && currentIndex > 0) {
+        return SWIPE_SEQUENCE[currentIndex - 1];
+      }
+      return currentFilter;
+    });
+  };
+
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Detectar si el deslizamiento es predominantemente horizontal
+        return (
+          Math.abs(gestureState.dx) > 30 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5
+        );
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -50) {
+          // Deslizar hacia la izquierda -> avanzar a la siguiente sección
+          handleSwipe('left');
+        } else if (gestureState.dx > 50) {
+          // Deslizar hacia la derecha -> regresar a la sección anterior
+          handleSwipe('right');
+        }
+      },
+    })
+  ).current;
 
   // Métricas del Dashboard de Pedidos
   const totalOrders = orders.length;
@@ -189,7 +230,7 @@ export default function OrdersScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} {...panResponder.panHandlers}>
       {/* Modal de Alarma de Nuevo Pedido */}
       <Modal visible={hasNewPendingOrder} transparent animationType="fade">
         <View style={styles.alertOverlay}>
