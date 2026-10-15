@@ -138,9 +138,9 @@ const styles = StyleSheet.create({
   },
   brandLogo: {
     width: '100%',
-    maxWidth: 320,
-    height: 125,
-    marginBottom: 6,
+    maxWidth: 640,
+    height: 250,
+    marginBottom: 10,
   },
   subtitle: {
     fontSize: 14,
