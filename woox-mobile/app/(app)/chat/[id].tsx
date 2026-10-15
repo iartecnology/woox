@@ -31,7 +31,11 @@ export default function ChatDetailScreen() {
 
   const currentConv = conversations.find((c) => c.id === id);
   const isAiActive = currentConv?.ai_active ?? currentConv?.is_bot_active ?? true;
-  const customerOrders: Order[] = currentConv?.customers?.orders || [];
+  // Ordenar siempre del más reciente al más antiguo
+  const rawOrders: Order[] = currentConv?.customers?.orders || [];
+  const customerOrders: Order[] = [...rawOrders].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 
   // Auto-scroll al recibir un nuevo mensaje en vivo
   useEffect(() => {
@@ -137,42 +141,30 @@ export default function ChatDetailScreen() {
         </View>
 
         <View style={styles.bannerActionsRight}>
-          {/* Botón superior de pedido directo a la orden individual */}
+          {/* Botón superior de pedidos vinculados (despliega historial del más reciente al más antiguo) */}
           {customerOrders.length > 0 && (
             <TouchableOpacity
-              style={[styles.ordersPillBtn, customerOrders.length === 1 && styles.ordersPillBtnSingle]}
-              onPress={() => {
-                if (customerOrders.length === 1) {
-                  // Si solo hay un pedido, va directo al pedido individual
-                  router.push(`/(app)/order/${customerOrders[0].id}` as any);
-                } else {
-                  // Si tiene múltiples pedidos, abre la gaveta de selección de pedido individual
-                  setShowOrdersDrawer(!showOrdersDrawer);
-                }
-              }}
+              style={[styles.ordersPillBtn, showOrdersDrawer && styles.ordersPillBtnActive]}
+              onPress={() => setShowOrdersDrawer(!showOrdersDrawer)}
             >
               <Ionicons
                 name="receipt"
                 size={13}
-                color={customerOrders.length === 1 ? '#FFFFFF' : Colors.primaryDark}
+                color={showOrdersDrawer ? '#FFFFFF' : Colors.primaryDark}
               />
               <Text
                 style={[
                   styles.ordersPillBtnText,
-                  customerOrders.length === 1 && styles.ordersPillBtnTextSingle,
+                  showOrdersDrawer && styles.ordersPillBtnTextActive,
                 ]}
               >
-                {customerOrders.length === 1
-                  ? `Pedido #${customerOrders[0].id.slice(0, 5).toUpperCase()}`
-                  : `${customerOrders.length} pedidos`}
+                {customerOrders.length} {customerOrders.length === 1 ? 'pedido' : 'pedidos'}
               </Text>
-              {customerOrders.length > 1 && (
-                <Ionicons
-                  name={showOrdersDrawer ? 'chevron-up' : 'chevron-down'}
-                  size={12}
-                  color={Colors.primaryDark}
-                />
-              )}
+              <Ionicons
+                name={showOrdersDrawer ? 'chevron-up' : 'chevron-down'}
+                size={12}
+                color={showOrdersDrawer ? '#FFFFFF' : Colors.primaryDark}
+              />
             </TouchableOpacity>
           )}
 
@@ -202,7 +194,8 @@ export default function ChatDetailScreen() {
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.drawerList}>
-            {customerOrders.map((ord) => {
+            {customerOrders.map((ord, idx) => {
+              const isLatest = idx === 0;
               const statusColor =
                 ord.status === 'delivered'
                   ? '#059669'
@@ -215,16 +208,23 @@ export default function ChatDetailScreen() {
               return (
                 <TouchableOpacity
                   key={ord.id}
-                  style={styles.orderSnippetCard}
+                  style={[styles.orderSnippetCard, isLatest && styles.orderSnippetCardLatest]}
                   onPress={() => {
                     setShowOrdersDrawer(false);
                     router.push(`/(app)/order/${ord.id}` as any);
                   }}
                 >
                   <View style={styles.snippetHeader}>
-                    <Text style={styles.snippetOrderNumber}>
-                      Orden #{ord.id.slice(0, 6).toUpperCase()}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={styles.snippetOrderNumber}>
+                        #{ord.id.slice(0, 6).toUpperCase()}
+                      </Text>
+                      {isLatest && (
+                        <View style={styles.latestBadge}>
+                          <Text style={styles.latestBadgeText}>ÚLTIMO</Text>
+                        </View>
+                      )}
+                    </View>
                     <View style={[styles.snippetStatusBadge, { backgroundColor: `${statusColor}15` }]}>
                       <Text style={[styles.snippetStatusText, { color: statusColor }]}>
                         {ord.status.toUpperCase()}
@@ -234,6 +234,10 @@ export default function ChatDetailScreen() {
 
                   <Text style={styles.snippetTotal}>
                     ${Number((ord as any).total ?? ord.total_amount ?? 0).toFixed(2)}
+                  </Text>
+
+                  <Text style={styles.snippetTime}>
+                    🕒 {new Date(ord.created_at).toLocaleDateString([], { day: '2-digit', month: 'short' })} • {new Date(ord.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
 
                   {ord.delivery_address && (
@@ -429,6 +433,28 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.primaryDark,
     marginTop: 4,
+  },
+  orderSnippetCardLatest: {
+    borderColor: Colors.primaryDark,
+    borderWidth: 1.5,
+    backgroundColor: '#FFFFFF',
+  },
+  latestBadge: {
+    backgroundColor: Colors.primarySubtle,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  latestBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: Colors.primaryDark,
+  },
+  snippetTime: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    marginTop: 2,
+    fontWeight: '600',
   },
   snippetAddress: {
     fontSize: 10,
