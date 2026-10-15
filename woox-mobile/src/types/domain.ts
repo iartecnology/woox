@@ -16,6 +16,15 @@ export interface Merchant {
   is_active: boolean;
   currency?: string;
   logo_url?: string;
+  schedule_mode?: 'manual' | 'automatic';
+  is_open_manual?: boolean;
+  weekly_schedule?: {
+    day: string;
+    name: string;
+    enabled: boolean;
+    open: string;
+    close: string;
+  }[];
 }
 
 export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled';

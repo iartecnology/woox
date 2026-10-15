@@ -1384,7 +1384,7 @@ async function _processFlowFromState(
             try {
                 // ── 1. CONSULTAS PARALELAS A BD ────────────────────────────
                 const [merchantRes, platformRes, promptRes, histRes, prodsRes] = await Promise.all([
-                    supabase.from('merchants').select('name, ai_api_key, ai_model, ai_provider, ollama_base_url, lmstudio_base_url').eq('id', merchantId).single(),
+                    supabase.from('merchants').select('name, ai_api_key, ai_model, ai_provider, ollama_base_url, lmstudio_base_url, schedule_mode, is_open_manual, weekly_schedule').eq('id', merchantId).single(),
                     supabase.from('platform_settings').select('ai_api_key, ai_model').eq('id', 'global').maybeSingle(),
                     supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantId }),
                     memoryLimit > 0
@@ -1427,6 +1427,37 @@ async function _processFlowFromState(
                 if (!aiConfig.apiKey) {
                     messagesToReturn.push('⚠️ Configuración de IA no disponible. Contacta a soporte.');
                     waitingFor = 'ai_input'; break;
+                }
+
+                // ── 2.5 VERIFICAR APERTURA Y CIERRE DEL COMERCIO (MANUAL / HORARIOS) ─────────
+                let isStoreOpen = true;
+                const schedMode = merchant?.schedule_mode || 'manual';
+                if (schedMode === 'manual') {
+                    if (typeof merchant?.is_open_manual === 'boolean') {
+                        isStoreOpen = merchant.is_open_manual;
+                    }
+                } else if (schedMode === 'automatic' && Array.isArray(merchant?.weekly_schedule) && merchant.weekly_schedule.length > 0) {
+                    try {
+                        const now = new Date();
+                        const tz = 'America/Bogota';
+                        const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: tz }).format(now).toLowerCase();
+                        const timeStr = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).format(now);
+                        const dayConfig = merchant.weekly_schedule.find((s: any) => s.day?.toLowerCase() === dayName);
+                        if (!dayConfig || !dayConfig.enabled) {
+                            isStoreOpen = false;
+                        } else {
+                            isStoreOpen = timeStr >= (dayConfig.open || '00:00') && timeStr <= (dayConfig.close || '23:59');
+                        }
+                    } catch (tzErr) {
+                        console.error('[BOT-ENGINE] Error evaluando horarios del comercio:', tzErr);
+                    }
+                }
+
+                if (!isStoreOpen) {
+                    const closedMessage = `😴 En este momento ${merchant?.name || 'nuestro restaurante'} se encuentra CERRADO. Te invitamos a consultar nuestro menú o escribirnos nuevamente dentro de nuestro horario habitual. ¡Será un gusto atenderte pronto! 🍕`;
+                    messagesToReturn.push(closedMessage);
+                    waitingFor = 'ai_input';
+                    break;
                 }
 
                 // ── 3. DETECTAR SI ES UN NUEVO SALUDO / NUEVO PEDIDO TRAS UNA ORDEN COMPLETADA ──
