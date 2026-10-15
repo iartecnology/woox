@@ -65,27 +65,35 @@ function formatPrice(amount: number | string): string {
 }
 
 async function createOrderSafe(supabase: any, orderData: any) {
-    const fullData = { 
-        ...orderData, 
-        source: orderData.source || 'bot_flow', 
-        closing_agent_type: orderData.closing_agent_type || 'bot' 
+    // 1. Extraer solo las columnas válidas de la tabla orders
+    const validOrderPayload: any = {
+        merchant_id: orderData.merchant_id,
+        customer_id: orderData.customer_id,
+        total: orderData.total,
+        delivery_address: orderData.delivery_address || 'No proporcionada',
+        notes: orderData.notes || null,
+        status: orderData.status || 'pending',
+        conversation_id: orderData.conversation_id || null,
+        channel: orderData.channel || 'bot',
+        source: orderData.source || 'bot_flow',
+        closing_agent_type: orderData.closing_agent_type || 'bot'
     };
-    
-    let { data, error } = await supabase.from('orders').insert(fullData).select('*').single();
 
-    if (error && (error.message.includes('column') || error.message.includes('cache'))) {
-        console.log('[BOT-ENGINE] Fallback a esquema básico de orders...');
+    let { data, error } = await supabase.from('orders').insert(validOrderPayload).select('*').single();
+
+    if (error) {
+        console.warn('[BOT-ENGINE] Reintentando inserción básica en orders:', error.message);
+        // Fallback mínimo sin source/closing_agent_type si la tabla no los tiene
         const basicData: any = {
-            merchant_id: orderData.merchant_id,
-            customer_id: orderData.customer_id,
-            total: orderData.total,
-            delivery_address: orderData.delivery_address,
-            notes: orderData.notes,
-            status: orderData.status,
-            customer_name: orderData.customer_name,
-            customer_phone: orderData.customer_phone
+            merchant_id: validOrderPayload.merchant_id,
+            customer_id: validOrderPayload.customer_id,
+            total: validOrderPayload.total,
+            delivery_address: validOrderPayload.delivery_address,
+            notes: validOrderPayload.notes,
+            status: validOrderPayload.status,
+            conversation_id: validOrderPayload.conversation_id,
+            channel: validOrderPayload.channel
         };
-        if (orderData.channel) basicData.channel = orderData.channel;
         const res = await supabase.from('orders').insert(basicData).select('*').single();
         data = res.data;
         error = res.error;
@@ -1150,7 +1158,25 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
         return `Error al gestionar la sesión: ${sessionErr?.message || 'Error desconocido'}`;
     }
 
+    let currentNodeId: string | null = session.current_node_id;
     let variables: any = session.variables || {};
+    let waitingFor: string | null = session.waiting_for;
+
+    // Detectar si el usuario envía un saludo o reinicio tras haber terminado o tener una orden
+    const cleanMsg = messageText.trim().toLowerCase();
+    const isGreetingOrReset = /^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches|inicio|empezar|ordenar|menu|menú|nuevo pedido|otra vez|quiero pedir|pedir)$/i.test(cleanMsg);
+
+    if (isGreetingOrReset && (variables['orderNumber'] || variables['order_number'] || currentNodeId === 'node_end' || !currentNodeId)) {
+        console.log(`[BOT-ENGINE] Saludo detectado tras orden o flujo completado. Reiniciando sesión al inicio.`);
+        currentNodeId = startNode.id;
+        waitingFor = null;
+        variables['cart'] = [];
+        delete variables['orderNumber'];
+        delete variables['order_number'];
+        delete variables['direccion_entrega'];
+        delete variables['checkout_summary_cache'];
+    }
+
     const { data: merchantData } = await supabase.from('merchants').select('name, menu_pdf_url').eq('id', merchantId).single();
     if (merchantData) {
         variables['merchantName'] = merchantData.name;
@@ -1161,7 +1187,7 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
 
     return await _processFlowFromState(
         supabase, merchantId, conversationId, messageText, customerId,
-        nodes, connections, session, session.current_node_id, variables, session.waiting_for, flow.id
+        nodes, connections, session, currentNodeId, variables, waitingFor, flow.id
     );
 }
 
