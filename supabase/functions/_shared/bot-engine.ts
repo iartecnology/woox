@@ -1359,26 +1359,31 @@ async function _processFlowFromState(
 
             try {
                 // ── 1. CONSULTAS PARALELAS A BD ────────────────────────────
-                const [merchantRes, platformRes, promptRes, histRes] = await Promise.all([
+                const [merchantRes, platformRes, promptRes, histRes, prodsRes] = await Promise.all([
                     supabase.from('merchants').select('name, ai_api_key, ai_model, ai_provider, ollama_base_url, lmstudio_base_url').eq('id', merchantId).single(),
                     supabase.from('platform_settings').select('ai_api_key, ai_model').eq('id', 'global').maybeSingle(),
                     supabase.rpc('get_compiled_prompt', { p_merchant_id: merchantId }),
                     memoryLimit > 0
                         ? supabase.from('bot_flow_history').select('role, content').eq('session_id', session.id).order('created_at', { ascending: false }).limit(memoryLimit)
-                        : Promise.resolve({ data: [] })
+                        : Promise.resolve({ data: [] }),
+                    supabase.from('products').select('name, price, is_available').eq('merchant_id', merchantId).eq('is_available', true).limit(30)
                 ]);
 
                 const merchant = merchantRes.data;
                 const platform = platformRes.data;
                 const compiledPrompt = promptRes.data;
                 const history = histRes.data ? histRes.data.reverse() : [];
+                const activeProducts = prodsRes.data || [];
+                const productsCatalogBrief = activeProducts.length > 0
+                    ? activeProducts.map((p: any) => `${p.name} ($${p.price})`).join(', ')
+                    : 'No hay productos configurados';
 
                 if (promptRes.error) console.error('[BOT-ENGINE] Error al obtener prompt centralizado:', promptRes.error);
 
                 // ── 2. RESOLVER CONFIG DE IA (Adaptador Unificado) ─────────
                 const aiConfig = resolveAIConfig(merchant, node.data, platform, {
                     temperature: temp,
-                    maxTokens: 1024
+                    maxTokens: 350
                 });
 
                 if (!aiConfig.apiKey) {
@@ -1457,6 +1462,7 @@ ${node.data.prompt || ''}
 
 ### ESTADO ACTUAL DE LA SESIÓN:
 - Tienda: ${merchant?.name || 'Nuestra tienda'}
+- Catálogo oficial y único de productos disponibles: ${productsCatalogBrief} (¡PROHIBIDO mencionar cualquier producto o sabor que no esté en esta lista!)
 - Carrito del cliente: ${variables['cart']?.length > 0 ? variables['cart'].map((it: any) => it.name + ' x' + it.qty + ' ($' + formatPrice(it.price * it.qty) + ')').join(', ') : 'vacío'}
 - Número de pedido activo: ${variables['orderNumber'] || 'ninguno'}
 - Herramienta de cierre presente: ${toolDefs.some(t => t.name === 'checkout_trigger') ? 'checkout_trigger (Flujo Híbrido -> NO pedir datos en chat)' : (toolDefs.some(t => t.name === 'register_order') ? 'register_order (Cierre Autónomo -> Pedir datos en chat)' : 'ninguna')}
