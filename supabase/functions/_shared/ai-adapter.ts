@@ -229,15 +229,34 @@ export async function callUnifiedAI(
             // Groq, OpenAI, DeepSeek, OpenRouter, Cerebras, Custom — todos usan formato OpenAI
             result = await callOpenAICompatibleWithTools(config, messages, tools, executeToolFn, debugLogs, MAX_TOOL_LOOPS);
             
-            // Detección proactiva de fallos de cuota o de servicio en Groq
+            // Detección proactiva de fallos de cuota o de servicio en el proveedor actual
             const hasError = result.debugLogs.some(log => log.includes('429') || log.includes('Rate limit') || log.includes('ERROR'));
             
-            if ((!result.text || hasError) && config.provider === 'groq') {
+            if ((!result.text || hasError)) {
+                const groqKey = Deno.env.get('GROQ_API_KEY');
                 const geminiKey = config.fallbackGeminiKey || Deno.env.get('GEMINI_API_KEY');
+
+                // Si falló y tenemos Groq configurado (y no era ya Groq)
+                if (groqKey && config.provider !== 'groq') {
+                    console.warn(`[AI-ADAPTER] [FALLBACK] ${config.provider} falló o arrojó error. Intentando con Groq...`);
+                    debugLogs.push(`[FALLBACK-TRIGGERED] ${config.provider} falló/429. Reintentando con Groq (llama-3.3-70b-versatile)...`);
+                    
+                    const fallbackConfig: AIConfig = {
+                        provider: 'groq',
+                        model: 'llama-3.3-70b-versatile',
+                        apiKey: groqKey,
+                        temperature: config.temperature,
+                        maxTokens: config.maxTokens
+                    };
+                    
+                    const groqResult = await callOpenAICompatibleWithTools(fallbackConfig, messages, tools, executeToolFn, debugLogs, MAX_TOOL_LOOPS);
+                    if (groqResult.text) return groqResult;
+                }
                 
-                if (geminiKey) {
-                    console.warn('[AI-ADAPTER] [FALLBACK] Groq falló o arrojó 429. Intentando fallback con Gemini...');
-                    debugLogs.push('[FALLBACK-TRIGGERED] Groq falló/429. Reintentando con Gemini (gemini-flash-latest)...');
+                // Si aún no hay texto o Groq no estaba disponible, intentar Gemini
+                if (geminiKey && config.provider !== 'google_gemini') {
+                    console.warn(`[AI-ADAPTER] [FALLBACK] ${config.provider} falló o arrojó 429. Intentando fallback con Gemini...`);
+                    debugLogs.push(`[FALLBACK-TRIGGERED] ${config.provider} falló/429. Reintentando con Gemini (gemini-flash-latest)...`);
                     
                     const fallbackConfig: AIConfig = {
                         provider: 'google_gemini',
@@ -521,15 +540,12 @@ async function callOpenAICompatibleWithTools(
         const message = data.choices?.[0]?.message;
         if (!message) break;
 
-        // Acumular texto
-        if (message.content) {
-            finalText = (finalText ? finalText + '\n' : '') + message.content;
-        }
-
-        // Procesar tool calls
         const toolCalls = message.tool_calls;
+
+        // Si el modelo ejecutó tool_calls estructurados
         if (toolCalls && toolCalls.length > 0) {
-            // Agregar la respuesta del asistente con tool_calls al historial
+            // Resetear finalText para que pensamientos intermedios o fugas de plantillas no se mezclen con la respuesta final
+            finalText = '';
             requestBody.messages.push(message);
 
             for (const tc of toolCalls) {
@@ -549,21 +565,142 @@ async function callOpenAICompatibleWithTools(
                     content: result
                 });
             }
-            // Continuar el loop para que el modelo procese el resultado
-        } else {
-            // No hay más tool calls, terminamos
-            break;
+            // Continuar el loop para que el modelo procese el resultado y genere la respuesta final
+            continue;
         }
+
+        // Si NO devolvió tool_calls estructurados, verificar si emitió una llamada a herramienta dentro del texto
+        if (message.content) {
+            const inlineTool = tryExtractTextToolCall(message.content, KNOWN_TOOLS);
+            if (inlineTool) {
+                const { name, args } = inlineTool;
+                console.log(`[AI-ADAPTER] ${config.provider} inline text tool call detected: ${name}`, args);
+                debugLogs.push(`[TOOL-INLINE] ${name}(${JSON.stringify(args).slice(0, 100)})`);
+
+                const result = await executeToolFn(name, args);
+                const inlineId = `inline-${i}-${name}`;
+                allToolCalls.push({ id: inlineId, name, arguments: args });
+
+                requestBody.messages.push({
+                    role: 'assistant',
+                    content: null,
+                    tool_calls: [{
+                        id: inlineId,
+                        type: 'function',
+                        function: { name, arguments: JSON.stringify(args) }
+                    }]
+                });
+                requestBody.messages.push({
+                    role: 'tool',
+                    tool_call_id: inlineId,
+                    content: result
+                });
+                finalText = '';
+                continue;
+            }
+
+            // No es una llamada a herramienta, guardar el texto y limpiar
+            finalText = (finalText ? finalText + '\n' : '') + message.content;
+        }
+
+        // Fin del turno si no hubo tool calls
+        break;
     }
+
+    // Sanitizar cualquier fuga de scaffolding de herramientas (<tools>, <function>, etc.)
+    finalText = sanitizeAssistantText(finalText);
 
     // Fallback: si no hay texto pero hubo tool calls, usar el último resultado de tool
     if (!finalText && allToolCalls.length > 0) {
         const lastToolMsg = requestBody.messages.filter((m: any) => m.role === 'tool').pop();
         if (lastToolMsg?.content) {
-            finalText = lastToolMsg.content;
+            finalText = sanitizeAssistantText(lastToolMsg.content);
             debugLogs.push('[FALLBACK] Using last tool result as response');
         }
     }
 
     return { text: finalText.trim(), toolCalls: allToolCalls, debugLogs };
+}
+
+/**
+ * Extrae llamadas a herramientas cuando un modelo de lenguaje las escribe en texto plano o XML
+ * en lugar de usar la API estructurada de function calling.
+ */
+function tryExtractTextToolCall(text: string, knownTools: Set<string>): { name: string; args: any } | null {
+    if (!text) return null;
+
+    // Patrón 1: <tool_call>\s*({"name": ...})\s*</tool_call>
+    const xmlMatch = text.match(/<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/i);
+    if (xmlMatch) {
+        try {
+            const parsed = JSON.parse(xmlMatch[1]);
+            const name = parsed.name || parsed.function?.name;
+            const args = parsed.arguments || parsed.parameters || parsed.function?.arguments || {};
+            if (name && knownTools.has(name)) {
+                return { name, args: typeof args === 'string' ? JSON.parse(args) : args };
+            }
+        } catch (_e) { /* ignore */ }
+    }
+
+    // Patrón 2: <function=nombre_herramienta>{...}</function>
+    const fnTagMatch = text.match(/<function=([a-zA-Z0-9_]+)>\s*(\{[\s\S]*?\})\s*<\/function>/i);
+    if (fnTagMatch) {
+        const name = fnTagMatch[1];
+        if (knownTools.has(name)) {
+            try {
+                return { name, args: JSON.parse(fnTagMatch[2]) };
+            } catch (_e) { /* ignore */ }
+        }
+    }
+
+    // Patrón 3: JSON crudo con {"name": "...", "arguments": {...}}
+    const jsonMatch = text.match(/\{\s*"name"\s*:\s*"([a-zA-Z0-9_]+)"[\s\S]*?"arguments"\s*:\s*(\{[\s\S]*?\})\s*\}/);
+    if (jsonMatch) {
+        const name = jsonMatch[1];
+        if (knownTools.has(name)) {
+            try {
+                return { name, args: JSON.parse(jsonMatch[2]) };
+            } catch (_e) { /* ignore */ }
+        }
+    }
+
+    // Patrón 4: Llamada tipo función nombre_herramienta({...})
+    for (const toolName of knownTools) {
+        const fnCallMatch = text.match(new RegExp(toolName + '\\s*\\(([\\{\\[][\\s\\S]*?[\\}\\]])\\)'));
+        if (fnCallMatch) {
+            try {
+                return { name: toolName, args: JSON.parse(fnCallMatch[1]) };
+            } catch (_e) { /* ignore */ }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Limpia cualquier fuga de plantillas internas de herramientas (<tools>, <function>, <parameter>),
+ * bloques de razonamiento o JSON de depuración de la respuesta final dirigida al usuario.
+ */
+export function sanitizeAssistantText(text: string): string {
+    if (!text) return '';
+    let cleaned = text;
+
+    // 1. Eliminar bloques de scaffolding y templates de herramientas inyectados por OpenRouter / prompts
+    cleaned = cleaned.replace(/You have access to the following functions:[\s\S]*?(?:<\/tools>|(?=\n\n[A-Z¡¿])|$)/gi, '');
+    cleaned = cleaned.replace(/<tools>[\s\S]*?(?:<\/tools>|$)/gi, '');
+    cleaned = cleaned.replace(/<function[\s\S]*?(?:<\/function>|$)/gi, '');
+    cleaned = cleaned.replace(/(?:<parameter>[\s\S]*?<\/parameter>)+/gi, '');
+    cleaned = cleaned.replace(/<parameter>[\s\S]*/gi, '');
+    cleaned = cleaned.replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)/gi, '');
+    cleaned = cleaned.replace(/<\/?(?:tools|function|tool_call|parameter|parameters)>/gi, '');
+
+    // 2. Eliminar razonamiento interno (DeepSeek R1, Nemotron, etc.)
+    cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    cleaned = cleaned.replace(/<thought>[\s\S]*?<\/thought>/gi, '');
+    cleaned = cleaned.replace(/<\/?(?:think|thought)>/gi, '');
+
+    // 3. Eliminar restos de JSON sueltos de llamadas de función
+    cleaned = cleaned.replace(/\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/gi, '');
+
+    return cleaned.trim();
 }

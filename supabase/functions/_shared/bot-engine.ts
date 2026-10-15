@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { notifyMerchantAgents } from "./notifications.ts";
-import { resolveAIConfig, callUnifiedAI, type AIMessage, type AIToolDef } from "./ai-adapter.ts";
+import { resolveAIConfig, callUnifiedAI, sanitizeAssistantText, type AIMessage, type AIToolDef } from "./ai-adapter.ts";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // HELPERS
@@ -1398,7 +1398,21 @@ async function _processFlowFromState(
                 const merchant = merchantRes.data;
                 const platform = platformRes.data;
                 const compiledPrompt = promptRes.data;
-                const history = histRes.data ? histRes.data.reverse() : [];
+                let history = histRes.data ? histRes.data.reverse() : [];
+                if (history.length === 0 && conversationId) {
+                    const { data: convMessages } = await supabase
+                        .from('messages')
+                        .select('sender_type, content')
+                        .eq('conversation_id', conversationId)
+                        .order('created_at', { ascending: false })
+                        .limit(memoryLimit > 0 ? memoryLimit : 8);
+                    if (convMessages && convMessages.length > 0) {
+                        history = convMessages.reverse().map((m: any) => ({
+                            role: m.sender_type === 'customer' ? 'user' : 'assistant',
+                            content: m.content
+                        }));
+                    }
+                }
                 const activeProducts = prodsRes.data || [];
                 const productsCatalogBrief = activeProducts.length > 0
                     ? activeProducts.map((p: any) => `${p.name} ($${p.price})`).join(', ')
@@ -1542,30 +1556,38 @@ ${node.data.prompt || ''}
                 // ── 8. PROCESAR RESULTADO ─────────────────────────────────
                 debugLogs.push(...result.debugLogs);
 
-                if (result.text) {
-                    messagesToReturn.push(result.text);
-                    await supabase.from('bot_flow_history').insert({
-                        session_id: session.id,
-                        role: 'assistant',
-                        content: result.text
-                    });
+                let finalCleanResponse = sanitizeAssistantText(result.text || '');
 
-                    // Registrar consumo en SaaS Metering
-                    try {
-                        const estimatedTokens = Math.ceil((systemPrompt.length + finalUserMessage.length + result.text.length) / 4);
-                        await supabase.rpc('track_merchant_usage', {
-                            p_merchant_id: merchantId,
-                            p_tokens: estimatedTokens,
-                            p_is_ai_message: true,
-                            p_is_outbound: true
-                        });
-                    } catch (mErr) {
-                        console.warn('[BOT-ENGINE] Error tracking AI usage:', mErr);
+                if (!finalCleanResponse) {
+                    console.log('[BOT-ENGINE] Sin respuesta limpia del modelo tras sanitización. Aplicando fallback contextual.');
+                    // Si el cliente preguntó por pizzas o productos del menú
+                    if (/(piza|pizza|men[uú]|producto|plato|carta|opci[oó]n|sabor|tienen|hay)/i.test(messageText)) {
+                        finalCleanResponse = `¡Con gusto! Nuestras opciones disponibles son:\n${productsCatalogBrief}\n\n¿Cuál de estas delicias te gustaría pedir hoy? 🍕`;
+                    } else if (/^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches)/i.test(messageText.trim())) {
+                        finalCleanResponse = `¡Benvenuto a ${merchant?.name || 'La Piazza Pizzería'}! 🍕 Tu pizzería artesanal italiana. ¿En qué podemos deleitarte hoy?`;
+                    } else {
+                        finalCleanResponse = `¡Entendido! Con gusto te colaboro con tu orden en ${merchant?.name || 'nuestro restaurante'}. ¿Qué plato o pizza te gustaría añadir a tu pedido? 🍕`;
                     }
-                } else {
-                    console.log('[BOT-ENGINE] Sin respuesta de texto del modelo.');
-                    const generic = `Lo siento, tuve un problema. DEBUG:\n${debugLogs.join('\n')}`;
-                    messagesToReturn.push(generic);
+                }
+
+                messagesToReturn.push(finalCleanResponse);
+                await supabase.from('bot_flow_history').insert({
+                    session_id: session.id,
+                    role: 'assistant',
+                    content: finalCleanResponse
+                });
+
+                // Registrar consumo en SaaS Metering
+                try {
+                    const estimatedTokens = Math.ceil((systemPrompt.length + finalUserMessage.length + finalCleanResponse.length) / 4);
+                    await supabase.rpc('track_merchant_usage', {
+                        p_merchant_id: merchantId,
+                        p_tokens: estimatedTokens,
+                        p_is_ai_message: true,
+                        p_is_outbound: true
+                    });
+                } catch (mErr) {
+                    console.warn('[BOT-ENGINE] Error tracking AI usage:', mErr);
                 }
 
                 // ── 9. CHECKOUT TRIGGER (Válvula de Escape) ───────────────
