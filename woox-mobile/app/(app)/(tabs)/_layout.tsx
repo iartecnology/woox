@@ -48,7 +48,7 @@ export default function TabsLayout() {
           backgroundColor: Colors.bgSecondary,
           borderBottomWidth: 1,
           borderBottomColor: Colors.borderSubtle,
-          height: 170,
+          height: 95,
         },
         headerTintColor: Colors.textPrimary,
         headerTitleAlign: 'center',
@@ -182,8 +182,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   headerLogo: {
-    width: 440,
-    height: 130,
+    width: 160,
+    height: 42,
   },
   bellBtn: {
     marginRight: 16,

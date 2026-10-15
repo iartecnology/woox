@@ -134,13 +134,13 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   brandLogo: {
     width: '100%',
-    maxWidth: 640,
-    height: 250,
-    marginBottom: 10,
+    maxWidth: 280,
+    height: 75,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
