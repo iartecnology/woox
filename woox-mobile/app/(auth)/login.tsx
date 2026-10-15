@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from 'react-native';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useRouter } from 'expo-router';
@@ -53,10 +54,11 @@ export default function LoginScreen() {
     >
       <View style={styles.card}>
         <View style={styles.header}>
-          <View style={styles.logoBadge}>
-            <Ionicons name="chatbubbles" size={32} color={Colors.primaryDark} />
-          </View>
-          <Text style={styles.title}>Woox Merchant</Text>
+          <Image
+            source={require('../../assets/woox-logo.png')}
+            style={styles.brandLogo}
+            resizeMode="contain"
+          />
           <Text style={styles.subtitle}>Comercio Conversacional & Operaciones</Text>
         </View>
 
@@ -134,20 +136,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  logoBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 20,
-    backgroundColor: Colors.primarySubtle,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
+  brandLogo: {
+    width: 180,
+    height: 70,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,

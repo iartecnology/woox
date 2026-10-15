@@ -5,7 +5,7 @@ import { useConversations } from '../../../src/hooks/useConversations';
 import { useAuthStore } from '../../../src/stores/useAuthStore';
 import { useSettingsStore } from '../../../src/stores/useSettingsStore';
 import { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Colors } from '../../../src/constants/theme';
 
 export default function TabsLayout() {
@@ -50,7 +50,14 @@ export default function TabsLayout() {
           borderBottomColor: Colors.borderSubtle,
         },
         headerTintColor: Colors.textPrimary,
-        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+        headerTitleAlign: 'center',
+        headerTitle: () => (
+          <Image
+            source={require('../../../assets/woox-logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+        ),
         headerShadowVisible: false,
         headerRight: () => <NotificationBell />,
         tabBarStyle: {
@@ -172,6 +179,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '800',
+  },
+  headerLogo: {
+    width: 110,
+    height: 32,
   },
   bellBtn: {
     marginRight: 16,
