@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
@@ -29,17 +29,18 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
   const [period, setPeriod] = useState<Period>('days');
   const [metric, setMetric] = useState<Metric>('sales');
   const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  // Procesamiento de datos agrupados por Días (últimos 7 días) o Meses (últimos 6 meses)
+  // Procesamiento de datos agrupados por Días (últimos 30 días) o Meses (últimos 12 meses)
   const chartData: ChartPoint[] = useMemo(() => {
     const validOrders = orders.filter((o) => o.status !== 'cancelled');
 
     if (period === 'days') {
-      // Últimos 7 días (del día actual hacia atrás)
+      // Últimos 30 días cronológicos (desde hace 29 días hasta hoy)
       const daysList: ChartPoint[] = [];
       const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-      for (let i = 6; i >= 0; i--) {
+      for (let i = 29; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         d.setHours(0, 0, 0, 0);
@@ -67,11 +68,11 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
       }
       return daysList;
     } else {
-      // Últimos 6 meses
+      // Últimos 12 meses cronológicos (desde hace 11 meses hasta el mes en curso)
       const monthsList: ChartPoint[] = [];
       const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-      for (let i = 5; i >= 0; i--) {
+      for (let i = 11; i >= 0; i--) {
         const d = new Date();
         d.setDate(1);
         d.setMonth(d.getMonth() - i);
@@ -92,7 +93,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
 
         monthsList.push({
           label: monthNames[month],
-          subLabel: `${year}`,
+          subLabel: `'${year.toString().slice(-2)}`,
           ordersCount: monthOrders.length,
           salesTotal: monthSales,
           isTodayOrCurrent: i === 0,
@@ -101,6 +102,14 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
       return monthsList;
     }
   }, [orders, period]);
+
+  // Al cambiar de período o cargar, desplazar automáticamente hacia el final (datos más recientes)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [period]);
 
   // Totales y picos
   const values = chartData.map((d) => (metric === 'sales' ? d.salesTotal : d.ordersCount));
@@ -127,12 +136,12 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
               {metric === 'sales' ? 'Gráfica de Ventas' : 'Gráfica de Pedidos'}
             </Text>
             <Text style={styles.cardSubtitle}>
-              {period === 'days' ? 'Desempeño últimos 7 días' : 'Desempeño últimos 6 meses'}
+              {period === 'days' ? 'Últimos 30 días (deslizable)' : 'Últimos 12 meses (deslizable)'}
             </Text>
           </View>
         </View>
 
-        {/* Toggle Días / Meses */}
+        {/* Toggle Días (30D) / Meses (12M) */}
         <View style={styles.periodToggle}>
           <TouchableOpacity
             style={[styles.periodButton, period === 'days' && styles.periodButtonActive]}
@@ -142,7 +151,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
             }}
           >
             <Text style={[styles.periodButtonText, period === 'days' && styles.periodButtonTextActive]}>
-              Días
+              30 Días
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -153,7 +162,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
             }}
           >
             <Text style={[styles.periodButtonText, period === 'months' && styles.periodButtonTextActive]}>
-              Meses
+              12 Meses
             </Text>
           </TouchableOpacity>
         </View>
@@ -169,7 +178,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
           onPress={() => setMetric('sales')}
         >
           <Text style={[styles.metricLabel, metric === 'sales' && styles.metricLabelActiveSales]}>
-            Ventas Totales
+            Ventas Acumuladas
           </Text>
           <Text style={[styles.metricValue, metric === 'sales' && styles.metricValueActiveSales]}>
             ${totalPeriodSales.toFixed(2)}
@@ -184,7 +193,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
           onPress={() => setMetric('orders')}
         >
           <Text style={[styles.metricLabel, metric === 'orders' && styles.metricLabelActiveOrders]}>
-            Total Pedidos
+            Pedidos Acumulados
           </Text>
           <Text style={[styles.metricValue, metric === 'orders' && styles.metricValueActiveOrders]}>
             {totalPeriodOrders} {totalPeriodOrders === 1 ? 'pedido' : 'pedidos'}
@@ -192,7 +201,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Tooltip Interactivo de Barra Seleccionada */}
+      {/* Tooltip Interactivo de Barra Seleccionada o Pista de Desplazamiento */}
       {selectedData ? (
         <View style={styles.interactiveTooltip}>
           <Text style={styles.tooltipTitle}>
@@ -215,12 +224,15 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
           </View>
         </View>
       ) : (
-        <Text style={styles.chartTip}>
-          Toca cualquier barra para inspeccionar el valor exacto
-        </Text>
+        <View style={styles.scrollHintRow}>
+          <Ionicons name="swap-horizontal" size={14} color={Colors.textMuted} />
+          <Text style={styles.chartTip}>
+            Desliza horizontalmente para navegar el historial ({chartData.length} períodos)
+          </Text>
+        </View>
       )}
 
-      {/* Lienzo del Gráfico de Barras */}
+      {/* Lienzo del Gráfico Deslizable Horizontalmente */}
       <View style={styles.chartContainer}>
         {/* Líneas guía de fondo */}
         <View style={styles.gridLinesContainer}>
@@ -229,8 +241,14 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
           <View style={styles.gridLine} />
         </View>
 
-        {/* Barras de datos */}
-        <View style={styles.barsContainer}>
+        {/* Scroll Horizontal de Barras */}
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContentContainer}
+          decelerationRate="normal"
+        >
           {chartData.map((item, idx) => {
             const rawVal = metric === 'sales' ? item.salesTotal : item.ordersCount;
             const heightPercent = maxVal > 0 ? Math.max((rawVal / maxVal) * 100, 4) : 4;
@@ -252,8 +270,11 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
 
             return (
               <TouchableOpacity
-                key={`${item.label}-${idx}`}
-                style={styles.barColumn}
+                key={`${item.label}-${item.subLabel}-${idx}`}
+                style={[
+                  styles.barColumn,
+                  period === 'days' ? styles.barColumnDays : styles.barColumnMonths,
+                ]}
                 activeOpacity={0.7}
                 onPress={() => setSelectedBarIndex(isSelected ? null : idx)}
               >
@@ -295,16 +316,19 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
                     item.isTodayOrCurrent && styles.barLabelHighlight,
                     isSelected && { fontWeight: '800', color: Colors.primaryDark },
                   ]}
+                  numberOfLines={1}
                 >
                   {item.label}
                 </Text>
                 {item.subLabel ? (
-                  <Text style={styles.barSubLabel}>{item.subLabel}</Text>
+                  <Text style={styles.barSubLabel} numberOfLines={1}>
+                    {item.subLabel}
+                  </Text>
                 ) : null}
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -458,15 +482,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
   },
+  scrollHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginBottom: 8,
+  },
   chartTip: {
     fontSize: 11,
     color: Colors.textMuted,
-    textAlign: 'center',
-    marginBottom: 8,
     fontStyle: 'italic',
   },
   chartContainer: {
-    height: 160,
+    height: 165,
     position: 'relative',
     marginTop: 6,
   },
@@ -484,20 +513,22 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.borderSubtle,
     opacity: 0.7,
   },
-  barsContainer: {
-    flexDirection: 'row',
-    height: '100%',
+  scrollContentContainer: {
     alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    paddingHorizontal: 6,
     zIndex: 1,
-    paddingHorizontal: 4,
   },
   barColumn: {
-    flex: 1,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingHorizontal: 2,
+  },
+  barColumnDays: {
+    width: 42,
+  },
+  barColumnMonths: {
+    width: 52,
   },
   barTopLabelContainer: {
     height: 18,
@@ -512,7 +543,7 @@ const styles = StyleSheet.create({
   barTrack: {
     flex: 1,
     width: '100%',
-    maxWidth: 24,
+    maxWidth: 22,
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
@@ -525,7 +556,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.textPrimary,
   },
   barLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: Colors.textMuted,
     marginTop: 6,
