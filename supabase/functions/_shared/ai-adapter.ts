@@ -65,15 +65,19 @@ const ENV_KEY_MAP: Record<string, string> = {
  * Detecta el proveedor correcto basándose en el nombre del modelo.
  */
 function detectProviderFromModel(model: string, explicitProvider?: string): string {
+    // Si el comercio o nodo especificó explícitamente un proveedor válido, respetarlo SIEMPRE
+    if (explicitProvider && explicitProvider !== 'google_gemini') {
+        return explicitProvider;
+    }
     const m = model.toLowerCase();
-    // Si contiene '/' típicamente es OpenRouter (ej: nvidia/nemotron-..., meta-llama/...) o si el proveedor explícito es openrouter
-    if (explicitProvider === 'openrouter' || m.includes('/') || m.includes('openrouter')) return 'openrouter';
+    if (explicitProvider === 'openrouter' || m.includes('openrouter')) return 'openrouter';
     if (m.includes('llama') || m.includes('mixtral') || m.includes('whisper')) return 'groq';
     if (m.includes('gpt-') || m.includes('o1-') || m.includes('o3-')) return 'openai';
     if (m.includes('deepseek')) return 'deepseek';
     if (m.includes('gemini') || m.includes('gemma')) return 'google_gemini';
     if (m.includes('cerebras')) return 'cerebras';
     if (m.includes('glm')) return 'zai';
+    if (m.includes('/')) return 'openrouter';
     return explicitProvider || 'google_gemini'; // default
 }
 
