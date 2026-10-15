@@ -23,12 +23,23 @@ export default function TabsLayout() {
   const unreadChatsCount = conversations.reduce((acc, c) => acc + (Number(c.unread_count) || 0), 0);
   const totalNotifications = pendingOrdersCount + unreadChatsCount;
 
+  // Al presionar la campana, llevar directamente a lo que requiere atención inmediata
+  const handleBellPress = () => {
+    if (pendingOrdersCount > 0) {
+      router.push('/(app)/(tabs)/' as any); // Ir a Pedidos pendientes
+    } else if (unreadChatsCount > 0) {
+      router.push('/(app)/(tabs)/chats' as any); // Ir a Chats sin responder
+    } else {
+      router.push('/(app)/(tabs)/dashboard' as any); // Ir a métricas
+    }
+  };
+
   // Header Right Actions (Bell + Profile Avatar)
   const HeaderRightActions = () => (
     <View style={styles.headerRightContainer}>
       <TouchableOpacity
         style={styles.bellBtn}
-        onPress={() => router.push('/(app)/(tabs)/dashboard' as any)}
+        onPress={handleBellPress}
         activeOpacity={0.7}
       >
         <Ionicons name="notifications-outline" size={20} color={Colors.textPrimary} />

@@ -64,11 +64,31 @@ export function useConversations(merchantId?: string) {
     },
   });
 
+  // Mutación para marcar conversación como leída (unread_count = 0)
+  const markAsReadMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { error } = await supabase
+        .from('conversations')
+        .update({ unread_count: 0 })
+        .eq('id', conversationId);
+
+      if (error) console.error('[useConversations] Error marking as read:', error);
+    },
+    onSuccess: (_, conversationId) => {
+      queryClient.setQueryData<Conversation[]>(['conversations', merchantId], (old) => {
+        if (!old) return old;
+        return old.map((c) => (c.id === conversationId ? { ...c, unread_count: 0 } : c));
+      });
+      queryClient.invalidateQueries({ queryKey: ['conversations', merchantId] });
+    },
+  });
+
   return {
     ...query,
     conversations: query.data || [],
     toggleBot: toggleBotMutation.mutateAsync,
     isTogglingBot: toggleBotMutation.isPending,
+    markAsRead: markAsReadMutation.mutateAsync,
   };
 }
 

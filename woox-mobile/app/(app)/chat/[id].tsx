@@ -25,7 +25,7 @@ export default function ChatDetailScreen() {
   const router = useRouter();
   const { merchant } = useAuthStore();
   const { messages, isLoading, sendMessage, isSending } = useChatMessages(id);
-  const { conversations, toggleBot } = useConversations(merchant?.id);
+  const { conversations, toggleBot, markAsRead } = useConversations(merchant?.id);
   const [inputText, setInputText] = useState('');
   const [showOrdersDrawer, setShowOrdersDrawer] = useState(false);
   const flatListRef = useRef<FlatList>(null);
@@ -37,6 +37,13 @@ export default function ChatDetailScreen() {
   const customerOrders: Order[] = [...rawOrders].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
+
+  // Marcar como leído al entrar a la conversación
+  useEffect(() => {
+    if (id && currentConv && (currentConv.unread_count ?? 0) > 0) {
+      markAsRead(id);
+    }
+  }, [id, currentConv?.unread_count]);
 
   // Auto-scroll al recibir un nuevo mensaje en vivo
   useEffect(() => {
