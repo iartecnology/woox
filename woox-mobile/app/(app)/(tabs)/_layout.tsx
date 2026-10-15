@@ -126,7 +126,18 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* 4. Reservas */}
+      {/* 4. CRM / Clientes */}
+      <Tabs.Screen
+        name="crm"
+        options={{
+          title: 'CRM',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* 5. Reservas */}
       <Tabs.Screen
         name="reservations"
         options={{

@@ -29,6 +29,15 @@ export default function AppLayout() {
           title: 'Detalle de Pedido',
         }}
       />
+      <Stack.Screen
+        name="customer/[id]"
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTintColor: '#0F172A',
+          title: 'Ficha de Cliente (CRM)',
+        }}
+      />
     </Stack>
   );
 }

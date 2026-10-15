@@ -33,10 +33,24 @@ export interface OrderItem {
 
 export interface Customer {
   id: string;
+  merchant_id?: string;
   full_name: string;
   phone?: string;
   email?: string;
   address?: string;
+  loyalty_level?: 'bronze' | 'silver' | 'gold' | 'platinum' | string;
+  loyalty_points?: number;
+  churn_risk?: 'low' | 'medium' | 'high' | string;
+  clv?: number;
+  avg_ticket?: number;
+  total_orders?: number;
+  sentiment?: string;
+  tags?: string[];
+  last_purchase_at?: string;
+  status?: string;
+  telegram_user_id?: string;
+  whatsapp_phone?: string;
+  created_at?: string;
   orders?: Order[];
 }
 
