@@ -1403,7 +1403,7 @@ async function _processFlowFromState(
                         .select('sender_type, content')
                         .eq('conversation_id', conversationId)
                         .order('created_at', { ascending: false })
-                        .limit(memoryLimit > 0 ? memoryLimit : 8);
+                        .limit(memoryLimit > 0 ? Math.min(memoryLimit, 4) : 4);
                     if (convMessages && convMessages.length > 0) {
                         history = convMessages.reverse().map((m: any) => ({
                             role: m.sender_type === 'customer' ? 'user' : 'assistant',
@@ -1510,9 +1510,10 @@ ${node.data.prompt || ''}
 8. SALUDOS Y NUEVOS PEDIDOS: Si el cliente te saluda ("Hola", "Buenas") o solicita hacer un nuevo pedido, salúdalo con calidez y pregúntale qué se le antoja ordenar hoy. NUNCA repitas la despedida o confirmación de un pedido anterior.
 9. MANEJO DE NEGATIVAS ('No'): Si el cliente responde 'no' a tu pregunta de si desea algo más, procede de inmediato al cierre de compra. Nunca muestres el menú tras una negativa.
 10. NO OFRECER "MÁS OPCIONES" SI YA MOSTRASTE EL MENÚ COMPLETO: Si ya listaste los productos disponibles, NO preguntes "¿te gustaría ver más opciones?". En su lugar, invita al cliente a elegir directamente: "¿Cuál te gustaría pedir hoy?".
-11. VER PEDIDO/CARRITO: Si el cliente dice 'muéstrame el pedido', 'ver carrito', 'qué llevo' o similar, LLAMA SIEMPRE a 'get_cart' y muestra su resultado. NUNCA respondas de memoria.
+11. VER PEDIDO/CARRITO: Si el cliente dice 'muéstrame el pedido', 'ver carrito', 'qué llevo' o similar, LLAMA SIEMPRE a 'get_cart' y muestra su resultado con una frase cordial. NUNCA respondas de memoria.
 12. CANTIDADES AMBIGUAS: Si el cliente responde algo ambiguo como 'una y una', 'dos de esas', NO adivines ni agregues productos que no mencionó; pregunta cuáles productos y cantidades exactas.
 13. DATOS DE ENTREGA: Si el cliente responde 'no' o 'ok' cuando ya pediste nombre, dirección y teléfono, vuelve a pedirlos brevemente en lugar de reiniciar la conversación.
+14. SIEMPRE HABLA TRAS EJECUTAR HERRAMIENTAS: Siempre que ejecutes una herramienta ('add_to_cart', 'remove_from_cart', 'get_cart', 'register_order'), DEBES devolver un mensaje de confirmación claro, amable y conciso al cliente indicando qué se hizo y cuál es el siguiente paso. JAMÁS devuelvas una respuesta vacía.
 
 ### ESTADO ACTUAL DE LA SESIÓN:
 - Tienda: ${merchant?.name || 'Nuestra tienda'}
@@ -1561,11 +1562,47 @@ ${node.data.prompt || ''}
 
                 if (!finalCleanResponse) {
                     console.log('[BOT-ENGINE] Sin respuesta limpia del modelo tras sanitización. Aplicando fallback contextual.');
-                    // Si el cliente preguntó por pizzas o productos del menú
-                    if (/(piza|pizza|men[uú]|producto|plato|carta|opci[oó]n|sabor|tienen|hay)/i.test(messageText)) {
-                        finalCleanResponse = `¡Con gusto! Nuestras opciones disponibles son:\n${productsCatalogBrief}\n\n¿Cuál de estas delicias te gustaría pedir hoy? 🍕`;
+                    const currentCart = variables['cart'] || [];
+                    const cartTotal = currentCart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
+
+                    // 1. Solicitud de quitar o cancelar un producto del carrito
+                    if (/(cancela|elimina|quita|borra|sacar?|remover?)\s+(la|el|un|una|los|las)?\s*([a-zA-Z\sáéíóúñ]+)/i.test(messageText)) {
+                        const match = messageText.match(/(cancela|elimina|quita|borra|sacar?|remover?)\s+(la|el|un|una|los|las)?\s*([a-zA-Z\sáéíóúñ]+)/i);
+                        const targetItem = (match?.[3] || '').replace(/por favor|gracias|del pedido|del carrito/i, '').trim().toLowerCase();
+                        const itemIdx = currentCart.findIndex((it: any) => it.name.toLowerCase().includes(targetItem) || targetItem.includes(it.name.toLowerCase()));
+                        if (itemIdx !== -1) {
+                            const removed = currentCart.splice(itemIdx, 1)[0];
+                            variables['cart'] = currentCart;
+                            const newTotal = currentCart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
+                            finalCleanResponse = `✅ Listo, he cancelado ${removed.name} de tu pedido. Ahora tienes:\n${currentCart.map((it: any) => `• ${it.name} x${it.qty} = $${formatPrice(it.price * it.qty)}`).join('\n')}\n\n💰 Total: $${formatPrice(newTotal)}\n\n¿Deseas algo más o procedemos a la entrega?`;
+                        } else {
+                            finalCleanResponse = `No encontré ese producto en tu carrito actual. ¿Qué producto deseas eliminar o modificar?`;
+                        }
+                    // 2. Consulta explícita del carrito / pedido
+                    } else if (/(carrito|pedido|llevo|orden|cuenta|total)/i.test(messageText)) {
+                        if (currentCart.length > 0) {
+                            finalCleanResponse = `🛒 Tu carrito actual:\n${currentCart.map((it: any) => `• ${it.name} x${it.qty} = $${formatPrice(it.price * it.qty)}`).join('\n')}\n\n💰 Total: $${formatPrice(cartTotal)}\n\n¿Deseas agregar algo más o procedemos a la entrega?`;
+                        } else {
+                            finalCleanResponse = `Tu carrito está vacío actualmente. ¿Qué te gustaría pedir? 🍕`;
+                        }
+                    // 3. Cliente confirma o dice no (cierre de pedido)
+                    } else if (/^(no|nada m[aá]s|eso es todo|listo|ya est[aá]|as[ií] est[aá] bien|ser[ií]a todo|ninguno)/i.test(messageText.trim())) {
+                        if (currentCart.length > 0) {
+                            finalCleanResponse = `¡Perfecto! Para completar tu pedido, por favor indícame tu nombre completo, dirección de entrega y teléfono de contacto.`;
+                        } else {
+                            finalCleanResponse = `¡Entendido! Con gusto te colaboro con tu orden en ${merchant?.name || 'nuestro restaurante'}. ¿Qué te gustaría ordenar hoy?`;
+                        }
+                    // 4. Consulta de menú o productos (o pregunta si tienen algo no disponible)
+                    } else if (/(piza|pizza|men[uú]|producto|plato|carta|opci[oó]n|sabor|tienen|hay|hamburguesa|jugo|malteada|sushi|tacos)/i.test(messageText)) {
+                        if (/sushi|taco/i.test(messageText)) {
+                            finalCleanResponse = `No contamos con sushi ni tacos en nuestro menú. 🍕 Te ofrecemos pizzas artesanales, hamburguesas gourmet, malteadas y jugos naturales:\n${productsCatalogBrief}\n\n¿Cuál de estas delicias te gustaría pedir?`;
+                        } else {
+                            finalCleanResponse = `¡Con gusto! Nuestras opciones disponibles son:\n${productsCatalogBrief}\n\n¿Cuál de estas opciones te gustaría pedir hoy? 🍕`;
+                        }
+                    // 5. Saludos
                     } else if (/^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches)/i.test(messageText.trim())) {
                         finalCleanResponse = `¡Benvenuto a ${merchant?.name || 'La Piazza Pizzería'}! 🍕 Tu pizzería artesanal italiana. ¿En qué podemos deleitarte hoy?`;
+                    // 6. Fallback general
                     } else {
                         finalCleanResponse = `Disculpa, no logré entender bien tu mensaje. ¿Me lo repites o me indicas qué te gustaría pedir? 🍕`;
                     }
