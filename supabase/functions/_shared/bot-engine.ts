@@ -331,8 +331,14 @@ async function executeAgentTool(
     switch (toolName) {
         case 'catalog_search': {
             const queryRaw = (toolArgs?.query || '').toLowerCase().trim();
-            // Limpieza básica y manejo de plurales
-            const query = queryRaw.replace(/^(papas|una|un|el|la|los|las|quiero|ver|busca|hamburguesas?)\s+/i, '').replace(/s$/, '').trim() || queryRaw.replace(/s$/, '');
+            // Limpieza inteligente de palabras vacías e intenciones de compra
+            const stopWordsPattern = /^(quiero|pedir|ordenar|tienen|hay|ver|busca|muéstrame|muestrame|dame|agrega|una|un|el|la|los|las|por favor|dos|tres|cuatro|\d+)\s+/gi;
+            let query = queryRaw;
+            // Aplicar reemplazo en bucle para limpiar secuencias como "quiero pedir 2 pizzas..."
+            for (let i = 0; i < 3; i++) {
+                query = query.replace(stopWordsPattern, '').trim();
+            }
+            query = query.replace(/s$/, '').trim() || queryRaw;
             
             console.log(`[BOT-ENGINE] Catalog Search | Raw: "${queryRaw}" | Clean: "${query}"`);
 
@@ -372,13 +378,10 @@ async function executeAgentTool(
                 }
             }
 
-            // 2. Buscar productos con estrategia multi-etapa (Exacta/Contiene -> Palabras individuales -> Categoría)
-            let q = supabase.from('products')
-                .select('id, name, price, description, is_available')
-                .eq('merchant_id', merchantId)
-                .eq('is_available', true);
-            
-            // Construir filtro OR dinámico
+            // 2. Extraer tokens significativos (mínimo 3 caracteres, sin artículos)
+            const words = query.split(/\s+/).filter(w => w.length >= 3 && !['del', 'las', 'los', 'con', 'sin', 'por'].includes(w));
+
+            // 3. Buscar productos con estrategia multi-etapa
             const filters = [
                 `name.ilike.%${query}%`,
                 `description.ilike.%${query}%`
@@ -386,8 +389,6 @@ async function executeAgentTool(
             if (queryRaw !== query) {
                 filters.push(`name.ilike.%${queryRaw}%`);
             }
-            // Expandir filtros con palabras individuales (mínimo 3 caracteres)
-            const words = query.split(/\s+/).filter(w => w.length >= 3);
             for (const w of words) {
                 const cleanWord = w.replace(/s$/, '');
                 filters.push(`name.ilike.%${cleanWord}%`);
@@ -402,7 +403,11 @@ async function executeAgentTool(
                 filters.push(`category_id.in.(${allCatIds.join(',')})`);
             }
 
-            let { data: prods, error: pErr } = await q.or(filters.join(',')).limit(6);
+            let { data: prods, error: pErr } = await supabase.from('products')
+                .select('id, name, price, description, is_available')
+                .eq('merchant_id', merchantId)
+                .eq('is_available', true)
+                .or(filters.join(','));
 
             if (pErr) console.error('[BOT-ENGINE] Error en búsqueda de productos:', pErr);
             
@@ -422,19 +427,27 @@ async function executeAgentTool(
                 }
             }
 
-            console.log(`[BOT-ENGINE] Productos encontrados: ${prods?.length || 0}`);
+            console.log(`[BOT-ENGINE] Productos encontrados crudos: ${prods?.length || 0}`);
 
             if (!prods || prods.length === 0) {
-                // Sugerencia si no hay nada
-                const { data: others } = await supabase.from('products').select('name, price').eq('merchant_id', merchantId).eq('is_available', true).limit(3);
-                if (others && others.length > 0) {
-                   return `No encontré productos específicos para "${queryRaw}", pero te sugiero estos destacados de nuestro menú:\n${others.map((p: any) => `• ${p.name} - $${formatPrice(p.price)}`).join('\n')}\n\n¿Te interesa alguno o buscas otra cosa?`;
-                }
-                return `Lo siento, no encontré productos que coincidan con "${queryRaw}" en nuestro catálogo actual.`;
+                return `El producto o término "${queryRaw}" no existe en el catálogo activo de la tienda.`;
             }
+
+            // 4. RANKING Y ORDENAMIENTO POR RELEVANCIA (Score Exacto / Token Overlap)
+            const queryLower = query.toLowerCase();
+            const rankedProds = (prods || []).map((p: any) => {
+                const nameLower = (p.name || '').toLowerCase();
+                let score = 0;
+                if (nameLower === queryLower) score += 100;
+                else if (nameLower.includes(queryLower)) score += 50;
+                for (const w of words) {
+                    if (nameLower.includes(w)) score += 20;
+                }
+                return { ...p, score };
+            }).sort((a: any, b: any) => b.score - a.score).slice(0, 5);
             
-            const results = prods.map((p: any) => `• ${p.name} - $${formatPrice(p.price)}${p.description ? ` (${p.description.substring(0, 50)}...)` : ''}`).join('\n');
-            return `He encontrado estas opciones destacadas:\n${results}${prods.length >= 5 ? '\n\n...y algunos más. ¿Buscas algo específico?' : ''}`;
+            const results = rankedProds.map((p: any) => `• ${p.name} - $${formatPrice(p.price)}${p.description ? ` (${p.description.substring(0, 60)}...)` : ''}`).join('\n');
+            return `Productos encontrados en el catálogo:\n${results}`;
         }
 
         case 'inventory_check': {
@@ -1454,7 +1467,19 @@ async function _processFlowFromState(
                 }
 
                 if (!isStoreOpen) {
-                    const closedMessage = `😴 En este momento ${merchant?.name || 'nuestro restaurante'} se encuentra CERRADO. Te invitamos a consultar nuestro menú o escribirnos nuevamente dentro de nuestro horario habitual. ¡Será un gusto atenderte pronto! 🍕`;
+                    let scheduleInfo = '';
+                    if (Array.isArray(merchant?.weekly_schedule) && merchant.weekly_schedule.length > 0) {
+                        try {
+                            const now = new Date();
+                            const tz = 'America/Bogota';
+                            const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: tz }).format(now).toLowerCase();
+                            const todaySched = merchant.weekly_schedule.find((s: any) => s.day?.toLowerCase() === dayName);
+                            if (todaySched && todaySched.enabled) {
+                                scheduleInfo = ` Nuestro horario de hoy es de ${todaySched.open || '11:00'} a ${todaySched.close || '22:00'}.`;
+                            }
+                        } catch (_e) {}
+                    }
+                    const closedMessage = `😴 En este momento ${merchant?.name || 'nuestro restaurante'} se encuentra CERRADO.${scheduleInfo} Te invitamos a consultar nuestro menú o escribirnos nuevamente dentro de nuestro horario habitual. ¡Será un gusto atenderte pronto! 🍕`;
                     messagesToReturn.push(closedMessage);
                     waitingFor = 'ai_input';
                     break;
@@ -1532,7 +1557,7 @@ ${node.data.prompt || ''}
 1. HERRAMIENTAS TÉCNICAS: NUNCA escribas comandos técnicos en texto plano como "add to cart", "catalog_search", o corchetes [UPDATE_CART]. Úsalas mediante la llamada de funciones del sistema.
 2. NO EXPLIQUES TUS ACCIONES TÉCNICAS: No digas "Voy a agregar...", simplemente ejecuta la herramienta y confirma amablemente el resultado.
 3. ESTRICTAMENTE PROHIBIDO INVENTAR PRODUCTOS O INGREDIENTES: Solo puedes ofrecer o mencionar productos que existan textualmente en 'catalog_search'. Usa únicamente la descripción oficial (no agregues ingredientes inventados como 'verduras seleccionadas').
-4. AGREGAR AL CARRITO INMEDIATAMENTE: Si el cliente pide o confirma un producto (ej: 'quiero dos margaritas', 'si una coca cola', 'agrégala'), LLAMA DE INMEDIATO a 'add_to_cart' con su cantidad. No preguntes si es por separado ni pidas doble confirmación.
+4. AGREGAR AL CARRITO INMEDIATAMENTE: Si el cliente pide o confirma un producto (ej: 'quiero dos margaritas', 'quiero pedir 2 pizzas pepperoni supreme', 'si una coca cola', 'dame 1 hamburguesa'), TIENES PROHIBIDO llamar a 'catalog_search'. DEBES LLAMAR DIRECTAMENTE A 'add_to_cart' con el nombre del producto y su cantidad. No pidas confirmación previa ni vuelvas a buscar lo que ya pidió.
 5. QUITAR O MODIFICAR CARRITO: Si el cliente dice 'quita una de pepperoni', 'cancela la bebida', 'elimina X', LLAMA DE INMEDIATO a la herramienta 'remove_from_cart' indicando el nombre y cantidad.
 6. TOTALES EXACTOS DEL CARRITO: El contenido y total del carrito deben ser exactamente los devueltos por las herramientas. No inventes sumas manuales ni agregues signos de dólar duplicados ($$).
 7. CIERRE INTELIGENTE (HÍBRIDO vs AUTÓNOMO):
