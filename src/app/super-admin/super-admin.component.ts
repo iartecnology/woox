@@ -496,7 +496,10 @@ export class SuperAdminComponent implements OnInit {
             if (profilesResult.error) throw profilesResult.error;
             if (platformResult.data && platformResult.error) throw platformResult.error;
 
-            this.merchants = merchantsResult.data || [];
+            this.merchants = (merchantsResult.data || []).map(m => ({
+                ...m,
+                stats: m.stats || { messages_24h: 0, orders_month: 0, conversion_rate: 0 }
+            }));
             this.merchantUsers = (profilesResult.data || []) as any; // Usar perfiles como usuarios
 
             if (platformResult.data) {
@@ -508,6 +511,9 @@ export class SuperAdminComponent implements OnInit {
 
             this.updateMerchantsView();
             this.cdr.detectChanges(); // Forzar renderizado inicial
+
+            // Cargar métricas de rendimiento en segundo plano sin bloquear la UI inicial
+            this.loadMerchantsPerformanceStats();
         } catch (error: any) {
             console.error('CRITICAL: Supabase connection failed:', error);
             const detail = error.message || error.error_description || 'Desconocido';
@@ -515,6 +521,98 @@ export class SuperAdminComponent implements OnInit {
             this.loadFallbacks();
         } finally {
             this.isLoading = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    async loadMerchantsPerformanceStats() {
+        if (!this.merchants || this.merchants.length === 0) return;
+
+        try {
+            const now = new Date();
+            const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            const currentPeriodMonth = now.toISOString().substring(0, 7);
+
+            // 1. Consultar merchant_usage del mes actual (si existe SaaS metering)
+            const { data: usageData } = await supabase
+                .from('merchant_usage')
+                .select('merchant_id, messages_inbound, messages_outbound, orders_closed_count')
+                .eq('period_month', currentPeriodMonth);
+
+            const usageMap = new Map<string, { messages: number; orders: number }>();
+            if (usageData && usageData.length > 0) {
+                usageData.forEach((u: any) => {
+                    const totalMsgs = (u.messages_inbound || 0) + (u.messages_outbound || 0);
+                    usageMap.set(u.merchant_id, {
+                        messages: totalMsgs,
+                        orders: u.orders_closed_count || 0
+                    });
+                });
+            }
+
+            // 2. Consultar pedidos del mes actual agrupados por comercio
+            const { data: ordersData } = await supabase
+                .from('orders')
+                .select('merchant_id, created_at, status')
+                .gte('created_at', startOfMonth);
+
+            const ordersCountMap = new Map<string, number>();
+            if (ordersData && ordersData.length > 0) {
+                ordersData.forEach((o: any) => {
+                    if (o.merchant_id) {
+                        ordersCountMap.set(o.merchant_id, (ordersCountMap.get(o.merchant_id) || 0) + 1);
+                    }
+                });
+            }
+
+            // 3. Consultar conversaciones recientes (últimas 24h) agrupadas por comercio
+            const { data: convData } = await supabase
+                .from('conversations')
+                .select('merchant_id, last_message_at')
+                .gte('last_message_at', past24h);
+
+            const conv24hMap = new Map<string, number>();
+            if (convData && convData.length > 0) {
+                convData.forEach((c: any) => {
+                    if (c.merchant_id) {
+                        conv24hMap.set(c.merchant_id, (conv24hMap.get(c.merchant_id) || 0) + 1);
+                    }
+                });
+            }
+
+            // 4. Asignar stats a cada comercio
+            this.merchants.forEach(m => {
+                const usage = usageMap.get(m.id);
+                const ordersMonth = ordersCountMap.get(m.id) ?? (usage ? usage.orders : 0);
+                const msgs24h = conv24hMap.get(m.id) ?? (usage ? usage.messages : 0);
+
+                // Calcular tasa de conversión: pedidos / conversaciones o fórmula proporcional
+                let convRate = 0;
+                if (ordersMonth > 0 && msgs24h > 0) {
+                    convRate = Math.min(100, Math.round((ordersMonth / msgs24h) * 100));
+                } else if (ordersMonth > 0) {
+                    convRate = Math.min(100, Math.round(ordersMonth * 10)); // estimado si no hay registro de chat 24h
+                }
+
+                m.stats = {
+                    messages_24h: msgs24h,
+                    orders_month: ordersMonth,
+                    conversion_rate: convRate
+                };
+            });
+
+            this.updateMerchantsView();
+            this.cdr.detectChanges();
+        } catch (err) {
+            console.warn('⚠️ No se pudieron cargar estadísticas detalladas de comerciantes:', err);
+            // Asegurar que al menos todos los comerciantes tengan stats por defecto
+            this.merchants.forEach(m => {
+                if (!m.stats) {
+                    m.stats = { messages_24h: 0, orders_month: 0, conversion_rate: 0 };
+                }
+            });
+            this.updateMerchantsView();
             this.cdr.detectChanges();
         }
     }

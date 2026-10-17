@@ -179,20 +179,36 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="performance-stats" *ngIf="m.stats">
+                                <div class="performance-stats" *ngIf="m.stats; else noStatsTpl">
                                     <div class="stat-item" title="Mensajes en las últimas 24h">
-                                        <span class="stat-val">{{ m.stats.messages_24h }}</span>
+                                        <span class="stat-val">{{ m.stats.messages_24h || 0 }}</span>
                                         <span class="stat-lbl">msjs</span>
                                     </div>
                                     <div class="stat-item" title="Pedidos este mes">
-                                        <span class="stat-val">{{ m.stats.orders_month }}</span>
+                                        <span class="stat-val">{{ m.stats.orders_month || 0 }}</span>
                                         <span class="stat-lbl">ventas</span>
                                     </div>
                                     <div class="stat-item highlight" title="Tasa de conversión">
-                                        <span class="stat-val">{{ m.stats.conversion_rate }}%</span>
+                                        <span class="stat-val">{{ m.stats.conversion_rate || 0 }}%</span>
                                         <span class="stat-lbl">conv.</span>
                                     </div>
                                 </div>
+                                <ng-template #noStatsTpl>
+                                    <div class="performance-stats opacity-60">
+                                        <div class="stat-item" title="Sin actividad reciente">
+                                            <span class="stat-val">0</span>
+                                            <span class="stat-lbl">msjs</span>
+                                        </div>
+                                        <div class="stat-item" title="Sin pedidos este mes">
+                                            <span class="stat-val">0</span>
+                                            <span class="stat-lbl">ventas</span>
+                                        </div>
+                                        <div class="stat-item highlight" title="Sin conversión">
+                                            <span class="stat-val">0%</span>
+                                            <span class="stat-lbl">conv.</span>
+                                        </div>
+                                    </div>
+                                </ng-template>
                             </td>
                             <td>
                                 <span class="status-badge" [class.active]="m.is_active"
