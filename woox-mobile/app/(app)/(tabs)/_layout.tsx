@@ -1,11 +1,12 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useOrders } from '../../../src/hooks/useOrders';
 import { useConversations } from '../../../src/hooks/useConversations';
 import { useAuthStore } from '../../../src/stores/useAuthStore';
 import { useSettingsStore } from '../../../src/stores/useSettingsStore';
 import { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Platform } from 'react-native';
 import { Colors } from '../../../src/constants/theme';
 
 export default function TabsLayout() {
@@ -42,7 +43,7 @@ export default function TabsLayout() {
         onPress={handleBellPress}
         activeOpacity={0.7}
       >
-        <Ionicons name="notifications-outline" size={20} color={Colors.textPrimary} />
+        <Ionicons name="notifications-outline" size={19} color="#FFFFFF" />
         {totalNotifications > 0 && (
           <View style={styles.bellBadge}>
             <Text style={styles.bellBadgeText}>
@@ -57,7 +58,7 @@ export default function TabsLayout() {
         onPress={() => router.push('/(app)/(tabs)/profile' as any)}
         activeOpacity={0.7}
       >
-        <Ionicons name="person-circle" size={32} color={Colors.primaryDark} />
+        <Ionicons name="person-circle" size={32} color="#FFFFFF" />
       </TouchableOpacity>
     </View>
   );
@@ -65,17 +66,23 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
+        headerBackground: () => (
+          <LinearGradient
+            colors={[Colors.headerTop, Colors.headerBottom]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        ),
         headerStyle: {
-          backgroundColor: Colors.bgSecondary,
-          borderBottomWidth: 1,
-          borderBottomColor: Colors.borderSubtle,
-          height: 95,
+          backgroundColor: Colors.headerPrimary,
+          height: Platform.OS === 'ios' ? 105 : 95,
         },
-        headerTintColor: Colors.textPrimary,
+        headerTintColor: '#FFFFFF',
         headerTitleAlign: 'center',
         headerTitle: () => (
           <Image
-            source={require('../../../assets/woox-logo.png')}
+            source={require('../../../assets/woox-logo-white.png')}
             style={styles.headerLogo}
             resizeMode="contain"
           />
@@ -263,24 +270,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   headerLogo: {
-    width: 118,
-    height: 35,
+    width: 128,
+    height: 38,
   },
   headerRightContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 14,
-    gap: 8,
+    marginRight: 16,
+    gap: 10,
   },
   bellBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.bgPrimary,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   profileBtn: {
     width: 36,
@@ -292,7 +299,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -4,
     top: -4,
-    backgroundColor: Colors.danger,
+    backgroundColor: '#EF4444',
     borderRadius: 9,
     minWidth: 18,
     height: 18,

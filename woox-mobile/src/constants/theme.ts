@@ -14,6 +14,11 @@ export const Colors = {
   primaryHover: '#3730A3', // Indigo 800
   primarySubtle: '#EEF2FF',// Indigo 50 (fondo suave para badges y selección)
 
+  // Header Brand Gradient (Exacto de la imagen de marca de Woox)
+  headerTop: '#2F2E94',    // Azul índigo profundo superior
+  headerBottom: '#454ADA', // Azul índigo vibrante inferior
+  headerPrimary: '#3B3BD4',// Color medio sólido para barra superior
+
   // Tipografía
   textPrimary: '#0F172A',  // Slate 900: Máximo contraste
   textSecondary: '#334155',// Slate 700: Subtítulos

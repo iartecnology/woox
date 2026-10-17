@@ -1,5 +1,8 @@
 import { Stack, Redirect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StyleSheet } from 'react-native';
 import { useAuthStore } from '../../src/stores/useAuthStore';
+import { Colors } from '../../src/constants/theme';
 
 export default function AppLayout() {
   const { profile } = useAuthStore();
@@ -8,15 +11,30 @@ export default function AppLayout() {
     return <Redirect href="/(auth)/login" />;
   }
 
+  const gradientHeaderBackground = () => (
+    <LinearGradient
+      colors={[Colors.headerTop, Colors.headerBottom]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        headerBackground: gradientHeaderBackground,
+        headerTintColor: '#FFFFFF',
+        headerTitleStyle: { fontWeight: '700', color: '#FFFFFF' },
+        headerShadowVisible: false,
+      }}
+    >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen
         name="chat/[id]"
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: '#FFFFFF' },
-          headerTintColor: '#0F172A',
           title: 'Conversación',
         }}
       />
@@ -24,8 +42,6 @@ export default function AppLayout() {
         name="order/[id]"
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: '#FFFFFF' },
-          headerTintColor: '#0F172A',
           title: 'Detalle de Pedido',
         }}
       />
@@ -33,8 +49,6 @@ export default function AppLayout() {
         name="customer/[id]"
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: '#FFFFFF' },
-          headerTintColor: '#0F172A',
           title: 'Ficha de Cliente (CRM)',
         }}
       />
