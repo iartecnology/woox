@@ -49,111 +49,104 @@ export default function LoginScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={[Colors.headerTop, Colors.headerBottom]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.innerKeyboardContainer}
-      >
-        <View style={styles.cardContainer}>
-          {/* Tarjeta de Cristal Translúcido (Frosted Glass) */}
-          <View style={styles.card}>
-            {/* Header con el Logo Oficial */}
-            <View style={styles.header}>
-              <Image
-                source={require('../../assets/woox-logo-white.png')}
-                style={styles.brandLogo}
-                resizeMode="contain"
+      <View style={styles.cardContainer}>
+        {/* Tarjeta con Degradado de Marca */}
+        <LinearGradient
+          colors={[Colors.headerTop, Colors.headerBottom]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.card}
+        >
+          {/* Header con el Logo Oficial */}
+          <View style={styles.header}>
+            <Image
+              source={require('../../assets/woox-logo-white.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
+            <Text style={styles.subtitle}>El futuro de tus ventas con Inteligencia Artificial</Text>
+          </View>
+
+          {/* Formulario */}
+          <View style={styles.form}>
+            <Text style={styles.label}>Correo Electrónico</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={19} color="rgba(255, 255, 255, 0.75)" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="admin@tuempresa.com"
+                placeholderTextColor="rgba(255, 255, 255, 0.55)"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
               />
-              <Text style={styles.subtitle}>El futuro de tus ventas con Inteligencia Artificial</Text>
             </View>
 
-            {/* Formulario */}
-            <View style={styles.form}>
-              <Text style={styles.label}>Correo Electrónico</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={19} color="rgba(255, 255, 255, 0.75)" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="admin@tuempresa.com"
-                  placeholderTextColor="rgba(255, 255, 255, 0.55)"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                />
-              </View>
-
-              <Text style={styles.label}>Contraseña</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={19} color="rgba(255, 255, 255, 0.75)" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="••••••••"
-                  placeholderTextColor="rgba(255, 255, 255, 0.55)"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={20}
-                    color="rgba(255, 255, 255, 0.8)"
-                  />
-                </TouchableOpacity>
-              </View>
-
+            <Text style={styles.label}>Contraseña</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={19} color="rgba(255, 255, 255, 0.75)" style={styles.inputIcon} />
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="••••••••"
+                placeholderTextColor="rgba(255, 255, 255, 0.55)"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
               <TouchableOpacity
-                style={[styles.loginButton, loading && styles.disabledButton]}
-                onPress={handleLogin}
-                disabled={loading}
-                activeOpacity={0.88}
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
               >
-                {loading ? (
-                  <ActivityIndicator color={Colors.headerPrimary} />
-                ) : (
-                  <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
-                )}
+                <Ionicons
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={20}
+                  color="rgba(255, 255, 255, 0.8)"
+                />
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={[styles.loginButton, loading && styles.disabledButton]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.88}
+            >
+              {loading ? (
+                <ActivityIndicator color={Colors.headerPrimary} />
+              ) : (
+                <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+              )}
+            </TouchableOpacity>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </LinearGradient>
+        </LinearGradient>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  innerKeyboardContainer: {
-    flex: 1,
+    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     padding: 24,
   },
   cardContainer: {
     borderRadius: 26,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
-    elevation: 10,
+    shadowColor: Colors.headerTop,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 22,
+    elevation: 8,
   },
   card: {
     borderRadius: 26,
     padding: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.28)',
   },
   header: {
     alignItems: 'center',
@@ -187,7 +180,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.16)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.32)',
+    borderColor: 'rgba(255, 255, 255, 0.30)',
     paddingHorizontal: 14,
   },
   inputIcon: {
@@ -216,9 +209,9 @@ const styles = StyleSheet.create({
     marginTop: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 3,
   },
   disabledButton: {
     opacity: 0.7,
