@@ -11,6 +11,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,62 +53,77 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <View style={styles.card}>
-        <View style={styles.header}>
-          <Image
-            source={require('../../assets/woox-logo.png')}
-            style={styles.brandLogo}
-            resizeMode="contain"
-          />
-          <Text style={styles.subtitle}>El futuro de tus ventas con Inteligencia Artificial</Text>
-        </View>
-
-        <View style={styles.form}>
-          <Text style={styles.label}>Correo Electrónico</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="admin@tuempresa.com"
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <Text style={styles.label}>Contraseña</Text>
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="••••••••"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
+      <View style={styles.cardContainer}>
+        {/* Tarjeta con Degradado de Marca */}
+        <LinearGradient
+          colors={[Colors.headerTop, Colors.headerBottom]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.card}
+        >
+          {/* Header con el Logo Oficial */}
+          <View style={styles.header}>
+            <Image
+              source={require('../../assets/woox-logo-white.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
             />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeButton}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-off' : 'eye'}
-                size={20}
-                color={Colors.textMuted}
-              />
-            </TouchableOpacity>
+            <Text style={styles.subtitle}>El futuro de tus ventas con Inteligencia Artificial</Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.loginButton, loading && styles.disabledButton]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          {/* Formulario */}
+          <View style={styles.form}>
+            <Text style={styles.label}>Correo Electrónico</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={19} color="rgba(255, 255, 255, 0.7)" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="admin@tuempresa.com"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
+
+            <Text style={styles.label}>Contraseña</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={19} color="rgba(255, 255, 255, 0.7)" style={styles.inputIcon} />
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="••••••••"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={20}
+                  color="rgba(255, 255, 255, 0.75)"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.loginButton, loading && styles.disabledButton]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color={Colors.headerPrimary} />
+              ) : (
+                <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
       </View>
     </KeyboardAvoidingView>
   );
@@ -116,37 +132,40 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bgPrimary,
+    backgroundColor: '#0F172A',
     justifyContent: 'center',
     padding: 24,
   },
+  cardContainer: {
+    borderRadius: 26,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 8,
+  },
   card: {
-    backgroundColor: Colors.bgSecondary,
-    borderRadius: 24,
+    borderRadius: 26,
     padding: 28,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 26,
   },
   brandLogo: {
     width: '100%',
-    maxWidth: 210,
-    height: 64,
-    marginBottom: 10,
+    maxWidth: 220,
+    height: 60,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 4,
     textAlign: 'center',
+    lineHeight: 18,
   },
   form: {
     gap: 14,
@@ -154,55 +173,54 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: '#FFFFFF',
     marginBottom: 2,
   },
-  input: {
-    backgroundColor: Colors.bgPrimary,
-    borderRadius: 12,
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.borderColor,
-    color: Colors.textPrimary,
-    paddingHorizontal: 16,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    paddingHorizontal: 14,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    color: '#FFFFFF',
     paddingVertical: 14,
     fontSize: 15,
   },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.bgPrimary,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderColor,
-  },
   passwordInput: {
     flex: 1,
-    color: Colors.textPrimary,
-    paddingHorizontal: 16,
+    color: '#FFFFFF',
     paddingVertical: 14,
     fontSize: 15,
   },
   eyeButton: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 6,
   },
   loginButton: {
-    backgroundColor: Colors.primaryDark,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 16,
-    shadowColor: Colors.primaryDark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    marginTop: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   disabledButton: {
-    opacity: 0.6,
+    opacity: 0.7,
   },
   loginButtonText: {
-    color: '#FFFFFF',
+    color: Colors.headerPrimary,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });
