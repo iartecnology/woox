@@ -89,20 +89,28 @@ export default function TabsLayout() {
         ),
         headerShadowVisible: false,
         headerRight: () => <HeaderRightActions />,
+        tabBarBackground: () => (
+          <LinearGradient
+            colors={[Colors.headerTop, Colors.headerBottom]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        ),
         tabBarStyle: {
-          backgroundColor: Colors.bgSecondary,
-          borderTopColor: Colors.borderSubtle,
-          height: 68,
-          paddingBottom: 10,
+          backgroundColor: Colors.headerPrimary,
+          borderTopWidth: 0,
+          height: Platform.OS === 'ios' ? 76 : 68,
+          paddingBottom: Platform.OS === 'ios' ? 16 : 10,
           paddingTop: 8,
-          elevation: 6,
-          shadowColor: '#0F172A',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.06,
-          shadowRadius: 10,
+          elevation: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.18,
+          shadowRadius: 12,
         },
-        tabBarActiveTintColor: Colors.primaryDark,
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarActiveTintColor: '#FFFFFF',
+        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.60)',
         tabBarLabelStyle: { fontWeight: '700', fontSize: 11, marginTop: 2 },
       }}
     >
@@ -116,7 +124,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'grid' : 'grid-outline'}
                 size={22}
-                color={focused ? Colors.primaryDark : color}
+                color={focused ? '#FFFFFF' : color}
               />
             </View>
           ),
@@ -134,7 +142,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'receipt' : 'receipt-outline'}
                 size={22}
-                color={focused ? Colors.primaryDark : color}
+                color={focused ? '#FFFFFF' : color}
               />
               {pendingOrdersCount > 0 && (
                 <View style={styles.badge}>
@@ -156,10 +164,10 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
                 size={22}
-                color={focused ? Colors.primaryDark : color}
+                color={focused ? '#FFFFFF' : color}
               />
               {unreadChatsCount > 0 && (
-                <View style={[styles.badge, { backgroundColor: Colors.primaryDark }]}>
+                <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
                   <Text style={styles.badgeText}>{unreadChatsCount}</Text>
                 </View>
               )}
@@ -178,7 +186,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'people' : 'people-outline'}
                 size={22}
-                color={focused ? Colors.primaryDark : color}
+                color={focused ? '#FFFFFF' : color}
               />
             </View>
           ),
@@ -196,7 +204,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'calendar' : 'calendar-outline'}
                 size={22}
-                color={focused ? Colors.primaryDark : color}
+                color={focused ? '#FFFFFF' : color}
               />
             </View>
           ),
@@ -213,7 +221,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'fast-food' : 'fast-food-outline'}
                 size={22}
-                color={focused ? Colors.primaryDark : color}
+                color={focused ? '#FFFFFF' : color}
               />
             </View>
           ),
@@ -230,7 +238,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'settings' : 'settings-outline'}
                 size={22}
-                color={focused ? Colors.primaryDark : color}
+                color={focused ? '#FFFFFF' : color}
               />
             </View>
           ),
@@ -242,7 +250,7 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   tabIconContainer: {
-    width: 40,
+    width: 44,
     height: 30,
     borderRadius: 15,
     justifyContent: 'center',
@@ -250,7 +258,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabIconContainerActive: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
   badge: {
     position: 'absolute',
