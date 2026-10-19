@@ -1007,36 +1007,199 @@
                 <button class="cancel-btn" (click)="showUserManager = false">Cerrar</button>
             </div>
         </div>
-    </div><!-- Modal de Configuración de IA -->
+    </div>    <!-- Modal de Configuración de IA Modernizado -->
     <div class="modal-overlay" *ngIf="showAIConfig" (click)="showAIConfig = false">
-        <div class="modal-content ai-config-modal" (click)="$event.stopPropagation()">
-            <h2>🤖 Configuración de IA - {{ currentManagingMerchant?.name }}</h2>
-
-            <div class="ai-config-content">
-                <!-- 🎮 CENTRO DE CONTROL DE AUTOMATIZACIÓN -->
-                <section class="config-section automation-central">
-                    <div class="automation-header">
-                        <div class="title-group">
-                            <span class="main-emoji">🎮</span>
-                            <div class="text-info">
-                                <h3>Control de Automatización</h3>
-                                <p>Define el nivel de respuesta automática para este comercio.</p>
-                            </div>
-                        </div>
-                        <div class="automation-badge" [ngClass]="{'manual': !selectedMerchant.bot_mode}">
-                            {{ selectedMerchant.bot_mode ? '🧬 ASISTENTE ADN ACTIVO' : '👤 MODO MANUAL' }}
+        <div class="modal-content ai-config-modal-v2" (click)="$event.stopPropagation()">
+            <!-- Header con información del comercio y motor activo -->
+            <div class="ai-modal-header">
+                <div class="ai-header-info">
+                    <div class="ai-header-title">
+                        <span class="ai-avatar-icon">🤖</span>
+                        <div>
+                            <h2>Configuración de IA</h2>
+                            <span class="merchant-badge-sub">{{ currentManagingMerchant?.name }}</span>
                         </div>
                     </div>
+                    <div class="ai-active-pill" [class.custom]="!isUsingFallbackModel(selectedMerchant)">
+                        <span class="ai-pulse-dot"></span>
+                        <span class="ai-pill-text">
+                            <small>Motor Activo</small>
+                            <strong>{{ getOperatingModel(selectedMerchant) }}</strong>
+                        </span>
+                    </div>
+                </div>
 
-                    <div class="automation-options-grid" style="grid-template-columns: 1fr;">
-                        <!-- Única Opción: Asistente Automatizado (ADN Builder) -->
-                        <div class="auto-card" [class.active]="selectedMerchant.bot_mode">
-                            <div class="auto-card-content">
+                <!-- Tabs de Navegación -->
+                <div class="ai-nav-tabs">
+                    <button type="button" class="ai-tab-btn" [class.active]="aiModalTab === 'engine'" (click)="aiModalTab = 'engine'">
+                        <span class="tab-icon">⚡</span>
+                        <span class="tab-text">Motor & Conexión</span>
+                    </button>
+                    <button type="button" class="ai-tab-btn" [class.active]="aiModalTab === 'behavior'" (click)="aiModalTab = 'behavior'">
+                        <span class="tab-icon">🧬</span>
+                        <span class="tab-text">Modo & Flujos</span>
+                    </button>
+                    <button type="button" class="ai-tab-btn" [class.active]="aiModalTab === 'schedule'" (click)="aiModalTab = 'schedule'">
+                        <span class="tab-icon">⏰</span>
+                        <span class="tab-text">Horario de IA</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Contenido de las Pestañas -->
+            <div class="ai-modal-body">
+                <!-- ================= TAB 1: MOTOR & CONEXIÓN ================= -->
+                <div class="ai-tab-pane" *ngIf="aiModalTab === 'engine'">
+                    <div class="ai-cards-grid">
+                        <!-- Tarjeta Proveedor y Credenciales -->
+                        <div class="ai-panel-card">
+                            <div class="panel-card-title">
+                                <span class="panel-icon">🔌</span>
+                                <div>
+                                    <h4>Proveedor y Credenciales</h4>
+                                    <p>Selecciona la API o servidor local de IA para este comercio.</p>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label>Proveedor de IA</label>
+                                <select [(ngModel)]="selectedMerchant.ai_provider" (change)="aiConnectionStatus = 'none'">
+                                    <option *ngFor="let provider of aiProviders" [value]="provider.id">
+                                        {{ provider.icon }} {{ provider.name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- API Key para proveedores en la nube -->
+                            <div class="form-group mb-3" *ngIf="selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio'">
+                                <label>API Key del Proveedor</label>
+                                <div class="input-with-status">
+                                    <input type="password" [(ngModel)]="selectedMerchant.ai_api_key"
+                                        placeholder="sk-... o API Key" autocomplete="off"
+                                        (ngModelChange)="aiConnectionStatus = 'none'">
+                                </div>
+                                <small class="input-hint">Clave cifrada en reposo y usada exclusivamente para este comercio.</small>
+                            </div>
+
+                            <!-- URL para Ollama -->
+                            <div class="form-group mb-3" *ngIf="selectedMerchant.ai_provider === 'ollama'">
+                                <label>Ollama API URL</label>
+                                <input type="text" [(ngModel)]="selectedMerchant.ollama_base_url"
+                                    placeholder="http://localhost:11434"
+                                    (ngModelChange)="aiConnectionStatus = 'none'">
+                                <small class="input-hint">Endpoint HTTP local o de red privada de tu servidor Ollama.</small>
+                            </div>
+
+                            <!-- URL para LM Studio -->
+                            <div class="form-group mb-3" *ngIf="selectedMerchant.ai_provider === 'lmstudio'">
+                                <label>LM Studio API URL</label>
+                                <input type="text" [(ngModel)]="selectedMerchant.lmstudio_base_url"
+                                    placeholder="http://localhost:1234/v1"
+                                    (ngModelChange)="aiConnectionStatus = 'none'">
+                                <small class="input-hint">Servidor local de LM Studio compatible con OpenAPI.</small>
+                            </div>
+
+                            <!-- Botón de Test y Estado -->
+                            <div class="ai-action-row">
+                                <button type="button" class="verify-btn" (click)="testAIConnection()"
+                                    [disabled]="isTestingAI || (!selectedMerchant.ai_api_key && selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio')">
+                                    <span *ngIf="!isTestingAI">⚡ Verificar Conexión</span>
+                                    <span *ngIf="isTestingAI">⌛ Conectando...</span>
+                                </button>
+
+                                <div *ngIf="aiConnectionStatus !== 'none'" class="connection-status-pill"
+                                    [class.success]="aiConnectionStatus === 'success'"
+                                    [class.error]="aiConnectionStatus === 'error'">
+                                    <span *ngIf="aiConnectionStatus === 'success'">✅ Conexión Exitosa</span>
+                                    <span *ngIf="aiConnectionStatus === 'error'">❌ Error: {{ aiConnectionMessage }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tarjeta Modelo y Pruebas -->
+                        <div class="ai-panel-card">
+                            <div class="panel-card-title">
+                                <span class="panel-icon">🧠</span>
+                                <div>
+                                    <h4>Modelo de Inteligencia Artificial</h4>
+                                    <p>Ajusta qué modelo procesará las conversaciones.</p>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <div class="label-with-badge">
+                                    <label style="margin-bottom: 0;">Modelo de IA</label>
+                                    <span class="operating-pill" [class.custom]="!isUsingFallbackModel(selectedMerchant)">
+                                        <span class="status-dot"></span>
+                                        <strong>{{ getOperatingModel(selectedMerchant) }}</strong>
+                                        <span *ngIf="isUsingFallbackModel(selectedMerchant)" class="pill-tag">(Por defecto)</span>
+                                    </span>
+                                </div>
+
+                                <ng-container *ngIf="selectedMerchant.ai_provider === 'ollama' || selectedMerchant.ai_provider === 'lmstudio'; else cloudModelSelect">
+                                    <input type="text" [(ngModel)]="selectedMerchant.ai_model"
+                                        list="localModelsList" placeholder="Ej: qwen/qwen2.5-coder-14b">
+                                    <datalist id="localModelsList">
+                                        <option *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider)" [value]="model.id">
+                                            {{ model.name }}
+                                        </option>
+                                    </datalist>
+                                    <small class="input-hint">Elige de la lista local o escribe el identificador exacto.</small>
+                                </ng-container>
+
+                                <ng-template #cloudModelSelect>
+                                    <select [(ngModel)]="selectedMerchant.ai_model"
+                                        [disabled]="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model">
+                                        <option value="">Seleccionar modelo (usar recomendado)...</option>
+                                        <option *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider || 'google_gemini')" [value]="model.id">
+                                            {{ model.name }}
+                                        </option>
+                                    </select>
+                                    <small *ngIf="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model" class="warn-text">
+                                        💡 Puedes guardar directamente o verificar conexión para confirmar soporte.
+                                    </small>
+                                </ng-template>
+                            </div>
+
+                            <!-- Probar Prompt Rápido -->
+                            <div class="test-chat-section">
+                                <label class="section-label">🧪 Prueba Rápida de Respuesta</label>
+                                <div class="test-chat-input-group">
+                                    <input type="text" [(ngModel)]="testMessage" placeholder="Ej: Hola, ¿qué opciones tienes?" (keyup.enter)="testAIChatResponse()">
+                                    <button type="button" class="action-btn" (click)="testAIChatResponse()" [disabled]="isTestingChat">
+                                        {{ isTestingChat ? '⌛...' : '🚀 Probar' }}
+                                    </button>
+                                </div>
+                                <div class="test-chat-response" *ngIf="testResponse">
+                                    <div class="response-header"><strong>Respuesta generada:</strong></div>
+                                    <p>{{ testResponse }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 2: MODO & FLUJOS ================= -->
+                <div class="ai-tab-pane" *ngIf="aiModalTab === 'behavior'">
+                    <div class="ai-cards-grid single-column">
+                        <!-- Tarjeta Asistente ADN / Diseñador -->
+                        <div class="ai-panel-card highlight-card">
+                            <div class="panel-card-title">
+                                <span class="panel-icon">🧬</span>
+                                <div>
+                                    <h4>Asistente Automatizado (ADN Builder)</h4>
+                                    <p>Centraliza la lógica, árbol de decisiones y respuestas inteligentes por canal.</p>
+                                </div>
+                                <div class="automation-badge ms-auto" [ngClass]="{'manual': !selectedMerchant.bot_mode}">
+                                    {{ selectedMerchant.bot_mode ? '🧬 ADN ACTIVO' : '👤 MODO MANUAL' }}
+                                </div>
+                            </div>
+
+                            <div class="auto-card-content p-3">
                                 <div class="auto-card-info">
-                                    <span class="auto-icon">🧬</span>
                                     <div class="auto-details">
-                                        <strong>Asistente Automatizado (ADN)</strong>
-                                        <p>Toda la inteligencia artificial y la lógica programada ahora se centraliza en el Diseñador de Flujos.</p>
+                                        <strong>Respuestas Automatizadas</strong>
+                                        <p>Cuando está activado, el asistente responde según el diseño de flujos y catálogo de productos.</p>
                                     </div>
                                 </div>
                                 <label class="switch-pill">
@@ -1044,257 +1207,91 @@
                                     <span class="slider-pill round bot-pill-slider"></span>
                                 </label>
                             </div>
-                            <div *ngIf="selectedMerchant.bot_mode" class="auto-card-footer" style="display: flex; gap: 10px;">
-                                <button class="btn-builder-link" (click)="goToBotBuilder(currentManagingMerchant!)" style="flex: 1;">🎨 Abrir Diseñador de Flujos (ADN)</button>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div *ngIf="!selectedMerchant.ai_enabled && !selectedMerchant.bot_mode" class="manual-mode-alert">
-                        <span class="alert-icon">👤</span>
-                        <div class="alert-content">
-                            <strong>Atención Humana Requerida</strong>
-                            <p>El sistema no responderá automáticamente. El comercio deberá atender los chats de forma manual.</p>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Motor de IA (Agrupado y Organizado) -->
-                <section class="config-section ai-engine-container">
-                    <div class="section-title-group">
-                        <h3>⚙️ Motor de IA</h3>
-                        <p class="section-subtitle">Configura el "cerebro" que procesará los mensajes.</p>
-                    </div>
-
-                    <div class="ai-engine-grid">
-                        <!-- Tarjeta 1: Conectividad -->
-                        <div class="ai-config-card">
-                            <div class="card-header">
-                                <span class="card-icon">🔌</span>
-                                <h4>Conectividad y API</h4>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-group">
-                                    <label>Proveedor de IA</label>
-                                    <select [(ngModel)]="selectedMerchant.ai_provider"
-                                        (change)="aiConnectionStatus = 'none'">
-                                        <option *ngFor="let provider of aiProviders" [value]="provider.id">
-                                            {{ provider.icon }} {{ provider.name }}
-                                        </option>
-                                    </select>
+                            <div *ngIf="selectedMerchant.bot_mode" class="builder-shortcut-banner">
+                                <div class="shortcut-text">
+                                    <strong>Diseñador de Flujos Visual</strong>
+                                    <span>Personaliza prompts de sistema, nodos de WhatsApp/Web y catálogo directamente.</span>
                                 </div>
-
-                                <div class="form-group">
-                                    <label>API Key del Proveedor</label>
-                                    <div class="input-with-status">
-                                        <input type="text" [(ngModel)]="selectedMerchant.ai_api_key"
-                                            placeholder="sk-... o API Key" autocomplete="off"
-                                            (ngModelChange)="aiConnectionStatus = 'none'">
-                                    </div>
-                                    <small class="input-hint">
-                                        <ng-container
-                                            *ngIf="selectedMerchant.ai_provider === 'ollama' || selectedMerchant.ai_provider === 'lmstudio'">
-                                            🚀 <strong>Opcional:</strong> Los proveedores locales no suelen requerir API
-                                            Key.
-                                        </ng-container>
-                                        <ng-container
-                                            *ngIf="selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio'">
-                                            Tu clave se guarda de forma segura y solo se usa para estas conexiones.
-                                        </ng-container>
-                                    </small>
-                                </div>
-
-                                <!-- NUEVO: URL de Ollama -->
-                                <div class="form-group" *ngIf="selectedMerchant.ai_provider === 'ollama'">
-                                    <label>Ollama API URL</label>
-                                    <div class="input-with-status">
-                                        <input type="text" [(ngModel)]="selectedMerchant.ollama_base_url"
-                                            placeholder="http://localhost:11434"
-                                            (ngModelChange)="aiConnectionStatus = 'none'">
-                                    </div>
-                                    <small class="input-hint">La dirección local o remota donde corre tu instancia de
-                                        Ollama.</small>
-                                </div>
-
-                                <!-- NUEVO: URL de LM Studio -->
-                                <div class="form-group" *ngIf="selectedMerchant.ai_provider === 'lmstudio'">
-                                    <label>LM Studio API URL</label>
-                                    <div class="input-with-status">
-                                        <input type="text" [(ngModel)]="selectedMerchant.lmstudio_base_url"
-                                            placeholder="http://localhost:1234/v1"
-                                            (ngModelChange)="aiConnectionStatus = 'none'">
-                                    </div>
-                                    <small class="input-hint">La dirección local donde corre el servidor de LM Studio
-                                        (por defecto puerto 1234).</small>
-                                </div>
-
-                                <!-- Modelo de IA (Conectividad y API) -->
-                                <div class="form-group">
-                                    <div class="label-with-badge">
-                                        <label style="margin-bottom: 0;">Modelo de IA</label>
-                                        <span class="operating-pill" [class.custom]="!isUsingFallbackModel(selectedMerchant)">
-                                            <span class="status-dot"></span>
-                                            <span class="pill-label">Operando:</span>
-                                            <strong>{{ getOperatingModel(selectedMerchant) }}</strong>
-                                            <span *ngIf="isUsingFallbackModel(selectedMerchant)" class="pill-tag">(Por defecto)</span>
-                                        </span>
-                                    </div>
-
-                                    <ng-container
-                                        *ngIf="selectedMerchant.ai_provider === 'ollama' || selectedMerchant.ai_provider === 'lmstudio'; else cloudModelSelect">
-                                        <input type="text" [(ngModel)]="selectedMerchant.ai_model"
-                                            list="localModelsList" placeholder="Ej: qwen/qwen2.5-coder-14b">
-                                        <datalist id="localModelsList">
-                                            <option
-                                                *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider)"
-                                                [value]="model.id">
-                                                {{ model.name }}
-                                            </option>
-                                        </datalist>
-                                        <small class="input-hint">Puedes elegir de la lista o escribir el nombre exacto
-                                            del modelo.</small>
-                                    </ng-container>
-                                    <ng-template #cloudModelSelect>
-                                        <select [(ngModel)]="selectedMerchant.ai_model"
-                                            [disabled]="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model">
-                                            <option value="">Seleccionar modelo (usar recomendado)...</option>
-                                            <option
-                                                *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider || 'google_gemini')"
-                                                [value]="model.id">
-                                                {{ model.name }}
-                                            </option>
-                                        </select>
-                                    </ng-template>
-                                    <small
-                                        *ngIf="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model && selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio'"
-                                        class="warn-text">
-                                        ⚠️ Verifica la conexión para ver modelos disponibles o selecciona uno de la lista.
-                                    </small>
-                                </div>
-
-                                <button class="verify-btn" (click)="testAIConnection()"
-                                    [disabled]="isTestingAI || (!selectedMerchant.ai_api_key && selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio')">
-                                    <span *ngIf="!isTestingAI">⚡ Verificar y Listar Modelos</span>
-                                    <span *ngIf="isTestingAI">⌛ Conectando con {{ selectedMerchant.ai_provider
-                                        }}...</span>
+                                <button type="button" class="btn-builder-link" (click)="goToBotBuilder(currentManagingMerchant!)">
+                                    🎨 Abrir Diseñador de Flujos (ADN)
                                 </button>
+                            </div>
 
-                                <div *ngIf="aiConnectionStatus !== 'none'" class="connection-status-pill"
-                                    [class.success]="aiConnectionStatus === 'success'"
-                                    [class.error]="aiConnectionStatus === 'error'">
-                                    <span *ngIf="aiConnectionStatus === 'success'">✅ Conexión Exitosa</span>
-                                    <span *ngIf="aiConnectionStatus === 'error'">❌ Error: {{ aiConnectionMessage
-                                        }}</span>
-                                </div>
-
-                                <!-- TEST CHAT SECTION -->
-                                <div class="test-chat-section" *ngIf="aiConnectionStatus === 'success' || selectedMerchant.ai_model">
-                                    <h5 style="margin-top: 20px; font-size: 0.9rem; color: #4b5563; border-top: 1px solid #e5e7eb; padding-top: 15px;">🧪 Probar Respuesta de IA</h5>
-                                    <div class="test-chat-input-group" style="display: flex; gap: 8px; margin-top: 10px;">
-                                        <input type="text" [(ngModel)]="testMessage" placeholder="Escribe algo..." style="flex: 1; height: 36px; font-size: 0.85rem;">
-                                        <button class="action-btn" (click)="testAIChatResponse()" [disabled]="isTestingChat" style="height: 36px; white-space: nowrap;">
-                                            {{ isTestingChat ? '⌛...' : '🚀 Probar' }}
-                                        </button>
-                                    </div>
-                                    <div class="test-chat-response" *ngIf="testResponse" 
-                                         style="margin-top: 10px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; line-height: 1.4; color: #1e293b; max-height: 150px; overflow-y: auto;">
-                                        <strong>Respuesta:</strong><br>
-                                        {{ testResponse }}
-                                    </div>
+                            <div *ngIf="!selectedMerchant.ai_enabled && !selectedMerchant.bot_mode" class="manual-mode-alert mt-3">
+                                <span class="alert-icon">👤</span>
+                                <div class="alert-content">
+                                    <strong>Atención Humana Requerida</strong>
+                                    <p>El sistema no responderá automáticamente. El comercio deberá atender los chats en la bandeja de entrada.</p>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Tarjeta 2: Modelo y Agente -->
-                        <div class="ai-config-card">
-                            <div class="card-header">
-                                <span class="card-icon">🧠</span>
-                                <h4>Comportamiento y Flujos</h4>
+                        <!-- Tarjeta Catálogo & Reglas de Venta -->
+                        <div class="ai-panel-card">
+                            <div class="panel-card-title">
+                                <span class="panel-icon">🛍️</span>
+                                <div>
+                                    <h4>Contexto del Catálogo & Productos</h4>
+                                    <p>Indica si el modelo debe sugerir y cotizar productos del catálogo.</p>
+                                </div>
                             </div>
-                            <div class="card-body">
-                                <div class="form-group legacy-info">
-                                    <label>🤖 Configuración de Comportamiento</label>
-                                    <div class="info-banner">
-                                        Ahora la personalidad y las reglas se configuran en el 
-                                        <strong>Bot Builder</strong> para mayor flexibilidad por canal.
-                                    </div>
-                                    <button class="action-btn-outline" (click)="router.navigate(['/bot-builder'])" style="margin-top: 10px; width: 100%;">
-                                        Ir al Diseñador de Flujos
-                                    </button>
-                                </div>
 
-                                <!-- Resumen del Modelo Activo en Card 2 -->
-                                <div class="operating-model-summary-box">
-                                    <div class="summary-header">
-                                        <span class="icon">⚡</span>
-                                        <span class="title">Motor Activo en Respuestas</span>
-                                    </div>
-                                    <div class="summary-value">
-                                        {{ getOperatingModel(selectedMerchant) }}
-                                    </div>
-                                    <div class="summary-desc">
-                                        Este es el modelo de inteligencia artificial que responderá los mensajes de tus clientes.
-                                    </div>
-                                </div>
-
-                                <!-- Botón de Simulación Destacado -->
-                                <div class="simulator-trigger-box">
-                                    <button class="test-chat-btn" (click)="testChatSimulator($any(selectedMerchant))"
-                                        [disabled]="isPreparingSimulator">
-                                        <span class="icon" *ngIf="!isPreparingSimulator">💬</span>
-                                        <span class="icon" *ngIf="isPreparingSimulator">⌛</span>
-                                        <div class="btn-text">
-                                            <strong>{{ isPreparingSimulator ? 'Preparando...' : 'Probar Chat'
-                                                }}</strong>
-                                            <span>{{ isPreparingSimulator ? 'Obteniendo contexto del catálogo...' :
-                                                'Simular conversación con esta config.' }}</span>
-                                        </div>
-                                    </button>
+                            <div class="form-check-card">
+                                <label class="switch">
+                                    <input type="checkbox" [(ngModel)]="selectedMerchant.ai_use_catalog">
+                                    <span class="slider round"></span>
+                                </label>
+                                <div class="check-text">
+                                    <strong>Consultar Catálogo de Productos</strong>
+                                    <span>La IA tendrá acceso al inventario, precios y enlaces de compra para cerrar pedidos automáticamente.</span>
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
 
-                        <!-- Tarjeta 3: Horario de Atención de la IA -->
-                        <div class="ai-config-card">
-                            <div class="card-header">
-                                <div class="header-main">
-                                    <span class="card-icon">🕒</span>
+                <!-- ================= TAB 3: HORARIO DE IA ================= -->
+                <div class="ai-tab-pane" *ngIf="aiModalTab === 'schedule'">
+                    <div class="ai-cards-grid single-column">
+                        <div class="ai-panel-card">
+                            <div class="panel-card-title">
+                                <span class="panel-icon">⏰</span>
+                                <div>
                                     <h4>Horario de Atención de la IA</h4>
+                                    <p>Define las horas durante las cuales la IA atenderá activamente a los clientes.</p>
                                 </div>
-                                <div class="toggle-wrapper">
+                                <div class="toggle-wrapper ms-auto">
                                     <label class="switch">
                                         <input type="checkbox" [(ngModel)]="selectedMerchant.ai_schedule_enabled">
                                         <span class="slider round"></span>
                                     </label>
                                 </div>
                             </div>
-                            <div class="card-body" [class.disabled]="!selectedMerchant.ai_schedule_enabled">
-                                <p class="card-desc">Define cuándo la IA debe responder automáticamente. Fuera de este
-                                    rango, enviará el mensaje alternativo.</p>
 
-                                <div class="schedule-inputs">
-                                    <div class="form-group">
+                            <div class="schedule-body" [class.disabled-zone]="!selectedMerchant.ai_schedule_enabled">
+                                <div class="schedule-inputs-row">
+                                    <div class="form-group flex-1">
                                         <label>Hora de Inicio</label>
-                                        <input type="time" [(ngModel)]="selectedMerchant.ai_schedule_start">
+                                        <input type="time" [(ngModel)]="selectedMerchant.ai_schedule_start" [disabled]="!selectedMerchant.ai_schedule_enabled">
                                     </div>
-                                    <div class="form-group">
+                                    <div class="form-group flex-1">
                                         <label>Hora de Fin</label>
-                                        <input type="time" [(ngModel)]="selectedMerchant.ai_schedule_end">
+                                        <input type="time" [(ngModel)]="selectedMerchant.ai_schedule_end" [disabled]="!selectedMerchant.ai_schedule_enabled">
                                     </div>
                                 </div>
 
+                                <!-- Barra Visual 24 Horas -->
                                 <div class="visual-schedule-bar-container">
                                     <div class="visual-schedule-bar">
-                                        <div class="time-marker start">{{selectedMerchant.ai_schedule_start || '09:00'}}
-                                        </div>
+                                        <div class="time-marker start">{{selectedMerchant.ai_schedule_start || '09:00'}}</div>
                                         <div class="bar-track">
                                             <div class="bar-fill"
                                                 [style.left]="getSchedulePos(selectedMerchant.ai_schedule_start)"
                                                 [style.width]="getScheduleWidth(selectedMerchant.ai_schedule_start, selectedMerchant.ai_schedule_end)">
                                             </div>
                                         </div>
-                                        <div class="time-marker end">{{selectedMerchant.ai_schedule_end || '18:00'}}
-                                        </div>
+                                        <div class="time-marker end">{{selectedMerchant.ai_schedule_end || '18:00'}}</div>
                                     </div>
                                     <div class="day-labels">
                                         <span>00:00</span>
@@ -1305,23 +1302,31 @@
                                     </div>
                                 </div>
 
-                                <div class="form-group mt-20">
+                                <div class="form-group mt-4">
                                     <label>Mensaje Fuera de Horario</label>
                                     <textarea [(ngModel)]="selectedMerchant.ai_schedule_message" rows="3"
-                                        placeholder="Ej: ¡Hola! Gracias por escribirnos. Nuestro asistente virtual está descansando. Volveremos a atenderte automáticamente mañana a las 9:00 AM."></textarea>
-                                    <small class="hint-text">Este mensaje se enviará una sola vez cuando un cliente
-                                        contacte fuera del horario.</small>
+                                        [disabled]="!selectedMerchant.ai_schedule_enabled"
+                                        placeholder="Ej: ¡Hola! Gracias por escribirnos. Nuestro asistente virtual está fuera de horario. Volveremos a atenderte mañana a las 9:00 AM."></textarea>
+                                    <small class="hint-text">Este mensaje se enviará automáticamente si un cliente escribe fuera de la franja programada.</small>
                                 </div>
                             </div>
                         </div>
-
                     </div>
-                </section>
+                </div>
             </div>
 
-            <div class="modal-actions">
-                <button class="cancel-btn" (click)="showAIConfig = false">Cancelar</button>
-                <button class="save-btn" (click)="saveAIConfig()">Guardar Configuración de IA</button>
+            <!-- Footer con Botones de Acción -->
+            <div class="ai-modal-footer">
+                <div class="footer-left">
+                    <button type="button" class="btn-test-sim" (click)="testChatSimulator($any(selectedMerchant))" [disabled]="isPreparingSimulator">
+                        <span class="icon">{{ isPreparingSimulator ? '⌛' : '💬' }}</span>
+                        <span>{{ isPreparingSimulator ? 'Iniciando...' : 'Probar en Simulador' }}</span>
+                    </button>
+                </div>
+                <div class="footer-right">
+                    <button type="button" class="cancel-btn" (click)="showAIConfig = false">Cancelar</button>
+                    <button type="button" class="save-btn" (click)="saveAIConfig()">💾 Guardar Configuración</button>
+                </div>
             </div>
         </div>
     </div>

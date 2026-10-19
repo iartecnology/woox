@@ -145,6 +145,7 @@ export class SuperAdminComponent implements OnInit {
     selectedSegment: 'all' | 'retail' | 'reservations' | 'support' | 'expiring' | 'inactive' = 'all';
     activeMenuMerchantId: string | null = null;
     viewMerchants: Merchant[] = [];
+    aiModalTab: 'engine' | 'behavior' | 'schedule' = 'engine';
     Math = Math;
 
     get activeMerchantsCount(): number {
@@ -1357,6 +1358,7 @@ export class SuperAdminComponent implements OnInit {
         this.selectedMerchant.lmstudio_base_url = this.selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1';
 
         this.showAIConfig = true;
+        this.aiModalTab = 'engine';
         this.aiConnectionStatus = 'none';
         this.aiConnectionMessage = '';
 
