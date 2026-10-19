@@ -3073,6 +3073,31 @@ export class SuperAdminComponent implements OnInit {
         return this.aiModels[providerId] || [];
     }
 
+    getOperatingModel(merchant: any): string {
+        if (!merchant) return 'No configurado';
+        if (merchant.ai_model && merchant.ai_model.trim()) {
+            return merchant.ai_model;
+        }
+        const provider = merchant.ai_provider || 'google_gemini';
+        const defaultModels: Record<string, string> = {
+            'google_gemini': 'gemini-1.5-flash',
+            'openai': 'gpt-4o-mini',
+            'groq': 'llama-3.3-70b-versatile',
+            'anthropic': 'claude-3-5-sonnet-20241022',
+            'deepseek': 'deepseek-chat',
+            'openrouter': 'nvidia/nemotron-3.5-lightning:free',
+            'cerebras': 'llama-3.3-70b',
+            'zai': 'glm-4.7-flash',
+            'ollama': 'llama3:latest',
+            'lmstudio': 'Local Default'
+        };
+        return defaultModels[provider] || 'gemini-1.5-flash';
+    }
+
+    isUsingFallbackModel(merchant: any): boolean {
+        return !merchant?.ai_model || !merchant.ai_model.trim();
+    }
+
     getMaskedToken(token: string | undefined): string {
         if (!token) return '';
         if (token.length <= 8) return token;

@@ -225,6 +225,11 @@
                                         <span class="arrow">→</span>
                                     </button>
 
+                                    <!-- Acceso Directo: Configuración de IA (Robot) -->
+                                    <button class="quick-icon-btn" (click)="openAIConfig(m)" title="Configuración de IA">
+                                        🤖
+                                    </button>
+
                                     <!-- Acceso Directo: IA & ADN -->
                                     <button class="quick-icon-btn" (click)="goToBotBuilder(m)" title="Constructor de Flujos ADN">
                                         🧬
@@ -1123,6 +1128,50 @@
                                         (por defecto puerto 1234).</small>
                                 </div>
 
+                                <!-- Modelo de IA (Conectividad y API) -->
+                                <div class="form-group">
+                                    <div class="label-with-badge">
+                                        <label style="margin-bottom: 0;">Modelo de IA</label>
+                                        <span class="operating-pill" [class.custom]="!isUsingFallbackModel(selectedMerchant)">
+                                            <span class="status-dot"></span>
+                                            <span class="pill-label">Operando:</span>
+                                            <strong>{{ getOperatingModel(selectedMerchant) }}</strong>
+                                            <span *ngIf="isUsingFallbackModel(selectedMerchant)" class="pill-tag">(Por defecto)</span>
+                                        </span>
+                                    </div>
+
+                                    <ng-container
+                                        *ngIf="selectedMerchant.ai_provider === 'ollama' || selectedMerchant.ai_provider === 'lmstudio'; else cloudModelSelect">
+                                        <input type="text" [(ngModel)]="selectedMerchant.ai_model"
+                                            list="localModelsList" placeholder="Ej: qwen/qwen2.5-coder-14b">
+                                        <datalist id="localModelsList">
+                                            <option
+                                                *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider)"
+                                                [value]="model.id">
+                                                {{ model.name }}
+                                            </option>
+                                        </datalist>
+                                        <small class="input-hint">Puedes elegir de la lista o escribir el nombre exacto
+                                            del modelo.</small>
+                                    </ng-container>
+                                    <ng-template #cloudModelSelect>
+                                        <select [(ngModel)]="selectedMerchant.ai_model"
+                                            [disabled]="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model">
+                                            <option value="">Seleccionar modelo (usar recomendado)...</option>
+                                            <option
+                                                *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider || 'google_gemini')"
+                                                [value]="model.id">
+                                                {{ model.name }}
+                                            </option>
+                                        </select>
+                                    </ng-template>
+                                    <small
+                                        *ngIf="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model && selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio'"
+                                        class="warn-text">
+                                        ⚠️ Verifica la conexión para ver modelos disponibles o selecciona uno de la lista.
+                                    </small>
+                                </div>
+
                                 <button class="verify-btn" (click)="testAIConnection()"
                                     [disabled]="isTestingAI || (!selectedMerchant.ai_api_key && selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio')">
                                     <span *ngIf="!isTestingAI">⚡ Verificar y Listar Modelos</span>
@@ -1160,7 +1209,7 @@
                         <div class="ai-config-card">
                             <div class="card-header">
                                 <span class="card-icon">🧠</span>
-                                <h4>Modelo y Agente</h4>
+                                <h4>Comportamiento y Flujos</h4>
                             </div>
                             <div class="card-body">
                                 <div class="form-group legacy-info">
@@ -1174,38 +1223,18 @@
                                     </button>
                                 </div>
 
-                                <div class="form-group">
-                                    <label>Modelo de IA</label>
-                                    <ng-container
-                                        *ngIf="selectedMerchant.ai_provider === 'ollama' || selectedMerchant.ai_provider === 'lmstudio'; else cloudModelSelect">
-                                        <input type="text" [(ngModel)]="selectedMerchant.ai_model"
-                                            list="localModelsList" placeholder="Ej: qwen/qwen2.5-coder-14b">
-                                        <datalist id="localModelsList">
-                                            <option
-                                                *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider)"
-                                                [value]="model.id">
-                                                {{ model.name }}
-                                            </option>
-                                        </datalist>
-                                        <small class="input-hint">Puedes elegir de la lista o escribir el nombre exacto
-                                            del modelo.</small>
-                                    </ng-container>
-                                    <ng-template #cloudModelSelect>
-                                        <select [(ngModel)]="selectedMerchant.ai_model"
-                                            [disabled]="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model">
-                                            <option value="">Seleccionar modelo...</option>
-                                            <option
-                                                *ngFor="let model of getAvailableModels(selectedMerchant.ai_provider || 'google_gemini')"
-                                                [value]="model.id">
-                                                {{ model.name }}
-                                            </option>
-                                        </select>
-                                    </ng-template>
-                                    <small
-                                        *ngIf="aiConnectionStatus !== 'success' && !selectedMerchant.ai_model && selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio'"
-                                        class="warn-text">
-                                        ⚠️ Verifica la conexión para ver modelos.
-                                    </small>
+                                <!-- Resumen del Modelo Activo en Card 2 -->
+                                <div class="operating-model-summary-box">
+                                    <div class="summary-header">
+                                        <span class="icon">⚡</span>
+                                        <span class="title">Motor Activo en Respuestas</span>
+                                    </div>
+                                    <div class="summary-value">
+                                        {{ getOperatingModel(selectedMerchant) }}
+                                    </div>
+                                    <div class="summary-desc">
+                                        Este es el modelo de inteligencia artificial que responderá los mensajes de tus clientes.
+                                    </div>
                                 </div>
 
                                 <!-- Botón de Simulación Destacado -->
@@ -1218,8 +1247,7 @@
                                             <strong>{{ isPreparingSimulator ? 'Preparando...' : 'Probar Chat'
                                                 }}</strong>
                                             <span>{{ isPreparingSimulator ? 'Obteniendo contexto del catálogo...' :
-                                                'Simular
-                                                conversación con esta config.' }}</span>
+                                                'Simular conversación con esta config.' }}</span>
                                         </div>
                                     </button>
                                 </div>
