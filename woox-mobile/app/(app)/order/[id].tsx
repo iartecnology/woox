@@ -1,4 +1,5 @@
 import { formatOrderNumber } from '../../../src/lib/orderNumber';
+import { formatPrice } from '../../../src/lib/formatPrice';
 import React, { useState } from 'react';
 import {
   View,
@@ -217,7 +218,7 @@ export default function OrderDetailScreen() {
                 {it.notes ? <Text style={styles.itemNotes}>Nota: {it.notes}</Text> : null}
               </View>
               <Text style={styles.itemPrice}>
-                ${Number(it.subtotal || it.unit_price * it.quantity).toFixed(2)}
+                {formatPrice(it.subtotal || it.unit_price * it.quantity)}
               </Text>
             </View>
           ))
@@ -229,7 +230,7 @@ export default function OrderDetailScreen() {
 
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Total a Cobrar</Text>
-          <Text style={styles.totalValue}>${totalAmount.toFixed(2)}</Text>
+          <Text style={styles.totalValue}>{formatPrice(totalAmount)}</Text>
         </View>
       </View>
     </ScrollView>

@@ -15,11 +15,7 @@ import { supabase } from '../../../src/lib/supabase';
 import { Customer, Order } from '../../../src/types/domain';
 import { Colors } from '../../../src/constants/theme';
 import { formatOrderNumber } from '../../../src/lib/orderNumber';
-
-function formatCurrency(amount?: number | null): string {
-  if (!amount) return '$0';
-  return `$${Number(amount).toLocaleString('es-CO')}`;
-}
+import { formatPrice } from '../../../src/lib/formatPrice';
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return 'N/A';
@@ -181,11 +177,11 @@ export default function CustomerDetailScreen() {
         <View style={styles.metricsGrid}>
           <View style={styles.metricBox}>
             <Text style={styles.metricBoxLabel}>Valor Histórico (CLV)</Text>
-            <Text style={styles.metricBoxValue}>{formatCurrency(customer.clv)}</Text>
+            <Text style={styles.metricBoxValue}>{formatPrice(customer.clv)}</Text>
           </View>
           <View style={styles.metricBox}>
             <Text style={styles.metricBoxLabel}>Ticket Promedio</Text>
-            <Text style={styles.metricBoxValue}>{formatCurrency(customer.avg_ticket)}</Text>
+            <Text style={styles.metricBoxValue}>{formatPrice(customer.avg_ticket)}</Text>
           </View>
           <View style={styles.metricBox}>
             <Text style={styles.metricBoxLabel}>Total Pedidos</Text>
@@ -220,7 +216,7 @@ export default function CustomerDetailScreen() {
             >
               <View style={styles.orderTop}>
                 <Text style={styles.orderNumber}>{formatOrderNumber(order)}</Text>
-                <Text style={styles.orderTotal}>{formatCurrency(order.total_amount)}</Text>
+                <Text style={styles.orderTotal}>{formatPrice(order.total_amount)}</Text>
               </View>
               <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
               {order.order_items && order.order_items.length > 0 && (

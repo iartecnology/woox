@@ -1,4 +1,5 @@
 import { formatOrderNumber } from '../../../src/lib/orderNumber';
+import { formatPrice } from '../../../src/lib/formatPrice';
 import React, { useState } from 'react';
 import {
   View,
@@ -176,7 +177,7 @@ export default function OrdersScreen() {
               <View key={it.id || idx} style={styles.itemRow}>
                 <Text style={styles.itemQuantity}>{it.quantity}x</Text>
                 <Text style={styles.itemName} numberOfLines={1}>{it.product_name}</Text>
-                <Text style={styles.itemPrice}>${Number(it.subtotal || it.unit_price * it.quantity).toFixed(2)}</Text>
+                <Text style={styles.itemPrice}>{formatPrice(it.subtotal || it.unit_price * it.quantity)}</Text>
               </View>
             ))
           ) : (
@@ -193,7 +194,7 @@ export default function OrdersScreen() {
 
         <View style={styles.cardFooter}>
           <Text style={styles.totalAmount}>
-            Total: ${Number((item as any).total ?? item.total_amount ?? 0).toFixed(2)}
+            Total: {formatPrice((item as any).total ?? item.total_amount ?? 0)}
           </Text>
 
           <View style={styles.footerActions}>
@@ -254,7 +255,7 @@ export default function OrdersScreen() {
             <Ionicons name="bar-chart" size={18} color={Colors.primaryDark} />
             <Text style={styles.dashboardTitle}>Resumen del Negocio</Text>
           </View>
-          <Text style={styles.salesTotal}>${totalSales.toFixed(2)}</Text>
+          <Text style={styles.salesTotal}>{formatPrice(totalSales)}</Text>
         </View>
 
         <View style={styles.statsGrid}>

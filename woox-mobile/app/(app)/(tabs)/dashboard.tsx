@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../src/constants/theme';
 import { useRouter } from 'expo-router';
 import { AnalyticsCharts } from '../../../src/components/AnalyticsCharts';
+import { formatPrice } from '../../../src/lib/formatPrice';
 
 export default function DashboardScreen() {
   const { merchant } = useAuthStore();
@@ -69,7 +70,7 @@ export default function DashboardScreen() {
         </View>
         <View style={styles.revenueBadge}>
           <Text style={styles.revenueLabel}>Ventas Totales</Text>
-          <Text style={styles.revenueValue}>${totalRevenue.toFixed(2)}</Text>
+          <Text style={styles.revenueValue}>{formatPrice(totalRevenue)}</Text>
         </View>
       </View>
 

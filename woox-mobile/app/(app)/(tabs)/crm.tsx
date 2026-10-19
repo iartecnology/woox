@@ -17,11 +17,7 @@ import { Customer } from '../../../src/types/domain';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../../src/constants/theme';
-
-function formatCurrency(amount?: number | null): string {
-  if (!amount) return '$0';
-  return `$${Number(amount).toLocaleString('es-CO')}`;
-}
+import { formatPrice } from '../../../src/lib/formatPrice';
 
 const LOYALTY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   bronze: { label: 'Bronce', color: '#B45309', bg: '#FEF3C7' },
@@ -128,7 +124,7 @@ export default function CRMScreen() {
         <View style={styles.metricsRow}>
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>Total Gastado</Text>
-            <Text style={styles.metricValue}>{formatCurrency(item.clv)}</Text>
+            <Text style={styles.metricValue}>{formatPrice(item.clv)}</Text>
           </View>
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>Pedidos</Text>
@@ -200,7 +196,7 @@ export default function CRMScreen() {
           <Text style={styles.summaryLabel}>En Riesgo</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={[styles.summaryNumber, { color: Colors.primaryDark }]}>{formatCurrency(totalCLV)}</Text>
+          <Text style={[styles.summaryNumber, { color: Colors.primaryDark }]}>{formatPrice(totalCLV)}</Text>
           <Text style={styles.summaryLabel}>CLV Total</Text>
         </View>
       </View>

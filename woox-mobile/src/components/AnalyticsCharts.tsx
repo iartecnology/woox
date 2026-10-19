@@ -10,6 +10,7 @@ import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
 import { Order } from '../types/domain';
+import { formatPrice } from '../lib/formatPrice';
 
 interface AnalyticsChartsProps {
   orders: Order[];
@@ -203,7 +204,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
             <Text style={styles.legendLabelText}>Barras de Ventas</Text>
           </View>
           <Text style={[styles.legendValueText, { color: '#047857' }]}>
-            ${totalPeriodSales.toFixed(2)}
+            {formatPrice(totalPeriodSales)}
           </Text>
         </View>
 
@@ -228,7 +229,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
           <View style={styles.tooltipDetailsRow}>
             <Text style={styles.tooltipStat}>
               <Text style={{ fontWeight: '800', color: '#059669' }}>
-                ${selectedData.salesTotal.toFixed(2)}
+                {formatPrice(selectedData.salesTotal)}
               </Text>{' '}
               en ventas
             </Text>
@@ -296,7 +297,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
                         ]}
                         numberOfLines={1}
                       >
-                        ${Math.round(item.salesTotal)}
+                        {formatPrice(item.salesTotal)}
                       </Text>
                     )}
                   </View>

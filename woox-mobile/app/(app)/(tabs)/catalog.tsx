@@ -20,6 +20,7 @@ import { useCatalogManagement } from '../../../src/hooks/useCatalogManagement';
 import { Product, Category } from '../../../src/types/domain';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../src/constants/theme';
+import { formatPrice } from '../../../src/lib/formatPrice';
 
 export default function CatalogScreen() {
   const { merchant } = useAuthStore();
@@ -183,7 +184,7 @@ export default function CatalogScreen() {
             </View>
           </View>
 
-          <Text style={styles.productPrice}>${Number(item.price).toFixed(2)}</Text>
+          <Text style={styles.productPrice}>{formatPrice(item.price)}</Text>
 
           {item.description ? (
             <Text style={styles.productDesc} numberOfLines={2}>

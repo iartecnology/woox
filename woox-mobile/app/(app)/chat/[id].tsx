@@ -1,4 +1,5 @@
 import { formatOrderNumber } from '../../../src/lib/orderNumber';
+import { formatPrice } from '../../../src/lib/formatPrice';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -241,7 +242,7 @@ export default function ChatDetailScreen() {
                   </View>
 
                   <Text style={styles.snippetTotal}>
-                    ${Number((ord as any).total ?? ord.total_amount ?? 0).toFixed(2)}
+                    {formatPrice((ord as any).total ?? ord.total_amount ?? 0)}
                   </Text>
 
                   <Text style={styles.snippetTime}>
