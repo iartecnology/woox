@@ -33,37 +33,36 @@
         <div class="tab" [class.active]="inboxTab === 'all'" (click)="setInboxTab('all')">Todos</div>
       </div>
 
-      <div class="search-bar" style="margin-bottom: 8px;">
-        <span>🔍</span>
+      <div class="search-bar" style="margin-bottom: 10px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input type="text" [(ngModel)]="searchQuery" placeholder="Buscar cliente o mensaje...">
       </div>
 
-      <div class="channel-filters">
-        <div class="filter-pill" [class.active]="selectedChannel === 'all'" (click)="setFilter('all')">Todos</div>
-        <div class="filter-pill" [class.active]="selectedChannel === 'whatsapp'" (click)="setFilter('whatsapp')">
-          WhatsApp</div>
-        <div class="filter-pill" [class.active]="selectedChannel === 'telegram'" (click)="setFilter('telegram')">
-          Telegram</div>
-        <div class="filter-pill" [class.active]="selectedChannel === 'instagram'" (click)="setFilter('instagram')">
-          Instagram</div>
-        <div class="filter-pill" [class.active]="selectedChannel === 'messenger'" (click)="setFilter('messenger')">
-          Messenger</div>
-        <div class="filter-pill" [class.active]="selectedChannel === 'simulator'" (click)="setFilter('simulator')">
-          Pruebas 🚀</div>
-      </div>
+      <!-- Barra de Filtros Compacta y Elegante -->
+      <div class="filter-controls-row">
+        <!-- Canales desplegables -->
+        <select [ngModel]="selectedChannel" (ngModelChange)="setFilter($event)" class="clean-filter-select">
+          <option value="all">🌐 Todos los canales</option>
+          <option value="whatsapp">📱 WhatsApp</option>
+          <option value="telegram">✈️ Telegram</option>
+          <option value="instagram">📸 Instagram</option>
+          <option value="messenger">💬 Messenger</option>
+          <option value="simulator">🚀 Pruebas</option>
+        </select>
 
-      <!-- Filtro Operativo: IA vs Humano -->
-      <div class="channel-filters" style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.08);">
-        <div class="filter-pill" [class.active]="operationalFilter === 'all'" (click)="setOperationalFilter('all')">Todos</div>
-        <div class="filter-pill" [class.active]="operationalFilter === 'ai'" (click)="setOperationalFilter('ai')">🤖 IA</div>
-        <div class="filter-pill" [class.active]="operationalFilter === 'human'" (click)="setOperationalFilter('human')">👤 Humano</div>
-      </div>
+        <!-- Filtro Operativo (IA vs Humano) -->
+        <select [ngModel]="operationalFilter" (ngModelChange)="setOperationalFilter($event)" class="clean-filter-select">
+          <option value="all">👥 Todos los tipos</option>
+          <option value="ai">🤖 Solo IA</option>
+          <option value="human">👤 Solo Humanos</option>
+        </select>
 
-      <!-- Filtro de Estado: Abiertos vs Resueltos -->
-      <div class="channel-filters" style="margin-top: 4px; padding-top: 4px;">
-        <div class="filter-pill status-pill" [class.active]="chatStatusFilter === 'all'" (click)="setStatusFilter('all')">Todas</div>
-        <div class="filter-pill status-pill" [class.active]="chatStatusFilter === 'open'" (click)="setStatusFilter('open')">🟢 Abiertos</div>
-        <div class="filter-pill status-pill" [class.active]="chatStatusFilter === 'closed'" (click)="setStatusFilter('closed')">✅ Resueltos</div>
+        <!-- Filtro Estado (Abierto vs Resuelto) -->
+        <select [ngModel]="chatStatusFilter" (ngModelChange)="setStatusFilter($event)" class="clean-filter-select">
+          <option value="all">📋 Todos los estados</option>
+          <option value="open">🟢 Abiertos</option>
+          <option value="closed">✅ Resueltos</option>
+        </select>
       </div>
     </div>
 
@@ -184,38 +183,25 @@
         <div class="chat-actions" style="display: flex; align-items: center; gap: 8px;">
           <!-- Marcar Resuelto / Reabrir -->
           <button (click)="toggleConversationStatus()" class="icon-btn action-pill-btn" [class.is-done]="selectedConversation.status === 'closed'" [title]="selectedConversation.status === 'closed' ? 'Reabrir conversación' : 'Marcar conversación como resuelta'">
-            <span>{{ selectedConversation.status === 'closed' ? '🔄' : '✅' }}</span>
+            <span>{{ selectedConversation.status === 'closed' ? '🔄' : '✓' }}</span>
             <span>{{ selectedConversation.status === 'closed' ? 'Reabrir' : 'Resolver' }}</span>
           </button>
 
-          <!-- Exportar Chat -->
-          <button (click)="exportChatHistory()" class="icon-btn action-pill-btn" title="Exportar historial completo de mensajes en TXT">
-            <span>📄</span>
-            <span>Exportar</span>
-          </button>
-
-          <!-- Abrir en WhatsApp si tiene teléfono -->
-          <a *ngIf="customerCRM.phone && (selectedConversation.channel === 'whatsapp' || selectedConversation.channel === 'whatsapp_evolution')" 
-             [href]="'https://wa.me/' + customerCRM.phone.replace('+', '')" target="_blank" class="icon-btn action-pill-btn wa-link" title="Abrir en WhatsApp Web">
-            <span>📱</span>
-            <span>WhatsApp</span>
-          </a>
-
           <!-- Toggle Ficha CRM -->
-          <button (click)="toggleCrmPanel()" class="icon-btn" [style.background]="showCrmPanel ? '#ede9fe' : '#f1f5f9'" [style.color]="showCrmPanel ? '#7c3aed' : '#64748b'" title="Mostrar / Ocultar Ficha CRM" style="border: 1px solid var(--border-color); padding: 8px 12px; width: auto; height: 36px; border-radius: 10px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-            <span>ℹ️</span>
-            <span>{{ showCrmPanel ? 'Ocultar CRM' : 'Ficha CRM' }}</span>
+          <button (click)="toggleCrmPanel()" class="icon-btn action-pill-btn" [class.crm-active]="showCrmPanel" title="Mostrar / Ocultar Ficha CRM">
+            <span>👤</span>
+            <span>CRM</span>
           </button>
 
-          <!-- Interruptor IA vs Humano -->
-          <div class="ai-banner" [style.background]="selectedConversation.ai_active !== false ? 'rgba(99, 102, 241, 0.15)' : 'rgba(245, 158, 11, 0.15)'" style="padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px;">
-            <span class="ai-label" style="font-size: 0.8rem; font-weight: 700;">
-              {{ selectedConversation.ai_active !== false ? '🤖 IA Activa' : '👤 Humano al Mando' }}
-            </span>
-            <label class="switch">
-              <input type="checkbox" [checked]="selectedConversation.ai_active !== false" (change)="toggleAI()">
-              <span class="slider"></span>
-            </label>
+          <!-- Exportar Chat -->
+          <button (click)="exportChatHistory()" class="icon-btn action-circle-btn" title="Exportar historial de chat">
+            <span>📥</span>
+          </button>
+
+          <!-- Interruptor IA vs Humano Compacto -->
+          <div class="ai-banner-compact" [class.ai-off]="selectedConversation.ai_active === false" (click)="toggleAI()" [title]="selectedConversation.ai_active !== false ? 'Desactivar IA y tomar control' : 'Activar IA'">
+            <span class="ai-dot"></span>
+            <span class="ai-label-text">{{ selectedConversation.ai_active !== false ? 'IA Activa' : 'Humano' }}</span>
           </div>
         </div>
       </header>
@@ -272,20 +258,14 @@
           <span style="font-size: 0.7rem; opacity: 0.8;">Equipo</span>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
           <!-- Modos de Redacción: Cliente vs Nota Interna -->
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <button (click)="isInternalNote = false" [style.background]="!isInternalNote ? '#e8f5e9' : 'transparent'"
-              [style.color]="!isInternalNote ? '#2e7d32' : '#64748b'"
-              [style.border]="!isInternalNote ? '1px solid #a7f3d0' : '1px solid #e2e8f0'"
-              style="padding: 4px 12px; border-radius: 100px; font-size: 0.72rem; font-weight: 800; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 4px;">
-              <span>💬</span> <span>MENSAJE CLIENTE</span>
+          <div class="composer-mode-tabs">
+            <button (click)="isInternalNote = false" class="composer-tab" [class.active]="!isInternalNote">
+              <span>Mensaje</span>
             </button>
-            <button (click)="isInternalNote = true" [style.background]="isInternalNote ? '#f59e0b' : 'transparent'"
-              [style.color]="isInternalNote ? 'white' : '#64748b'"
-              [style.border]="isInternalNote ? '1px solid #d97706' : '1px solid #e2e8f0'"
-              style="padding: 4px 12px; border-radius: 100px; font-size: 0.72rem; font-weight: 800; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 4px;">
-              <span>🔒</span> <span>NOTA INTERNA</span>
+            <button (click)="isInternalNote = true" class="composer-tab internal" [class.active]="isInternalNote">
+              <span>Nota Interna</span>
             </button>
           </div>
 
@@ -297,7 +277,7 @@
               title="Copiloto IA: Redacta una respuesta óptima basada en el contexto del chat">
               <span *ngIf="isAICopilotBusy && aiCopilotAction === 'suggest'">⏳</span>
               <span *ngIf="!isAICopilotBusy || aiCopilotAction !== 'suggest'">✨</span>
-              <span>Sugerir Respuesta</span>
+              <span>Sugerir</span>
             </button>
 
             <!-- Copiloto IA: Mejorar / Reescribir -->
@@ -314,7 +294,7 @@
               <button (click)="showSnippetsMenu = !showSnippetsMenu" 
                 class="copilot-action-btn neutral"
                 title="Ver plantillas rápidas guardadas (o escribe / en el mensaje)">
-                <span>⚡</span> <span>Plantillas (/)</span>
+                <span>⚡</span> <span>Plantillas</span>
               </button>
 
               <!-- Popup de Snippets -->

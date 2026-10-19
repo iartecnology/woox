@@ -99,32 +99,165 @@
   color: #94a3b8;
 }
 
-/* Filtros */
-.channel-filters {
+/* Filtros Modernos Compactos */
+.filter-controls-row {
   display: flex;
-  gap: 8px;
-  margin-top: 16px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+  gap: 6px;
+  align-items: center;
 }
 
-.filter-pill {
-  padding: 6px 14px;
-  border-radius: 100px;
-  background: #f3f4f6;
-  color: #6d28d9;
-  font-size: 0.75rem;
+.clean-filter-select {
+  flex: 1;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.72rem;
   font-weight: 700;
+  color: #475569;
+  outline: none;
   cursor: pointer;
-  white-space: nowrap;
   transition: all 0.2s;
-  border: 1px solid transparent;
 }
 
-.filter-pill.active {
-  background: #7c3aed;
-  color: white;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+.clean-filter-select:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.clean-filter-select:focus {
+  border-color: #6366f1;
+  background: white;
+}
+
+/* Acciones de Cabecera Chat Limpias */
+.action-pill-btn {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  height: 34px;
+  width: auto;
+}
+
+.action-pill-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.action-pill-btn.is-done {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #a7f3d0;
+}
+
+.action-pill-btn.crm-active {
+  background: #ede9fe;
+  color: #6366f1;
+  border-color: #c7d2fe;
+}
+
+.action-circle-btn {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.action-circle-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+/* Interruptor IA Compacto */
+.ai-banner-compact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 34px;
+  box-sizing: border-box;
+}
+
+.ai-banner-compact .ai-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6366f1;
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.6);
+}
+
+.ai-banner-compact .ai-label-text {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #4338ca;
+}
+
+.ai-banner-compact.ai-off {
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.ai-banner-compact.ai-off .ai-dot {
+  background: #d97706;
+  box-shadow: none;
+}
+
+.ai-banner-compact.ai-off .ai-label-text {
+  color: #92400e;
+}
+
+/* Modos de Redacción Composer */
+.composer-mode-tabs {
+  display: flex;
+  background: #f1f5f9;
+  padding: 2px;
+  border-radius: 8px;
+  gap: 2px;
+}
+
+.composer-tab {
+  border: none;
+  background: transparent;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.composer-tab.active {
+  background: white;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.composer-tab.internal.active {
+  background: #fef3c7;
+  color: #b45309;
 }
 
 /* Conversaciones */
@@ -402,25 +535,28 @@ input:checked+.slider:before {
 
 /* Burbujas */
 .received .bubble {
-  background: #dcfce7;
-  color: #166534;
+  background: #ffffff;
+  color: #1e293b;
   border-bottom-right-radius: 4px;
-  border: 1px solid #bbf7d0;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .sent .bubble {
-  background: #f1f5f9;
-  /* Gris para Agente/Sistema */
+  background: #f8fafc;
+  /* Gris suave para Agente/Sistema */
   color: #1e293b;
   border-bottom-left-radius: 4px;
   border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
-/* Override para IA: Siempre morada */
+/* Override para IA: Tono índigo moderno y suave en vez de morado saturado */
 .bubble.ai {
-  background: #7c3aed !important;
+  background: #4f46e5 !important;
   color: #ffffff !important;
   border: none !important;
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.15) !important;
 }
 
 /* Footer de Entrada */
