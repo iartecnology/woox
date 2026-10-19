@@ -283,7 +283,7 @@ interface CartItem {
       background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px;
       font-size: 0.72rem; padding: 3px 6px; color: #1e293b; font-weight: 600; outline: none;
     }
-    .mode-select:focus { border-color: #7c3aed; }
+    .mode-select:focus { border-color: #4f46e5; }
 
     .copilot-btn {
       display: flex; align-items: center; gap: 6px;
@@ -296,8 +296,8 @@ interface CartItem {
       background: #f1f5f9; border-color: #94a3b8; color: #0f172a;
     }
     .copilot-btn.active {
-      background: #7c3aed; border-color: #6d28d9; color: #ffffff;
-      box-shadow: 0 0 12px rgba(124, 58, 237, 0.35);
+      background: #4f46e5; border-color: #4338ca; color: #ffffff;
+      box-shadow: 0 0 12px rgba(79, 70, 229, 0.35);
       animation: pulseCopilot 2s infinite;
     }
     .bot-icon { font-size: 0.9rem; }
@@ -372,10 +372,10 @@ interface CartItem {
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .message:not(.user) .bubble {
-      background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); 
+      background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); 
       color: #ffffff;
       border-bottom-left-radius: 4px;
-      border: 1px solid rgba(124, 58, 237, 0.2);
+      border: 1px solid rgba(79, 70, 229, 0.2);
     }
     .message.user .bubble {
       background: #ffffff; 
@@ -400,7 +400,7 @@ interface CartItem {
       display: flex; gap: 8px; font-size: 0.65rem; color: #64748b; margin-top: -4px; margin-left: 4px; flex-wrap: wrap; align-items: center;
     }
     .badge-model {
-      background: rgba(124, 58, 237, 0.1); color: #7c3aed; padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(124, 58, 237, 0.2); font-weight: 600;
+      background: rgba(79, 70, 229, 0.1); color: #4f46e5; padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(79, 70, 229, 0.2); font-weight: 600;
     }
     .badge-rag {
       background: #dcfce7; color: #166534; padding: 1px 6px; border-radius: 10px; border: 1px solid #bbf7d0; font-weight: 600;
@@ -412,7 +412,7 @@ interface CartItem {
       gap: 4px;
     }
     .dot {
-      width: 6px; height: 6px; background: #7c3aed; border-radius: 50%;
+      width: 6px; height: 6px; background: #4f46e5; border-radius: 50%;
       animation: bounce 1.4s infinite ease-in-out both;
     }
     .dot:nth-child(1) { animation-delay: -0.32s; }
@@ -473,31 +473,31 @@ interface CartItem {
       animation: slideUp 0.3s ease-out;
       margin-top: 4px;
     }
-    .card-title { font-weight: 800; font-size: 0.95rem; color: #6d28d9; margin-bottom: 4px; }
-    .card-desc { font-size: 0.8rem; color: #4c1d95; line-height: 1.4; margin-bottom: 12px; }
+    .card-title { font-weight: 800; font-size: 0.95rem; color: #4338ca; margin-bottom: 4px; }
+    .card-desc { font-size: 0.8rem; color: #3730a3; line-height: 1.4; margin-bottom: 12px; }
     .card-footer { display: flex; justify-content: space-between; align-items: center; }
-    .card-price { font-weight: 800; font-size: 1rem; color: #6d28d9; }
+    .card-price { font-weight: 800; font-size: 1rem; color: #4338ca; }
     .card-btn {
       padding: 6px 12px; border-radius: 8px; font-size: 0.75rem; font-weight: 700;
     }
 
-    .summary-text-card { border-left: 4px solid #7c3aed; }
+    .summary-text-card { border-left: 4px solid #4f46e5; }
     .card-header-text { 
       font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; 
-      color: #7c3aed; font-weight: 700; margin-bottom: 10px; display: block;
+      color: #4f46e5; font-weight: 700; margin-bottom: 10px; display: block;
     }
     .card-items { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
     .card-item-row { 
       display: flex; justify-content: space-between; font-size: 0.85rem; 
-      padding-bottom: 4px; border-bottom: 1px dashed #ddd6fe;
-      color: #4c1d95;
+      padding-bottom: 4px; border-bottom: 1px dashed #c7d2fe;
+      color: #3730a3;
     }
     .card-total-row { 
       display: flex; justify-content: space-between; align-items: center;
-      padding-top: 8px; border-top: 2px solid #f5f3ff; margin-bottom: 12px;
+      padding-top: 8px; border-top: 2px solid #eef2ff; margin-bottom: 12px;
     }
-    .card-total-row span:first-child { font-weight: 700; font-size: 0.8rem; color: #6d28d9; }
-    .total-amount { font-weight: 900; font-size: 1.1rem; color: #7c3aed; }
+    .card-total-row span:first-child { font-weight: 700; font-size: 0.8rem; color: #4338ca; }
+    .total-amount { font-weight: 900; font-size: 1.1rem; color: #4f46e5; }
     
     .confirm-btn-text {
       width: 100%; padding: 10px; border-radius: 8px; font-weight: 800; font-size: 0.85rem;
@@ -530,7 +530,7 @@ interface CartItem {
       background: #f9fafb;
       transition: border-color 0.2s;
     }
-    input:focus { border-color: #7c3aed; background: white; }
+    input:focus { border-color: #4f46e5; background: white; }
 
     .send-btn {
       width: 40px;
@@ -538,7 +538,7 @@ interface CartItem {
       min-width: 40px;
       border-radius: 12px;
       font-size: 1.1rem;
-      background: #7c3aed;
+      background: #4f46e5;
       color: white;
       border: none;
       display: flex; align-items: center; justify-content: center;

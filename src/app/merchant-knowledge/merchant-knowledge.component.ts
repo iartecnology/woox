@@ -313,7 +313,7 @@ declare const pdfjsLib: any;
         .form-group input, .form-group textarea { width: 100%; padding: 10px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; background: #f8fafc; box-sizing: border-box; resize: vertical; }
         .form-group input:focus, .form-group textarea:focus { border-color: #6366f1; background: white; }
 
-        .save-btn { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 10px; padding: 12px 20px; font-weight: 700; font-size: 0.9rem; cursor: pointer; width: 100%; transition: all 0.2s; }
+        .save-btn { background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border: none; border-radius: 10px; padding: 12px 20px; font-weight: 700; font-size: 0.9rem; cursor: pointer; width: 100%; transition: all 0.2s; }
         .save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
         .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .w-100 { width: 100%; }

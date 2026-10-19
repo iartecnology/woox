@@ -196,26 +196,45 @@
 }
 
 .status-badge {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 800;
     text-transform: uppercase;
     padding: 4px 12px;
-    border-radius: 20px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    letter-spacing: 0.03em;
 }
 
 .status-badge.pending {
     background: #fef3c7;
     color: #92400e;
+    border: 1px solid #fde68a;
 }
 
 .status-badge.cooking {
     background: #dbeafe;
     color: #1e40af;
+    border: 1px solid #bfdbfe;
 }
 
 .status-badge.ready {
     background: #dcfce7;
     color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.status-badge.delivered {
+    background: #e0e7ff;
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+}
+
+.status-badge.cancelled {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
 }
 
 .customer-info-section {
@@ -558,7 +577,7 @@
 }
 
 .primary-btn {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
     color: white !important;
     box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4) !important;
 }
@@ -796,36 +815,42 @@
 
 .status-badge-compact {
     display: inline-block;
-    padding: 4px 10px;
-    border-radius: 12px;
+    padding: 3px 10px;
+    border-radius: 9999px;
     font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.02em;
 }
 
 .status-badge-compact.pending {
     background: #fef3c7;
     color: #92400e;
+    border: 1px solid #fde68a;
 }
 
 .status-badge-compact.cooking {
     background: #dbeafe;
     color: #1e40af;
+    border: 1px solid #bfdbfe;
 }
 
 .status-badge-compact.ready {
-    background: #d1fae5;
-    color: #065f46;
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
 }
 
 .status-badge-compact.delivered {
     background: #e0e7ff;
     color: #3730a3;
+    border: 1px solid #c7d2fe;
 }
 
 .status-badge-compact.cancelled {
     background: #fee2e2;
     color: #991b1b;
+    border: 1px solid #fecaca;
 }
 
 .order-detail.active-list {
@@ -1150,7 +1175,7 @@
 }
 
 .action-buttons .primary-btn {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
     color: white;
 }
 

@@ -1450,7 +1450,7 @@ small {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, var(--accent-color), #8b5cf6);
+    background: linear-gradient(90deg, var(--accent-color), #6366f1);
 }
 
 .qr-image-wrapper img {
@@ -3046,7 +3046,7 @@ select {
     align-items: center;
     gap: 16px;
     padding: 16px;
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
     color: white;
     border: none;
     border-radius: 16px;

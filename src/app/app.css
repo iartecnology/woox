@@ -1153,7 +1153,7 @@ body {
     }
     
     .save-btn-small {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+        background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
         color: white !important;
         border: none !important;
         padding: 8px 16px !important;

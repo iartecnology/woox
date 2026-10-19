@@ -302,14 +302,14 @@
                 style="position: absolute; bottom: calc(100% + 8px); right: 0; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border: 1px solid var(--border-color); width: 310px; z-index: 100; overflow: hidden; animation: fadeIn 0.2s ease-out;">
                 <div style="padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid var(--border-color); font-size: 0.75rem; font-weight: 800; color: #475569; display: flex; justify-content: space-between; align-items: center;">
                   <span>Plantillas Rápidas</span>
-                  <button (click)="showSnippetsManagerModal = true; showSnippetsMenu = false" style="background: none; border: none; color: #7c3aed; font-weight: 800; cursor: pointer; font-size: 0.7rem;">+ Gestionar</button>
+                  <button (click)="showSnippetsManagerModal = true; showSnippetsMenu = false" style="background: none; border: none; color: #4f46e5; font-weight: 800; cursor: pointer; font-size: 0.7rem;">+ Gestionar</button>
                 </div>
                 <div *ngFor="let s of quickSnippets" (click)="insertSnippet(s.text)" 
                   style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" 
                   onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
                     <span style="font-size: 0.8rem; font-weight: 700; color: #1e293b;">{{ s.title }}</span>
-                    <span style="font-size: 0.65rem; background: #ede9fe; color: #7c3aed; padding: 1px 6px; border-radius: 4px; font-weight: 800;">/{{ s.code }}</span>
+                    <span style="font-size: 0.65rem; background: #eef2ff; color: #4f46e5; padding: 1px 6px; border-radius: 4px; font-weight: 800;">/{{ s.code }}</span>
                   </div>
                   <div style="font-size: 0.7rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.text }}</div>
                 </div>
@@ -454,16 +454,16 @@
     </div>
 
     <!-- BOTÓN OPTIMIZAR IA (NUEVO/RECUPERADO) -->
-    <div class="crm-section ai-optimization-box" style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border: 1px solid #ddd6fe; border-radius: 12px; padding: 12px; margin-bottom: 16px;">
+    <div class="crm-section ai-optimization-box" style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border: 1px solid #c7d2fe; border-radius: 12px; padding: 12px; margin-bottom: 16px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span style="font-size: 0.7rem; font-weight: 900; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.05em;">Inteligencia CRM</span>
+        <span style="font-size: 0.7rem; font-weight: 900; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.05em;">Inteligencia CRM</span>
         <button class="optimize-btn" (click)="optimizeCustomerWithIA()" [disabled]="isAILoading"
-          style="background: #7c3aed; color: white; border: none; padding: 4px 10px; border-radius: 100px; font-size: 0.65rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 6px rgba(124, 58, 237, 0.2);">
+          style="background: #4f46e5; color: white; border: none; padding: 4px 10px; border-radius: 100px; font-size: 0.65rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);">
           <span *ngIf="!isAILoading">✨ Optimizar IA</span>
           <span *ngIf="isAILoading">🪄 Analizando...</span>
         </button>
       </div>
-      <div *ngIf="customerCRM.ai_summary" class="ai-summary-text" style="font-size: 0.8rem; line-height: 1.4; color: #4338ca; font-style: italic; background: white; padding: 10px; border-radius: 10px; border: 1px dashed #c4b5fd;">
+      <div *ngIf="customerCRM.ai_summary" class="ai-summary-text" style="font-size: 0.8rem; line-height: 1.4; color: #3730a3; font-style: italic; background: white; padding: 10px; border-radius: 10px; border: 1px dashed #a5b4fc;">
         {{ customerCRM.ai_summary }}
       </div>
       <div *ngIf="!customerCRM.ai_summary" style="font-size: 0.75rem; color: #6d6d6d; text-align: center; padding: 10px;">
@@ -692,7 +692,7 @@
     <div style="max-height: 200px; overflow-y: auto; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px;">
       <div *ngFor="let snip of quickSnippets" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
         <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80%;">
-          <div style="font-size: 0.8rem; font-weight: 700; color: #334155;">{{ snip.title }} <span style="color: #7c3aed; font-family: monospace;">/{{ snip.code }}</span></div>
+          <div style="font-size: 0.8rem; font-weight: 700; color: #334155;">{{ snip.title }} <span style="color: #4f46e5; font-family: monospace;">/{{ snip.code }}</span></div>
           <div style="font-size: 0.72rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ snip.text }}</div>
         </div>
         <button (click)="deleteSnippet(snip.code)" style="background: #fee2e2; color: #b91c1c; border: none; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 700;">Borrar</button>
@@ -700,8 +700,8 @@
     </div>
 
     <!-- Formulario Nueva Plantilla -->
-    <div style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 14px;">
-      <div style="font-size: 0.75rem; font-weight: 800; color: #7c3aed; text-transform: uppercase; margin-bottom: 8px;">+ Crear Nueva Plantilla</div>
+    <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 12px; padding: 14px;">
+      <div style="font-size: 0.75rem; font-weight: 800; color: #4f46e5; text-transform: uppercase; margin-bottom: 8px;">+ Crear Nueva Plantilla</div>
       <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-bottom: 8px;">
         <input type="text" [(ngModel)]="newSnippetCode" placeholder="Comando (ej: wifi)" style="padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.8rem;">
         <input type="text" [(ngModel)]="newSnippetTitle" placeholder="Título (ej: 📶 Clave Wi-Fi)" style="padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.8rem;">
@@ -709,7 +709,7 @@
       <textarea [(ngModel)]="newSnippetText" placeholder="Texto completo que se enviará al cliente..." rows="3" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.8rem; resize: vertical; margin-bottom: 8px;"></textarea>
       <div style="display: flex; justify-content: flex-end; gap: 8px;">
         <button (click)="showSnippetsManagerModal = false" style="background: #f1f5f9; border: 1px solid #e2e8f0; padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Cerrar</button>
-        <button (click)="saveSnippetToStorage()" style="background: #7c3aed; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Guardar Plantilla</button>
+        <button (click)="saveSnippetToStorage()" style="background: #4f46e5; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Guardar Plantilla</button>
       </div>
     </div>
   </div>
