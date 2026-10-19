@@ -34,6 +34,7 @@ export class App {
   isMobile = this.mobileService.isMobile;
   private merchantSubscription: any = null;
   private ordersSubscription: any = null;
+  private globalSyncInterval: any = null;
 
   private checkMobile() {
     if (this.isMobile()) {
@@ -141,6 +142,28 @@ export class App {
            await this.supabaseService.refreshGlobalUnreadOrdersCount(merchantId);
            this.supabaseService.playSound();
         });
+
+        // Respaldo global de tiempo real: Sincronizar contadores de mensajes y pedidos en segundo plano cada 6s
+        if (this.globalSyncInterval) {
+          clearInterval(this.globalSyncInterval);
+        }
+        let previousOrdersCount = this.unreadOrdersCount();
+        let previousUnreadCount = this.unreadCount();
+
+        this.globalSyncInterval = setInterval(async () => {
+          if (!merchantId) return;
+          await this.supabaseService.refreshGlobalUnreadCount(merchantId);
+          await this.supabaseService.refreshGlobalUnreadOrdersCount(merchantId);
+
+          const newOrders = this.unreadOrdersCount();
+          const newUnread = this.unreadCount();
+
+          if (newOrders > previousOrdersCount || newUnread > previousUnreadCount) {
+            this.supabaseService.playSound();
+          }
+          previousOrdersCount = newOrders;
+          previousUnreadCount = newUnread;
+        }, 6000);
       } else {
         console.warn('[App] Limpiando active_merchant_id inválido (no UUID):', rawMerchantId);
         this.clearMerchantSession();
@@ -149,6 +172,10 @@ export class App {
   }
 
   private clearMerchantSession() {
+    if (this.globalSyncInterval) {
+      clearInterval(this.globalSyncInterval);
+      this.globalSyncInterval = null;
+    }
     localStorage.removeItem('active_merchant_id');
     localStorage.removeItem('merchant_name');
     localStorage.removeItem('merchant_slug');
@@ -156,6 +183,10 @@ export class App {
   }
 
   ngOnDestroy() {
+    if (this.globalSyncInterval) {
+      clearInterval(this.globalSyncInterval);
+      this.globalSyncInterval = null;
+    }
     if (this.merchantSubscription) {
       this.supabaseService.unsubscribe(this.merchantSubscription);
     }

@@ -152,6 +152,7 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
     }
 
     private orderSubscription: any;
+    private orderPollingInterval: any;
 
     async ngOnInit() {
         this.merchantId = localStorage.getItem('active_merchant_id') || localStorage.getItem('merchant_id') || '';
@@ -179,27 +180,45 @@ export class OrderManagementComponent implements OnInit, OnDestroy {
         console.log('📡 [OrderManagement] Configurando Realtime para merchant:', this.merchantId);
         this.orderSubscription = this.supabaseService.subscribeToOrders(this.merchantId, () => {
             console.log('🔔 [OrderManagement] Cambio detectado en pedidos, recargando...');
-            this.loadOrders();
+            this.loadOrders(true);
         });
+
+        // Respaldo de tiempo real: Sondeo en segundo plano cada 4 segundos
+        if (this.orderPollingInterval) {
+            clearInterval(this.orderPollingInterval);
+        }
+        this.orderPollingInterval = setInterval(() => {
+            if (this.merchantId && !this.isLoading) {
+                this.loadOrders(true);
+            }
+        }, 4000);
     }
 
     ngOnDestroy() {
+        if (this.orderPollingInterval) {
+            clearInterval(this.orderPollingInterval);
+            this.orderPollingInterval = null;
+        }
         if (this.orderSubscription) {
             console.log('🔌 [OrderManagement] Desconectando Realtime');
             this.orderSubscription.unsubscribe();
         }
     }
 
-    async loadOrders() {
-        this.isLoading = true;
-        this.cdr.detectChanges();
+    async loadOrders(silent: boolean = false) {
+        if (!silent) {
+            this.isLoading = true;
+            this.cdr.detectChanges();
+        }
 
         try {
             const { data, error } = await this.supabaseService.getOrders(this.merchantId);
 
             if (error) {
                 console.error('❌ Error de Supabase al cargar pedidos:', error);
-                this.notificationService.show('Error al cargar pedidos: ' + error.message, 'error');
+                if (!silent) {
+                    this.notificationService.show('Error al cargar pedidos: ' + error.message, 'error');
+                }
             }
 
             if (data) {

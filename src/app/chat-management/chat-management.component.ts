@@ -595,6 +595,9 @@ ${lastMsgs}`;
     private sessionSubscription: any = null;
     private merchantSubscription: any = null;
     private shouldScrollToBottom: boolean = false;
+    private pollingInterval: any = null;
+    private activeChatPollingInterval: any = null;
+    private lastKnownMessageId: string | null = null;
 
     totalNotifications: number = 0;
 
@@ -815,7 +818,53 @@ ${lastMsgs}`;
                 });
             });
 
+            // Respaldo de tiempo real: Sondeo en segundo plano para garantizar actualización en tiempo real
+            this.startConversationPolling();
         }
+    }
+
+    private startConversationPolling() {
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+        }
+        this.pollingInterval = setInterval(async () => {
+            if (this.merchantId && !this.isLoadingList) {
+                await this.loadConversations(true);
+            }
+        }, 4000);
+    }
+
+    private startActiveChatPolling(convId: string) {
+        if (this.activeChatPollingInterval) {
+            clearInterval(this.activeChatPollingInterval);
+            this.activeChatPollingInterval = null;
+        }
+
+        this.activeChatPollingInterval = setInterval(async () => {
+            if (!this.selectedConversation || this.selectedConversation.id !== convId || this.isLoadingDetails) {
+                return;
+            }
+
+            try {
+                const { data: messages } = await this.supabaseService.getMessages(convId);
+                if (messages && messages.length > 0 && this.selectedConversation && this.selectedConversation.id === convId) {
+                    const currentLen = this.selectedConversation.messages ? this.selectedConversation.messages.length : 0;
+                    if (messages.length !== currentLen) {
+                        this.selectedConversation.messages = messages.map((m: any) => ({
+                            id: m.id,
+                            sender_type: m.sender_type,
+                            content: m.content,
+                            created_at: new Date(m.created_at),
+                            formattedContent: this.formatMessage(m.content)
+                        }));
+                        this.shouldScrollToBottom = true;
+                        this.cdr.detectChanges();
+                    }
+                }
+            } catch (e) {
+                console.warn('Silent active chat polling error:', e);
+            }
+        }, 2500);
     }
 
     private setupMutationObserver() {
@@ -855,6 +904,14 @@ ${lastMsgs}`;
     }
 
     ngOnDestroy() {
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+            this.pollingInterval = null;
+        }
+        if (this.activeChatPollingInterval) {
+            clearInterval(this.activeChatPollingInterval);
+            this.activeChatPollingInterval = null;
+        }
         if (this.mutationObserver) {
             this.mutationObserver.disconnect();
         }
@@ -1239,6 +1296,9 @@ ${lastMsgs}`;
             });
         });
 
+        // Respaldo de tiempo real: Sondeo activo cada 2.5s para nuevos mensajes en este chat
+        this.startActiveChatPolling(conv.id);
+
         // Suscribirse a Typing
         try {
           const typingChannel = this.supabaseService.channel(`typing:${conv.id}`);
@@ -1424,10 +1484,27 @@ ${lastMsgs}`;
             await this.loadFullDeepDetails(this.selectedConversation.id);
             this.isInternalNote = false;
         } else {
+            // Optimistic UI: Mostrar el mensaje inmediatamente en pantalla
+            const tempMsgId = 'temp-' + Date.now();
+            this.selectedConversation.messages.push({
+                id: tempMsgId,
+                sender_type: 'human_agent',
+                content: content,
+                created_at: new Date(),
+                formattedContent: this.formatMessage(content)
+            });
+            this.selectedConversation.last_message = content;
+            this.selectedConversation.last_message_at = new Date();
+            this.shouldScrollToBottom = true;
+            this.cdr.detectChanges();
+
             // Enviar como mensaje normal
-            const { error } = await this.supabaseService.sendHumanMessage(this.selectedConversation.id, content);
+            const { data, error } = await this.supabaseService.sendHumanMessage(this.selectedConversation.id, content);
             if (error) {
                 console.error('Error sending message:', error);
+                // Remover el mensaje optimista si falló
+                this.selectedConversation.messages = this.selectedConversation.messages.filter(m => m.id !== tempMsgId);
+                this.cdr.detectChanges();
                 // Mostrar notificación visual
                 if (error.message?.includes('expired') || error.message?.includes('OAuthException')) {
                     this.notificationService.show('⚠️ Error: Tu conexión con WhatsApp ha expirado. Por favor actualiza el Token en Super Admin.', 'error');
@@ -1435,6 +1512,11 @@ ${lastMsgs}`;
                     this.notificationService.show(`❌ Error al entregar el mensaje: ${error.message || 'Error desconocido'}`, 'error');
                 }
             } else {
+                const inserted = (data as any);
+                if (inserted && Array.isArray(inserted) && inserted[0]?.id) {
+                    const temp = this.selectedConversation.messages.find(m => m.id === tempMsgId);
+                    if (temp) temp.id = inserted[0].id;
+                }
                 this.shouldScrollToBottom = true;
                 this.cdr.detectChanges();
             }
