@@ -42,7 +42,7 @@
       <div class="filter-controls-row">
         <!-- Canales desplegables -->
         <select [ngModel]="selectedChannel" (ngModelChange)="setFilter($event)" class="clean-filter-select">
-          <option value="all">🌐 Todos los canales</option>
+          <option value="all">🌐 Canales</option>
           <option value="whatsapp">📱 WhatsApp</option>
           <option value="telegram">✈️ Telegram</option>
           <option value="instagram">📸 Instagram</option>
@@ -52,14 +52,14 @@
 
         <!-- Filtro Operativo (IA vs Humano) -->
         <select [ngModel]="operationalFilter" (ngModelChange)="setOperationalFilter($event)" class="clean-filter-select">
-          <option value="all">👥 Todos los tipos</option>
+          <option value="all">👥 Tipos</option>
           <option value="ai">🤖 Solo IA</option>
           <option value="human">👤 Solo Humanos</option>
         </select>
 
         <!-- Filtro Estado (Abierto vs Resuelto) -->
         <select [ngModel]="chatStatusFilter" (ngModelChange)="setStatusFilter($event)" class="clean-filter-select">
-          <option value="all">📋 Todos los estados</option>
+          <option value="all">📋 Estados</option>
           <option value="open">🟢 Abiertos</option>
           <option value="closed">✅ Resueltos</option>
         </select>
