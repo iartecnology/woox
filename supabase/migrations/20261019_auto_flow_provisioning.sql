@@ -132,8 +132,12 @@ BEGIN
   )
   ON CONFLICT (merchant_id, name) DO NOTHING;
 
-  -- Asegurar que el comercio quede con bot_mode = true
-  UPDATE merchants SET bot_mode = true WHERE id = NEW.id AND (bot_mode IS NULL OR bot_mode = false);
+  -- Asegurar que el comercio quede con bot_mode = true y agent_id asignado
+  UPDATE merchants 
+  SET 
+    bot_mode = true,
+    agent_id = COALESCE(agent_id, '00000000-0000-0000-0000-000000000001')
+  WHERE id = NEW.id;
 
   RETURN NEW;
 END;
