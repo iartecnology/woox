@@ -180,54 +180,10 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
     }
 
     async refreshDataSilent() {
-        const { data } = await this.supabaseService.getOrders(this.merchantId);
+        const { data } = await this.supabaseService.getOrdersForMetrics(this.merchantId);
         if (data) {
             this.allOrders = data.map((o: any) => ({
-                id: '#' + String(o.order_number || 0).padStart(3, '0'),
-                customer: o.customers?.full_name || 'Cliente Anon',
-                total: o.total,
-                status: o.status,
-                created_at: o.created_at,
-                closing_agent_type: o.closing_agent_type,
-                channel: o.channel || 'web',
-                time: new Date(o.created_at).toLocaleTimeString(),
-                date: new Date(o.created_at).toLocaleDateString(),
-                agent: o.closing_agent_type === 'ai' ? '🤖 IA' : '👤 Humano'
-            }));
-
-            this.applyPeriodFilter();
-            this.cdr.detectChanges();
-        }
-    }
-
-    async loadData() {
-        this.isLoading = true;
-        this.cdr.detectChanges();
-
-        const [ordersRes, usageRes, msgsRes] = await Promise.all([
-            this.supabaseService.getOrders(this.merchantId),
-            this.supabaseService.getMerchantUsage(this.merchantId),
-            supabase
-                .from('messages')
-                .select('id, sender_type, content, conversations!inner(merchant_id)')
-                .eq('conversations.merchant_id', this.merchantId)
-        ]);
-
-        if (usageRes.data) {
-            this.usageData = usageRes.data;
-        } else if (msgsRes.data && msgsRes.data.length > 0) {
-            // Calcular uso real de IA a partir de los mensajes registrados
-            const aiMsgs = msgsRes.data.filter((m: any) => m.sender_type === 'ai');
-            const totalChars = aiMsgs.reduce((sum: number, m: any) => sum + (m.content?.length || 0), 0);
-            this.usageData = {
-                tokens_consumed: Math.max(Math.round(totalChars / 4), aiMsgs.length * 80),
-                ai_messages_count: aiMsgs.length
-            };
-        }
-
-        if (ordersRes.data) {
-            this.allOrders = ordersRes.data.map((o: any) => ({
-                id: o.id.substring(0, 8).toUpperCase(),
+                id: o.order_number ? '#' + String(o.order_number).padStart(3, '0') : o.id.substring(0, 8).toUpperCase(),
                 customer: o.customers?.full_name || 'Cliente Anon',
                 total: o.total,
                 status: o.status,
@@ -240,10 +196,60 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
             }));
 
             this.applyPeriodFilter();
+            this.cdr.detectChanges();
         }
+    }
 
-        this.isLoading = false;
+    async loadData() {
+        this.isLoading = true;
         this.cdr.detectChanges();
+
+        try {
+            // 1. Cargar pedidos con consulta liviana (sin order_items pesados) y consumo oficial en paralelo
+            const [ordersRes, usageRes] = await Promise.all([
+                this.supabaseService.getOrdersForMetrics(this.merchantId),
+                this.supabaseService.getMerchantUsage(this.merchantId)
+            ]);
+
+            if (usageRes.data) {
+                this.usageData = usageRes.data;
+            } else {
+                // Fallback solo si no hay registro oficial en merchant_usage: consultar solo conteo de mensajes IA sin traer el cuerpo de todos los textos
+                const { count } = await supabase
+                    .from('messages')
+                    .select('id, conversations!inner(merchant_id)', { count: 'exact', head: true })
+                    .eq('conversations.merchant_id', this.merchantId)
+                    .eq('sender_type', 'ai');
+
+                const aiCount = count || 0;
+                this.usageData = {
+                    tokens_consumed: aiCount * 120,
+                    ai_messages_count: aiCount
+                };
+            }
+
+            if (ordersRes.data) {
+                this.allOrders = ordersRes.data.map((o: any) => ({
+                    id: o.order_number ? '#' + String(o.order_number).padStart(3, '0') : o.id.substring(0, 8).toUpperCase(),
+                    customer: o.customers?.full_name || 'Cliente Anon',
+                    total: o.total,
+                    status: o.status,
+                    created_at: o.created_at,
+                    closing_agent_type: o.closing_agent_type,
+                    channel: o.channel || 'web',
+                    time: new Date(o.created_at).toLocaleTimeString(),
+                    date: new Date(o.created_at).toLocaleDateString(),
+                    agent: (o.closing_agent_type === 'ai' || o.closing_agent_type === 'bot') ? '🤖 IA' : '👤 Humano'
+                }));
+
+                this.applyPeriodFilter();
+            }
+        } catch (err) {
+            console.error('[MetricsDashboard] Error cargando métricas:', err);
+        } finally {
+            this.isLoading = false;
+            this.cdr.detectChanges();
+        }
     }
 
     setChartRange(range: '24h' | '7d' | '30d' | '12m' | 'custom') {

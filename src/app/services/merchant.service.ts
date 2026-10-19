@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { supabase } from '../supabase-config';
+import { supabase, supabaseUrl } from '../supabase-config';
 
 /**
  * MerchantService — Gestión de Comercios, Categorías, Productos y Configuración
@@ -65,7 +65,28 @@ export class MerchantService {
         delete payload.qrCodeUrl;
         delete payload.is_online;
         delete payload.id;
-        return await supabase.from('merchants').update(payload).eq('id', id);
+
+        const res = await supabase.from('merchants').update(payload).eq('id', id);
+
+        // Auto-registrar webhook de Telegram si el token fue actualizado
+        if (updates.telegram_bot_token && updates.telegram_bot_token.trim()) {
+            this.syncTelegramWebhook(id, updates.telegram_bot_token.trim()).catch(err => {
+                console.warn('[MerchantService] Falló auto-registro de Telegram webhook:', err);
+            });
+        }
+
+        return res;
+    }
+
+    private async syncTelegramWebhook(merchantId: string, botToken: string) {
+        try {
+            const webhookUrl = `${supabaseUrl}/functions/v1/telegram-webhook?merchant_id=${merchantId}`;
+            const tgUrl = `https://api.telegram.org/bot${botToken}/setWebhook?url=${encodeURIComponent(webhookUrl)}`;
+            await fetch(tgUrl);
+            console.log(`[MerchantService] Webhook de Telegram sincronizado exitosamente para merchant: ${merchantId}`);
+        } catch (e) {
+            console.error('[MerchantService] Error llamando a setWebhook:', e);
+        }
     }
 
     async deleteMerchant(id: string) {

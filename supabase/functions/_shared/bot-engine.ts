@@ -984,7 +984,7 @@ const TOOL_DEFINITIONS: Record<string, any> = {
 // PURE AI AGENT (FALLBACK)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function processPureAI(supabase: any, merchantId: string, conversationId: string, messageText: string, customerId: string): Promise<string | null> {
-    console.log(`[BOT-ENGINE] Modo IA Agente para conv: ${conversationId}`);
+    console.log(`[BOT-ENGINE] Modo IA Agente Multi-Proveedor para conv: ${conversationId}`);
     try {
         const { data: merchant } = await supabase.from("merchants").select("*").eq("id", merchantId).single();
         const { data: ps } = await supabase.from("platform_settings").select("*").eq("id", "global").maybeSingle();
@@ -995,38 +995,49 @@ async function processPureAI(supabase: any, merchantId: string, conversationId: 
             .select("sender_type, content")
             .eq("conversation_id", conversationId)
             .order("created_at", { ascending: false })
-            .limit(3);
+            .limit(5);
         
-        const historyContext = history 
-            ? history.reverse().map((m: any) => `${m.sender_type === 'customer' ? 'Cliente' : 'Asistente'}: ${m.content}`).join('\n')
-            : "";
-
-        const apiKey = merchant.ai_api_key || ps?.ai_api_key || Deno.env.get("GEMINI_API_KEY");
-        const model = merchant.ai_model || ps?.ai_model || "gemini-1.5-flash";
-
-        if (!apiKey) return "Mmm, mi cerebro de IA no tiene una llave de acceso configurada todavía. 🤖🗝️";
-
-        const multitaskInstruction = `Responde cordial y usa emojis. Al final de tu respuesta, DEBES incluir este bloque JSON oculto:
+        const aiMessages: AIMessage[] = [];
+        
+        // System Prompt con instrucciones de CRM
+        const multitaskInstruction = `Responde cordial, en español y usando emojis. Al final de tu respuesta, puedes sugerir productos del catálogo. Opcionalmente incluye este bloque JSON oculto si detectas preferencias o sentimiento:
 [DATA]
 {
     "crm": {"preferences": [], "tags": [], "sentiment": "neutral"}
 }
 [/DATA]`;
-
-        const fullPrompt = `${systemPrompt}\n\n${multitaskInstruction}`;
-        
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const res = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                system_instruction: { parts: [{ text: fullPrompt }] },
-                contents: [{ role: "user", parts: [{ text: `HISTORIAL:\n${historyContext}\n\nMENSAJE: ${messageText}` }] }]
-            }),
+        aiMessages.push({
+            role: 'system',
+            content: `${systemPrompt || 'Eres un asistente comercial.'}\n\n${multitaskInstruction}`
         });
 
-        const aiData = await res.json();
-        const rawText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        // Historial previo
+        if (history && history.length > 0) {
+            const chronological = [...history].reverse();
+            for (const m of chronological) {
+                aiMessages.push({
+                    role: m.sender_type === 'customer' ? 'user' : 'assistant',
+                    content: m.content || ''
+                });
+            }
+        }
+
+        // Mensaje actual
+        aiMessages.push({
+            role: 'user',
+            content: messageText
+        });
+
+        // Resolver configuración universal (Ollama/VPS, Groq, OpenAI, Gemini)
+        const aiConfig = resolveAIConfig(merchant, null, ps, { temperature: 0.6, maxTokens: 400 });
+
+        // Si es custom / ollama, no requerimos apiKey estricta de nube
+        if (aiConfig.provider === 'custom' && !aiConfig.apiKey) {
+            aiConfig.apiKey = 'ollama';
+        }
+
+        const aiResult = await callUnifiedAI(aiConfig, aiMessages, [], async () => "");
+        let rawText = aiResult.text || "";
 
         let response = rawText;
         const dataMatch = rawText.match(/\[DATA\]([\s\S]*?)\[\/DATA\]/);
@@ -1046,7 +1057,7 @@ async function processPureAI(supabase: any, merchantId: string, conversationId: 
             } catch (e) { console.error("[BOT-ENGINE] Error parseando CRM en modo PureAI", e); }
         }
 
-        return response || "Lo siento, tuve un problema procesando eso. 🤖⚙️";
+        return response ? sanitizeAssistantText(response) : "Lo siento, tuve un problema procesando eso. 🤖⚙️";
     } catch (err) {
         console.error("[BOT-ENGINE] Exception in processPureAI", err);
         return null;

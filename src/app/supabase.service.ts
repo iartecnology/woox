@@ -585,6 +585,15 @@ export class SupabaseService {
         return { data, error };
     }
 
+    async getOrdersForMetrics(merchantId: string) {
+        const { data, error } = await supabase
+            .from('orders')
+            .select('id, order_number, total, status, created_at, closing_agent_type, channel, customers(full_name)')
+            .eq('merchant_id', merchantId)
+            .order('created_at', { ascending: false });
+        return { data, error };
+    }
+
     async updateOrderStatus(orderId: string, status: string) {
         return await supabase.from('orders').update({ status }).eq('id', orderId);
     }
