@@ -1,15 +1,17 @@
 import { Routes } from '@angular/router';
-import { authGuard, superAdminGuard } from './auth.guard';
+import { authGuard, superAdminGuard, guestGuard, rootGuard } from './auth.guard';
 
 export const routes: Routes = [
-    // ── Rutas Públicas (sin autenticación) ───────────────────────────────
+    // ── Rutas Públicas / Invitados ───────────────────────────────────────
     { 
         path: 'login', 
-        loadComponent: () => import('./login/login.component').then(m => m.LoginComponent) 
+        loadComponent: () => import('./login/login.component').then(m => m.LoginComponent),
+        canActivate: [guestGuard]
     },
     { 
         path: 'register', 
-        loadComponent: () => import('./register/register.component').then(m => m.RegisterComponent) 
+        loadComponent: () => import('./register/register.component').then(m => m.RegisterComponent),
+        canActivate: [guestGuard]
     },
     { 
         path: 'p/:slug', 
@@ -109,6 +111,12 @@ export const routes: Routes = [
         canActivate: [authGuard] 
     },
 
-    // ── Ruta por defecto ──────────────────────────────────────────────────
-    { path: '', redirectTo: 'login', pathMatch: 'full' }
+    // ── Ruta por defecto (Redirige inteligentemente como WhatsApp) ────────
+    { 
+        path: '', 
+        pathMatch: 'full',
+        canActivate: [rootGuard],
+        children: []
+    },
+    { path: '**', redirectTo: '' }
 ];

@@ -1607,6 +1607,7 @@ export class SuperAdminComponent implements OnInit {
         this.ngZone.run(() => {
             localStorage.setItem('user_role', 'superadmin');
             localStorage.setItem('active_merchant_id', merchant.id);
+            localStorage.setItem('last_superadmin_merchant_id', merchant.id);
             localStorage.setItem('merchant_name', merchant.name);
             localStorage.setItem('merchant_slug', merchant.slug);
             localStorage.setItem('merchant_industry_type', merchant.industry_type || 'retail');

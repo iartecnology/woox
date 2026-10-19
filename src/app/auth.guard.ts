@@ -38,3 +38,42 @@ export const superAdminGuard: CanActivateFn = (_route, _state) => {
 
     return true;
 };
+
+/**
+ * guestGuard — Evita que usuarios ya autenticados caigan en /login o /register.
+ * Como WhatsApp, si ya tienes sesión iniciada te lleva directo a tu panel principal.
+ */
+export const guestGuard: CanActivateFn = (_route, _state) => {
+    const router = inject(Router);
+    const userRole = localStorage.getItem('user_role');
+
+    if (userRole) {
+        if (userRole === 'superadmin') {
+            router.navigate(['/super-admin']);
+        } else {
+            router.navigate(['/chats']);
+        }
+        return false;
+    }
+
+    return true;
+};
+
+/**
+ * rootGuard — Resuelve la raíz ('') de la aplicación redirigiendo al panel si hay sesión o a login.
+ */
+export const rootGuard: CanActivateFn = (_route, _state) => {
+    const router = inject(Router);
+    const userRole = localStorage.getItem('user_role');
+
+    if (userRole) {
+        if (userRole === 'superadmin') {
+            router.navigate(['/super-admin']);
+        } else {
+            router.navigate(['/chats']);
+        }
+    } else {
+        router.navigate(['/login']);
+    }
+    return false;
+};

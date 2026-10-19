@@ -47,7 +47,7 @@ export class LoginComponent implements OnInit {
             if (userRole === 'superadmin') {
                 this.router.navigate(['/super-admin']);
             } else {
-                this.router.navigate(['/metrics']);
+                this.router.navigate(['/chats']);
             }
         }
     }
