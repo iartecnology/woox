@@ -1546,37 +1546,23 @@ async function _processFlowFromState(
 
                 console.log(`[BOT-ENGINE] Skills cargadas: ${toolDefs.map(t => t.name).join(', ') || 'ninguna'}`);
 
-                // ── 6. CONSTRUIR SYSTEM PROMPT ────────────────────────────
+                // ── 6. CONSTRUIR SYSTEM PROMPT (OPTIMIZADO Y COMPACTO) ────
                 const systemPrompt = `
-${compiledPrompt || 'Eres un asistente de ventas amigable.'}
+${compiledPrompt || 'Eres un asistente de ventas amigable y conciso.'}
+${node.data.prompt ? `### ETAPA: ${node.data.prompt}` : ''}
 
-### INSTRUCCIONES ESPECÍFICAS DE ESTA ETAPA:
-${node.data.prompt || ''}
+### REGLAS OPERATIVAS CLAVE:
+1. HERRAMIENTAS: Úsalas mediante function calling nativo (nunca texto plano tipo "add to cart").
+2. AGREGAR AL CARRITO: Si el cliente pide/confirma un producto, llama directamente a 'add_to_cart'. No busques en catálogo lo que ya pidió.
+3. CARRITO: Si pide modificar/eliminar usa 'remove_from_cart'; si pregunta qué lleva usa 'get_cart'.
+4. CIERRE: ${toolDefs.some(t => t.name === 'checkout_trigger') ? "Si el cliente termina o dice no más, llama a 'checkout_trigger'." : "Si tienes 'register_order' y ya tienes nombre, celular y dirección, llama a 'register_order'."}
+5. COMUNICACIÓN: Responde en 2-3 líneas, amable y con el total actualizado.
 
-### INSTRUCCIONES OPERATIVAS ESTRICTAS:
-1. HERRAMIENTAS TÉCNICAS: NUNCA escribas comandos técnicos en texto plano como "add to cart", "catalog_search", o corchetes [UPDATE_CART]. Úsalas mediante la llamada de funciones del sistema.
-2. NO EXPLIQUES TUS ACCIONES TÉCNICAS: No digas "Voy a agregar...", simplemente ejecuta la herramienta y confirma amablemente el resultado.
-3. ESTRICTAMENTE PROHIBIDO INVENTAR PRODUCTOS O INGREDIENTES: Solo puedes ofrecer o mencionar productos que existan textualmente en 'catalog_search'. Usa únicamente la descripción oficial (no agregues ingredientes inventados como 'verduras seleccionadas').
-4. AGREGAR AL CARRITO INMEDIATAMENTE: Si el cliente pide o confirma un producto (ej: 'quiero dos margaritas', 'quiero pedir 2 pizzas pepperoni supreme', 'si una coca cola', 'dame 1 hamburguesa'), TIENES PROHIBIDO llamar a 'catalog_search'. DEBES LLAMAR DIRECTAMENTE A 'add_to_cart' con el nombre del producto y su cantidad. No pidas confirmación previa ni vuelvas a buscar lo que ya pidió.
-5. QUITAR O MODIFICAR CARRITO: Si el cliente dice 'quita una de pepperoni', 'cancela la bebida', 'elimina X', LLAMA DE INMEDIATO a la herramienta 'remove_from_cart' indicando el nombre y cantidad.
-6. TOTALES EXACTOS DEL CARRITO: El contenido y total del carrito deben ser exactamente los devueltos por las herramientas. No inventes sumas manuales ni agregues signos de dólar duplicados ($$).
-7. CIERRE INTELIGENTE (HÍBRIDO vs AUTÓNOMO):
-   - Si dispones de la herramienta 'checkout_trigger': cuando el cliente diga 'eso es todo', 'nada más', 'quiero pagar', 'no' o termine de pedir, LLAMA INMEDIATAMENTE A 'checkout_trigger'. NO pidas nombre ni dirección en el chat.
-   - Si NO tienes 'checkout_trigger' pero sí 'register_order': para registrar el pedido necesitas Nombre, Celular y Dirección de entrega. Pídelos en un solo mensaje o recopílalos. ¡OBLIGATORIO Y ESTRICTO!: En el momento exacto en que tengas los datos de entrega (o el cliente te dé su dirección final), TIENES PROHIBIDO confirmar el pedido con texto inventado. DEBES LLAMAR INMEDIATAMENTE A LA HERRAMIENTA 'register_order' pasándole address, customer_name y customer_phone. La herramienta generará y te devolverá el número de orden oficial (#ORD-...). Jamás inventes que el pedido está marchando sin haber llamado a 'register_order'.
-8. SALUDOS Y NUEVOS PEDIDOS: Si el cliente te saluda ("Hola", "Buenas") o solicita hacer un nuevo pedido, salúdalo con calidez y pregúntale qué se le antoja ordenar hoy. NUNCA repitas la despedida o confirmación de un pedido anterior.
-9. MANEJO DE NEGATIVAS ('No'): Si el cliente responde 'no' a tu pregunta de si desea algo más, procede de inmediato al cierre de compra. Nunca muestres el menú tras una negativa.
-10. NO OFRECER "MÁS OPCIONES" SI YA MOSTRASTE EL MENÚ COMPLETO: Si ya listaste los productos disponibles, NO preguntes "¿te gustaría ver más opciones?". En su lugar, invita al cliente a elegir directamente: "¿Cuál te gustaría pedir hoy?".
-11. VER PEDIDO/CARRITO: Si el cliente dice 'muéstrame el pedido', 'ver carrito', 'qué llevo' o similar, LLAMA SIEMPRE a 'get_cart' y muestra su resultado con una frase cordial. NUNCA respondas de memoria.
-12. CANTIDADES AMBIGUAS: Si el cliente responde algo ambiguo como 'una y una', 'dos de esas', NO adivines ni agregues productos que no mencionó; pregunta cuáles productos y cantidades exactas.
-13. DATOS DE ENTREGA: Si el cliente responde 'no' o 'ok' cuando ya pediste nombre, dirección y teléfono, vuelve a pedirlos brevemente en lugar de reiniciar la conversación.
-14. SIEMPRE HABLA TRAS EJECUTAR HERRAMIENTAS: Siempre que ejecutes una herramienta ('add_to_cart', 'remove_from_cart', 'get_cart', 'register_order'), DEBES devolver un mensaje de confirmación claro, amable y conciso al cliente indicando qué se hizo y cuál es el siguiente paso. JAMÁS devuelvas una respuesta vacía.
-
-### ESTADO ACTUAL DE LA SESIÓN:
+### ESTADO SESIÓN:
 - Tienda: ${merchant?.name || 'Nuestra tienda'}
-- Catálogo oficial y único de productos disponibles: ${productsCatalogBrief} (¡PROHIBIDO mencionar cualquier producto o sabor que no esté en esta lista!)
-- Carrito del cliente: ${variables['cart']?.length > 0 ? variables['cart'].map((it: any) => it.name + ' x' + it.qty + ' ($' + formatPrice(it.price * it.qty) + ')').join(', ') : 'vacío'}
-- Número de pedido activo: ${variables['orderNumber'] || 'ninguno'}
-- Herramienta de cierre presente: ${toolDefs.some(t => t.name === 'checkout_trigger') ? 'checkout_trigger (Flujo Híbrido -> NO pedir datos en chat)' : (toolDefs.some(t => t.name === 'register_order') ? 'register_order (Cierre Autónomo -> Pedir datos en chat)' : 'ninguna')}
+- Catálogo: ${productsCatalogBrief}
+- Carrito: ${variables['cart']?.length > 0 ? variables['cart'].map((it: any) => `${it.name} x${it.qty} ($${formatPrice(it.price * it.qty)})`).join(', ') : 'vacío'}
+- Orden activa: ${variables['orderNumber'] || 'ninguna'}
 `;
                 const finalUserMessage = userTemplate.replace('{{message}}', messageText);
 
