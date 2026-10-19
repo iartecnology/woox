@@ -1640,9 +1640,10 @@ ${node.data.prompt ? `### ETAPA: ${node.data.prompt}` : ''}
                             finalCleanResponse = `Tu carrito está vacío actualmente. ¿Qué te gustaría pedir? 🍕`;
                         }
                     // 3. Cliente confirma o dice no (cierre de pedido)
-                    } else if (/^(no|nada m[aá]s|eso es todo|listo|ya est[aá]|as[ií] est[aá] bien|ser[ií]a todo|ninguno)/i.test(messageText.trim())) {
+                    } else if (/^(no|no mas|no más|nada m[aá]s|eso es todo|listo|ya est[aá]|as[ií] est[aá] bien|ser[ií]a todo|ninguno)/i.test(messageText.trim())) {
                         if (currentCart.length > 0) {
-                            finalCleanResponse = `¡Perfecto! Para completar tu pedido, por favor indícame tu nombre completo, dirección de entrega y teléfono de contacto.`;
+                            variables['_exit_ai_agent'] = true;
+                            finalCleanResponse = `¡Perfecto! Vamos a coordinar la entrega de tu pedido.`;
                         } else {
                             finalCleanResponse = `¡Entendido! Con gusto te colaboro con tu orden en ${merchant?.name || 'nuestro restaurante'}. ¿Qué te gustaría ordenar hoy?`;
                         }
