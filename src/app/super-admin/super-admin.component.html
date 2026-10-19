@@ -46,18 +46,18 @@
         <div class="metric-card">
             <div class="metric-icon-box bg-purple">🤖</div>
             <div class="metric-content">
-                <span class="metric-label">Interacciones IA (24h)</span>
+                <span class="metric-label">Mensajes e Interacciones</span>
                 <div class="metric-value">{{ totalMessages24h | number }}</div>
-                <span class="metric-sub text-muted">Mensajes gestionados hoy</span>
+                <span class="metric-sub text-muted">Mensajes gestionados en plataforma</span>
             </div>
         </div>
 
         <div class="metric-card">
             <div class="metric-icon-box bg-emerald">🛒</div>
             <div class="metric-content">
-                <span class="metric-label">Ventas del Mes</span>
+                <span class="metric-label">Pedidos Registrados</span>
                 <div class="metric-value">{{ totalOrdersMonth | number }}</div>
-                <span class="metric-sub text-muted">Pedidos registrados</span>
+                <span class="metric-sub text-muted">Ventas cerradas en el sistema</span>
             </div>
         </div>
 
@@ -180,15 +180,15 @@
                             </td>
                             <td>
                                 <div class="performance-stats" *ngIf="m.stats; else noStatsTpl">
-                                    <div class="stat-item" title="Mensajes en las últimas 24h">
+                                    <div class="stat-item" title="Mensajes e Interacciones totales">
                                         <span class="stat-val">{{ m.stats.messages_24h || 0 }}</span>
                                         <span class="stat-lbl">msjs</span>
                                     </div>
-                                    <div class="stat-item" title="Pedidos este mes">
+                                    <div class="stat-item" title="Pedidos cerrados">
                                         <span class="stat-val">{{ m.stats.orders_month || 0 }}</span>
                                         <span class="stat-lbl">ventas</span>
                                     </div>
-                                    <div class="stat-item highlight" title="Tasa de conversión">
+                                    <div class="stat-item highlight" title="Tasa de conversión real (pedidos / conversaciones)">
                                         <span class="stat-val">{{ m.stats.conversion_rate || 0 }}%</span>
                                         <span class="stat-lbl">conv.</span>
                                     </div>

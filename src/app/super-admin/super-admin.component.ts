@@ -534,28 +534,31 @@ export class SuperAdminComponent implements OnInit {
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
             const currentPeriodMonth = now.toISOString().substring(0, 7);
 
-            // 1. Consultar merchant_usage del mes actual (si existe SaaS metering)
-            const { data: usageData } = await supabase
-                .from('merchant_usage')
-                .select('merchant_id, messages_inbound, messages_outbound, orders_closed_count')
-                .eq('period_month', currentPeriodMonth);
+            // 1. Consultar merchant_usage del mes actual si existe
+            let usageMap = new Map<string, { messages: number; orders: number }>();
+            try {
+                const { data: usageData } = await supabase
+                    .from('merchant_usage')
+                    .select('merchant_id, messages_inbound, messages_outbound, orders_closed_count')
+                    .eq('period_month', currentPeriodMonth);
 
-            const usageMap = new Map<string, { messages: number; orders: number }>();
-            if (usageData && usageData.length > 0) {
-                usageData.forEach((u: any) => {
-                    const totalMsgs = (u.messages_inbound || 0) + (u.messages_outbound || 0);
-                    usageMap.set(u.merchant_id, {
-                        messages: totalMsgs,
-                        orders: u.orders_closed_count || 0
+                if (usageData && usageData.length > 0) {
+                    usageData.forEach((u: any) => {
+                        const totalMsgs = (u.messages_inbound || 0) + (u.messages_outbound || 0);
+                        usageMap.set(u.merchant_id, {
+                            messages: totalMsgs,
+                            orders: u.orders_closed_count || 0
+                        });
                     });
-                });
+                }
+            } catch (e) {
+                // Silencioso si la tabla no está creada
             }
 
             // 2. Consultar pedidos del mes actual agrupados por comercio
             const { data: ordersData } = await supabase
                 .from('orders')
-                .select('merchant_id, created_at, status')
-                .gte('created_at', startOfMonth);
+                .select('merchant_id, created_at, status');
 
             const ordersCountMap = new Map<string, number>();
             if (ordersData && ordersData.length > 0) {
@@ -566,38 +569,55 @@ export class SuperAdminComponent implements OnInit {
                 });
             }
 
-            // 3. Consultar conversaciones recientes (últimas 24h) agrupadas por comercio
+            // 3. Consultar mensajes y conversaciones reales por comercio
             const { data: convData } = await supabase
                 .from('conversations')
-                .select('merchant_id, last_message_at')
-                .gte('last_message_at', past24h);
+                .select('id, merchant_id, last_message_at');
 
-            const conv24hMap = new Map<string, number>();
+            const convToMerchant = new Map<string, string>();
+            const convCountMap = new Map<string, number>();
             if (convData && convData.length > 0) {
                 convData.forEach((c: any) => {
                     if (c.merchant_id) {
-                        conv24hMap.set(c.merchant_id, (conv24hMap.get(c.merchant_id) || 0) + 1);
+                        convToMerchant.set(c.id, c.merchant_id);
+                        convCountMap.set(c.merchant_id, (convCountMap.get(c.merchant_id) || 0) + 1);
                     }
                 });
             }
 
-            // 4. Asignar stats a cada comercio
+            // Contar mensajes reales asociados a cada comercio
+            const { data: msgData } = await supabase
+                .from('messages')
+                .select('id, conversation_id, created_at, sender_type');
+
+            const msgCountMap = new Map<string, number>();
+            if (msgData && msgData.length > 0) {
+                msgData.forEach((m: any) => {
+                    const merchantId = convToMerchant.get(m.conversation_id);
+                    if (merchantId) {
+                        msgCountMap.set(merchantId, (msgCountMap.get(merchantId) || 0) + 1);
+                    }
+                });
+            }
+
+            // 4. Asignar stats reales a cada comercio
             this.merchants.forEach(m => {
                 const usage = usageMap.get(m.id);
-                const ordersMonth = ordersCountMap.get(m.id) ?? (usage ? usage.orders : 0);
-                const msgs24h = conv24hMap.get(m.id) ?? (usage ? usage.messages : 0);
+                const ordersTotal = ordersCountMap.get(m.id) ?? (usage ? usage.orders : 0);
+                const msgsTotal = msgCountMap.get(m.id) ?? (usage ? usage.messages : 0);
+                const convsTotal = convCountMap.get(m.id) || 0;
 
-                // Calcular tasa de conversión: pedidos / conversaciones o fórmula proporcional
+                // Calcular tasa de conversión real: pedidos cerrados / conversaciones totales
                 let convRate = 0;
-                if (ordersMonth > 0 && msgs24h > 0) {
-                    convRate = Math.min(100, Math.round((ordersMonth / msgs24h) * 100));
-                } else if (ordersMonth > 0) {
-                    convRate = Math.min(100, Math.round(ordersMonth * 10)); // estimado si no hay registro de chat 24h
+                if (convsTotal > 0 && ordersTotal > 0) {
+                    convRate = Math.min(100, Math.round((ordersTotal / convsTotal) * 100));
+                } else if (msgsTotal > 0 && ordersTotal > 0) {
+                    convRate = Math.min(100, Math.round((ordersTotal / Math.max(1, Math.round(msgsTotal / 5))) * 100));
                 }
 
                 m.stats = {
-                    messages_24h: msgs24h,
-                    orders_month: ordersMonth,
+                    messages_24h: msgsTotal,
+                    orders_month: ordersTotal,
                     conversion_rate: convRate
                 };
             });

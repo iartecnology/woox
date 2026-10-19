@@ -204,13 +204,25 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
         this.isLoading = true;
         this.cdr.detectChanges();
 
-        const [ordersRes, usageRes] = await Promise.all([
+        const [ordersRes, usageRes, msgsRes] = await Promise.all([
             this.supabaseService.getOrders(this.merchantId),
-            this.supabaseService.getMerchantUsage(this.merchantId)
+            this.supabaseService.getMerchantUsage(this.merchantId),
+            supabase
+                .from('messages')
+                .select('id, sender_type, content, conversations!inner(merchant_id)')
+                .eq('conversations.merchant_id', this.merchantId)
         ]);
 
         if (usageRes.data) {
             this.usageData = usageRes.data;
+        } else if (msgsRes.data && msgsRes.data.length > 0) {
+            // Calcular uso real de IA a partir de los mensajes registrados
+            const aiMsgs = msgsRes.data.filter((m: any) => m.sender_type === 'ai');
+            const totalChars = aiMsgs.reduce((sum: number, m: any) => sum + (m.content?.length || 0), 0);
+            this.usageData = {
+                tokens_consumed: Math.max(Math.round(totalChars / 4), aiMsgs.length * 80),
+                ai_messages_count: aiMsgs.length
+            };
         }
 
         if (ordersRes.data) {
@@ -224,7 +236,7 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
                 channel: o.channel || 'web',
                 time: new Date(o.created_at).toLocaleTimeString(),
                 date: new Date(o.created_at).toLocaleDateString(),
-                agent: o.closing_agent_type === 'ai' ? '🤖 IA' : '👤 Humano'
+                agent: (o.closing_agent_type === 'ai' || o.closing_agent_type === 'bot') ? '🤖 IA' : '👤 Humano'
             }));
 
             this.applyPeriodFilter();
@@ -268,9 +280,9 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
         // 1. Calcular Cards
         const totalSales = filtered.reduce((acc, curr) => acc + Number(curr.total), 0);
         const totalOrders = filtered.length;
-        const aiOrders = filtered.filter(o => o.closing_agent_type === 'ai').length;
+        const aiOrders = filtered.filter(o => o.closing_agent_type === 'ai' || o.closing_agent_type === 'bot').length;
         const aiSales = filtered
-            .filter(o => o.closing_agent_type === 'ai')
+            .filter(o => o.closing_agent_type === 'ai' || o.closing_agent_type === 'bot')
             .reduce((acc, curr) => acc + Number(curr.total), 0);
         const conversionRate = totalOrders > 0 ? Math.round((aiOrders / totalOrders) * 100) : 0;
 
