@@ -27,7 +27,10 @@ function sanitizeMarkdown(text: string): string {
     sanitized = sanitized.replace(/catalog_search\s+query=[^\n]+/gi, "");
     sanitized = sanitized.replace(/\${2,}/g, "$");
     
-    // 2. Telegram Markdown V1 es muy estricto con los caracteres especiales sin cerrar.
+    // 2. Telegram Markdown V1 y WhatsApp usan un solo asterisco (*texto*) para negrita.
+    // El LLM genera formato Markdown estándar con dos asteriscos (**texto**).
+    sanitized = sanitized.replace(/\*\*(.*?)\*\*/g, "*$1*");
+
     // Aseguramos que los asteriscos esten balanceados para negrita
     const asterisks = (sanitized.match(/\*/g) || []).length;
     if (asterisks % 2 !== 0) sanitized = sanitized.replace(/\*/g, "");

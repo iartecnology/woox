@@ -16,6 +16,8 @@ function sanitizeMarkdown(text: string): string {
     sanitized = sanitized.replace(/\[UPDATE_CART:.*?\]/gi, "");
     sanitized = sanitized.replace(/\[ORDER_CONFIRMED:\s*\{[\s\S]*?\}\s*\]/gi, "");
     sanitized = sanitized.replace(/^\s*[}\]]+\s*$/gm, "");
+    // WhatsApp usa un solo asterisco (*texto*) para negrita
+    sanitized = sanitized.replace(/\*\*(.*?)\*\*/g, "*$1*");
     return sanitized.trim();
 }
 

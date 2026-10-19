@@ -120,10 +120,12 @@ Deno.serve(async (req) => {
             }
 
             if (textContent) {
+                // Telegram Markdown V1 usa *texto* para negrita en vez de **texto**
+                const tgText = textContent.replace(/\*\*(.*?)\*\*/g, "*$1*");
                 telRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ chat_id: chatId, text: textContent, parse_mode: "Markdown" })
+                    body: JSON.stringify({ chat_id: chatId, text: tgText, parse_mode: "Markdown" })
                 });
             }
 
@@ -215,6 +217,7 @@ Deno.serve(async (req) => {
                 }
 
                 if (textContent) {
+                    const waText = textContent.replace(/\*\*(.*?)\*\*/g, "*$1*");
                     waRes = await fetch(`https://graph.facebook.com/v22.0/${waPhoneId}/messages`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${waToken}` },
@@ -222,7 +225,7 @@ Deno.serve(async (req) => {
                             messaging_product: "whatsapp",
                             to: waCustomerPhone,
                             type: "text",
-                            text: { body: textContent }
+                            text: { body: waText }
                         })
                     });
                 }
