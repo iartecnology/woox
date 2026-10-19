@@ -23,9 +23,10 @@ function resolveVariables(text: string, variables: any, flowName?: string): stri
         } else {
             const summary = cart.map((it: any) => {
                 const notes = it.notes ? ` (${it.notes})` : '';
-                return `- ${it.name} x${it.qty}${notes} ($${it.price * it.qty})`;
+                const itemTotal = (Number(it.price) * it.qty).toLocaleString('es-CO');
+                return `- ${it.name} x${it.qty}${notes} ($${itemTotal})`;
             }).join('\n');
-            const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
+            const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0).toLocaleString('es-CO');
             const finalSummary = `${summary}\n\n💰 *Total: $${total}*`;
             text = text.replace(/{{cartSummary}}/ig, finalSummary);
             text = text.replace(/{{cart_summary}}/ig, finalSummary);

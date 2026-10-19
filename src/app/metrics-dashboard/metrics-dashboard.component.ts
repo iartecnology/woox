@@ -502,4 +502,30 @@ export class MetricsDashboardComponent implements OnInit, OnDestroy {
             this.currentPage = page;
         }
     }
+
+    exportToCSV(): void {
+        if (!this.recentOrders || this.recentOrders.length === 0) return;
+
+        const headers = ['ID Pedido', 'Cliente', 'Agente', 'Canal', 'Fecha', 'Hora', 'Estado', 'Total'];
+        const rows = this.recentOrders.map(o => [
+            `"${o.id}"`,
+            `"${(o.customer || '').replace(/"/g, '""')}"`,
+            `"${o.agent}"`,
+            `"${o.channel}"`,
+            `"${o.date}"`,
+            `"${o.time}"`,
+            `"${this.getStatusLabel(o.status)}"`,
+            `"${o.total}"`
+        ]);
+
+        const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `reporte_pedidos_${this.selectedTimeRange}_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 }

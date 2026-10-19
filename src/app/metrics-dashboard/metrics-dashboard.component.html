@@ -95,10 +95,16 @@
                 <div class="section-header" style="flex-direction: column; align-items: stretch; gap: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <h3 style="margin: 0;">Pedidos Recientes</h3>
-                        <span class="count-badge"
-                            style="background: #eef2ff; color: #4338ca; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 800;">
-                            {{ recentOrders.length }} Total
-                        </span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button (click)="exportToCSV()" class="view-all"
+                                style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 5px 12px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                📥 Exportar CSV
+                            </button>
+                            <span class="count-badge"
+                                style="background: #eef2ff; color: #4338ca; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 800;">
+                                {{ recentOrders.length }} Total
+                            </span>
+                        </div>
                     </div>
 
                     <!-- Campo de Búsqueda -->
@@ -106,8 +112,8 @@
                         <span
                             style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); opacity: 0.5;">🔍</span>
                         <input type="text" [(ngModel)]="searchTerm" (ngModelChange)="onSearch()"
-                            placeholder="Buscar por ID o Cliente..."
-                            style="width: 100%; padding: 10px 10px 10px 40px; border: 1px solid #e5e7eb; border-radius: 10px; outline: none; transition: border-color 0.2s;">
+                             placeholder="Buscar por ID o Cliente..."
+                             style="width: 100%; padding: 10px 10px 10px 40px; border: 1px solid #e5e7eb; border-radius: 10px; outline: none; transition: border-color 0.2s;">
                     </div>
                 </div>
 
@@ -146,7 +152,7 @@
                             <td>{{ order.id }}</td>
                             <td>{{ order.customer }}</td>
                             <td><span class="agent-badge">{{ order.agent }}</span></td>
-                            <td>${{ order.total | number:'1.2-2' }}</td>
+                            <td>${{ order.total | number:'1.0-0' }}</td>
                             <td><span class="status-badge" [class]="order.status">{{ getStatusLabel(order.status)
                                     }}</span>
                             </td>
