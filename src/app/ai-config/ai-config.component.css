@@ -64,7 +64,7 @@
 
 .config-section.highlight {
     border-left: 5px solid #ef4444;
-    background: var(--bg-secondary)afa;
+    background: #fef2f2;
 }
 
 .config-section h3 {
@@ -131,7 +131,7 @@ select:focus {
 }
 
 .agent-instructions-preview.restrictions-pre {
-    background: var(--bg-secondary)1f2;
+    background: #fff1f2;
     border-color: #fecaca;
     color: #991b1b;
 }
@@ -777,7 +777,7 @@ input:checked+.bot-slider {
 }
 
 .automation-status-badge.manual {
-    background: var(--bg-secondary)7ed;
+    background: #ffedd5;
     color: #c2410c;
     border-color: #fed7aa;
 }
@@ -843,7 +843,7 @@ input:checked+.bot-slider {
 
 .manual-alert {
     margin-top: 24px;
-    background: var(--bg-secondary)7ed;
+    background: #ffedd5;
     border: 1px solid #fed7aa;
     border-radius: 12px;
     padding: 16px;

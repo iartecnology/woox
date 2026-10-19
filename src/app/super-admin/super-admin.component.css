@@ -1119,7 +1119,7 @@ small {
 }
 
 .config-icon-btn.bot:hover {
-    background: var(--bg-secondary)1f2;
+    background: #fff1f2;
     border-color: #f43f5e;
     color: #e11d48;
 }
@@ -2374,7 +2374,7 @@ textarea::placeholder {
 }
 
 .legacy-info .info-banner {
-    background: var(--bg-secondary)beb;
+    background: #fffbeb;
     border: 1px solid #fef3c7;
     padding: 12px;
     border-radius: 8px;
@@ -4356,7 +4356,7 @@ input:checked+.slider-pill:before {
 .delete-icon-wrapper {
     width: 64px;
     height: 64px;
-    background: var(--bg-secondary)beb;
+    background: #fffbeb;
     color: #f59e0b;
     border-radius: 16px;
     display: flex;
@@ -4656,7 +4656,7 @@ input:checked+.slider:before {
 }
 
 .automation-badge.manual {
-    background: var(--bg-secondary)7ed;
+    background: #ffedd5;
     color: #9a3412;
     border-color: #fed7aa;
 }
@@ -4743,7 +4743,7 @@ input:checked+.slider:before {
 
 .manual-mode-alert {
     margin-top: 24px;
-    background: var(--bg-secondary)7ed;
+    background: #ffedd5;
     border: 1px solid #fed7aa;
     border-radius: 16px;
     padding: 20px;

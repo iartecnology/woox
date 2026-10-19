@@ -766,7 +766,7 @@ body {
     font-size: 2.5rem;
     font-weight: 900;
     color: #4F46E5;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 .loading-text {
@@ -833,7 +833,7 @@ body {
     }
 
     .mobile-title-unified {
-        font-family: 'Outfit', sans-serif;
+        font-family: 'Inter', sans-serif;
         font-weight: 800;
         font-size: 1.15rem;
         background: linear-gradient(135deg, #111827 0%, #374151 100%);
