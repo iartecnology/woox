@@ -1652,21 +1652,17 @@ ${node.data.prompt ? `### ETAPA: ${node.data.prompt}` : ''}
                         finalCleanResponse = `Nuestras pizzas artesanales son de tamaño familiar (8 porciones / 35 cm aprox.), ideales para compartir entre 3 y 4 personas. ¿Te gustaría que te agregue alguna pizza o bebida a tu orden? 🍕`;
                     // 5. Consulta de menú o productos (o pregunta si tienen algo no disponible)
                     } else if (/(piza|pizza|men[uú]|producto|plato|carta|opci[oó]n|sabor|tienen|hay|hamburguesa|jugo|malteada|sushi|tacos)/i.test(messageText)) {
-                        if (/sushi|taco/i.test(messageText)) {
-                            finalCleanResponse = `No contamos con sushi ni tacos en nuestro menú. 🍕 Te ofrecemos pizzas artesanales, hamburguesas gourmet, malteadas y jugos naturales:\n${productsCatalogBrief}\n\n¿Cuál de estas delicias te gustaría pedir?`;
-                        } else {
-                            finalCleanResponse = `¡Con gusto! Nuestras opciones disponibles son:\n${productsCatalogBrief}\n\n¿Cuál de estas opciones te gustaría pedir hoy? 🍕`;
-                        }
+                        finalCleanResponse = `¡Con gusto! En ${merchant?.name || 'nuestro menú'} tenemos disponible:\n${productsCatalogBrief}\n\n¿Cuál de estas delicias te gustaría pedir?`;
                     // 6. Saludos (solo si no hay historial largo o el carrito no tiene ítems)
                     } else if (/^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches)/i.test(messageText.trim())) {
                         if (currentCart.length > 0) {
-                            finalCleanResponse = `¡Hola de nuevo! Tienes productos en tu carrito. ¿Deseas agregar algo más o procedemos a completar tu pedido? 🍕`;
+                            finalCleanResponse = `¡Hola de nuevo! Tienes productos en tu carrito. ¿Deseas agregar algo más o procedemos a completar tu pedido?`;
                         } else {
-                            finalCleanResponse = `¡Benvenuto a ${merchant?.name || 'La Piazza Pizzería'}! 🍕 Tu pizzería artesanal italiana. ¿En qué podemos deleitarte hoy?`;
+                            finalCleanResponse = `¡Hola! 👋 Bienvenidos a ${merchant?.name || 'nuestro restaurante'}. ¿En qué te podemos deleitar hoy?`;
                         }
                     // 7. Fallback general
                     } else {
-                        finalCleanResponse = `Disculpa, no logré entender bien tu mensaje. ¿Me lo repites o me indicas qué te gustaría pedir? 🍕`;
+                        finalCleanResponse = `Disculpa, no logré entender bien tu mensaje. ¿Me lo repites o me indicas qué te gustaría pedir?`;
                     }
                 }
 
