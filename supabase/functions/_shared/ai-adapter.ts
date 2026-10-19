@@ -138,16 +138,25 @@ export function resolveAIConfig(
             (provider === 'cerebras') ||
             (provider === 'zai')
         );
-        if (keyBelongsToProvider) {
+        if (provider === 'custom' || provider === 'ollama' || provider === 'lmstudio') {
+            apiKey = legacyKey || 'ollama';
+        } else if (keyBelongsToProvider) {
             apiKey = legacyKey;
         } else {
             console.log(`[AI-ADAPTER] Legacy key (${legacyKey.slice(0,4)}...) no coincide con provider ${provider}, usando env var`);
         }
     }
 
-    // Fallback a platform o variables de entorno
+    // Fallback a platform o variables de entorno (validando que envVar no sea vacía)
     if (!apiKey) {
-        apiKey = Deno.env.get(ENV_KEY_MAP[provider] || '') || platform?.ai_api_key || '';
+        const envVarName = ENV_KEY_MAP[provider];
+        if (envVarName) {
+            apiKey = Deno.env.get(envVarName) || platform?.ai_api_key || '';
+        } else if (provider === 'custom' || provider === 'ollama' || provider === 'lmstudio') {
+            apiKey = 'ollama';
+        } else {
+            apiKey = platform?.ai_api_key || '';
+        }
     }
 
     // 5. Resolver URL base (solo si el proveedor explícito es custom, ollama o lmstudio)
@@ -155,6 +164,7 @@ export function resolveAIConfig(
     if (provider === 'custom' || provider === 'ollama' || provider === 'lmstudio') {
         baseUrl = merchant?.ai_api_url || merchant?.ollama_base_url || merchant?.lmstudio_base_url || undefined;
         provider = 'custom' as any;
+        if (!apiKey) apiKey = 'ollama';
     }
 
     const fallbackGeminiKey = platform?.ai_api_key || Deno.env.get('GEMINI_API_KEY') || '';
