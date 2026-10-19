@@ -222,10 +222,16 @@ export class SuperAdminComponent implements OnInit {
             { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B' }
         ],
         'ollama': [
+            { id: 'qwen2.5:1.5b', name: 'Qwen 2.5 1.5B (Instalado ⚡)' },
             { id: 'llama3:latest', name: 'Llama 3 (Meta)' },
             { id: 'mistral:latest', name: 'Mistral' },
             { id: 'phi3:latest', name: 'Phi-3 (Microsoft)' },
             { id: 'nomic-embed-text:latest', name: 'Nomic Embed (Recomendado para Vectores)' }
+        ],
+        'lmstudio': [
+            { id: 'qwen/qwen2.5-coder-14b', name: 'Qwen 2.5 Coder 14B' },
+            { id: 'qwen/qwen3.5-9b', name: 'Qwen 3.5 9B' },
+            { id: 'meta-llama-3.1-8b-instruct', name: 'Llama 3.1 8B Instruct' }
         ],
         'deepseek': [
             { id: 'deepseek-chat', name: 'DeepSeek Chat (Recomendado)' },
@@ -1079,16 +1085,17 @@ export class SuperAdminComponent implements OnInit {
                 } else {
                     throw new Error(data.error?.message || 'Error en Z.AI');
                 }
-            } else if (provider === 'ollama' || provider === 'lmstudio') {
-                const baseUrl = provider === 'ollama' 
-                    ? (this.selectedMerchant.ollama_base_url || 'http://localhost:11434')
-                    : (this.selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1');
+            } else if (provider === 'ollama' || provider === 'lmstudio' || provider === 'custom') {
+                const baseUrl = (provider === 'lmstudio')
+                    ? (this.selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1')
+                    : (this.selectedMerchant.ollama_base_url || 'https://woox-ollama-144-91-80-164.sslip.io');
                 
-                const url = provider === 'ollama' ? `${baseUrl}/api/generate` : `${baseUrl}/chat/completions`;
+                const isLMStudio = provider === 'lmstudio';
+                const url = isLMStudio ? `${baseUrl}/chat/completions` : `${baseUrl}/api/generate`;
                 
-                const body = provider === 'ollama' 
-                    ? { model: modelToUse, prompt: this.testMessage, stream: false }
-                    : { model: modelToUse, messages: [{ role: 'user', content: this.testMessage }] };
+                const body = isLMStudio
+                    ? { model: modelToUse || 'local-model', messages: [{ role: 'user', content: this.testMessage }] }
+                    : { model: modelToUse || 'qwen2.5:1.5b', prompt: this.testMessage, stream: false };
 
                 const resp = await fetch(url, {
                     method: 'POST',
@@ -1097,14 +1104,16 @@ export class SuperAdminComponent implements OnInit {
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    this.testResponse = provider === 'ollama' ? data.response : data.choices?.[0]?.message?.content;
+                    this.testResponse = isLMStudio ? data.choices?.[0]?.message?.content : (data.response || 'Sin respuesta.');
                 } else {
-                    throw new Error('Error en proveedor local');
+                    throw new Error(data.error || 'Error en proveedor local');
                 }
+            } else {
+                throw new Error(`Proveedor de IA no soportado: ${provider}`);
             }
         } catch (error: any) {
             console.error('Chat Test Error:', error);
-            this.testResponse = '❌ Error: ' + (error.message || 'No se pudo conectar');
+            this.testResponse = '❌ Error: ' + (error.message || 'No se pudo conectar con el motor de IA');
         } finally {
             this.isTestingChat = false;
             this.cdr.detectChanges();
@@ -1343,8 +1352,11 @@ export class SuperAdminComponent implements OnInit {
         this.currentManagingMerchant = merchant;
         this.isEditing = true;
 
-        // Asegurar propiedades de IA inmediatamente
-        this.selectedMerchant.ai_provider = this.selectedMerchant.ai_provider || 'google_gemini';
+        // Asegurar y normalizar proveedor (si viene como 'custom', mapear a 'ollama' para consistencia con el select)
+        if (this.selectedMerchant.ai_provider === 'custom' || !this.selectedMerchant.ai_provider) {
+            this.selectedMerchant.ai_provider = this.selectedMerchant.ai_provider === 'custom' ? 'ollama' : 'google_gemini';
+        }
+        
         this.selectedMerchant.ai_api_key = this.selectedMerchant.ai_api_key || '';
         this.selectedMerchant.ai_model = this.selectedMerchant.ai_model || '';
         this.selectedMerchant.ai_personality = this.selectedMerchant.ai_personality || 'friendly';
@@ -1354,7 +1366,11 @@ export class SuperAdminComponent implements OnInit {
         this.selectedMerchant.industry_type = this.selectedMerchant.industry_type || 'retail';
         this.selectedMerchant.ai_enabled = this.selectedMerchant.ai_enabled !== false;
         this.selectedMerchant.bot_mode = this.selectedMerchant.bot_mode || false;
-        this.selectedMerchant.ollama_base_url = (this.selectedMerchant as any).ai_api_url || this.selectedMerchant.ollama_base_url || 'http://localhost:11434';
+        
+        // Base URLs
+        this.selectedMerchant.ollama_base_url = (this.selectedMerchant as any).ai_api_url 
+            || this.selectedMerchant.ollama_base_url 
+            || 'https://woox-ollama-144-91-80-164.sslip.io';
         this.selectedMerchant.lmstudio_base_url = this.selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1';
 
         this.showAIConfig = true;
