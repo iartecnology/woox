@@ -1,8 +1,17 @@
 <div class="login-page">
     <div class="login-card">
         <div class="login-header">
-            <h1 class="brand">Woox</h1>
-            <p>Bienvenido de nuevo. Ingresa a tu panel de gestión.</p>
+            <div class="nav-brand">
+                <div class="brand-row">
+                    <img *ngIf="usePlatformLogoImage && platformLogoUrl" [src]="platformLogoUrl" alt="Platform Logo"
+                        class="sidebar-logo-img">
+                    <span *ngIf="!usePlatformLogoImage || !platformLogoUrl" class="brand-text">
+                        <span class="brand-accent">{{ platformName.substring(0, 2) }}</span><span class="brand-dark">{{ platformName.substring(2) }}</span>
+                    </span>
+                </div>
+                <small class="app-version-tag">PRO Edition v{{ appVersion }}</small>
+            </div>
+            <p class="login-subtitle">Ingresa a tu panel de gestión empresarial e IA</p>
         </div>
 
         <form (ngSubmit)="onLogin()" #loginForm="ngForm">

@@ -23,6 +23,22 @@ export class LoginComponent implements OnInit {
     private supabaseService = inject(SupabaseService);
     private router = inject(Router);
 
+    get platformName() {
+        return localStorage.getItem('platform_name') || 'Woox';
+    }
+
+    get platformLogoUrl() {
+        return localStorage.getItem('platform_logo_url') || '';
+    }
+
+    get usePlatformLogoImage() {
+        return localStorage.getItem('use_logo_image') === 'true';
+    }
+
+    get appVersion() {
+        return '1.0.0';
+    }
+
     ngOnInit() {
         // Persistencia de Sesión Estilo WhatsApp:
         // Si el usuario ya está autenticado localmente, entrar directo sin pedir credenciales.
