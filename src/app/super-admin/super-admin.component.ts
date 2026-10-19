@@ -1113,7 +1113,12 @@ export class SuperAdminComponent implements OnInit {
             }
         } catch (error: any) {
             console.error('Chat Test Error:', error);
-            this.testResponse = '❌ Error: ' + (error.message || 'No se pudo conectar con el motor de IA');
+            const msg = error.message || '';
+            if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+                this.testResponse = `⚠️ El navegador bloqueó la conexión directa por política de seguridad (CORS / Mixed Content). \n\n💡 Para probar la conversación completa con el catálogo y la IA activa, haz clic abajo en "💬 Probar en Simulador", donde corre a través del servidor.`;
+            } else {
+                this.testResponse = '❌ Error: ' + (msg || 'No se pudo conectar con el motor de IA');
+            }
         } finally {
             this.isTestingChat = false;
             this.cdr.detectChanges();
