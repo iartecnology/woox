@@ -348,7 +348,13 @@ export class SupabaseService {
     }
 
     async updateMerchant(id: string, updates: any) {
-        return await supabase.from('merchants').update(updates).eq('id', id);
+        const payload = { ...updates };
+        delete payload.stats;
+        delete payload.wa_qr;
+        delete payload.qrCodeUrl;
+        delete payload.is_online;
+        delete payload.id;
+        return await supabase.from('merchants').update(payload).eq('id', id);
     }
 
     async updateProduct(id: string, updates: any) {

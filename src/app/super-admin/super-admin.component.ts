@@ -2845,6 +2845,12 @@ export class SuperAdminComponent implements OnInit {
             updates.merchant_code = this.selectedMerchant.merchant_code;
         }
 
+        // ELIMINAR CAMPOS COMPUTADOS / TEMPORALES NO EXISTENTES EN TABLA MERCHANTS
+        delete (updates as any).stats;
+        delete (updates as any).wa_qr;
+        delete (updates as any).qrCodeUrl;
+        delete (updates as any).is_online;
+
         try {
             const { error } = await this.supabaseService.updateMerchant(merchantId, updates);
             if (error) throw error;
