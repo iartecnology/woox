@@ -356,9 +356,16 @@ export class SupabaseService {
     }
 
     async saveMerchant(merchant: any) {
+        // Clonar y eliminar propiedades computadas o en memoria que no son columnas de la tabla 'merchants'
+        const payload = { ...merchant };
+        delete payload.stats;
+        delete payload.wa_qr;
+        delete payload.qrCodeUrl;
+        delete payload.is_online;
+
         const { data, error } = await supabase
             .from('merchants')
-            .upsert(merchant)
+            .upsert(payload)
             .select()
             .single();
 

@@ -2930,6 +2930,12 @@ export class SuperAdminComponent implements OnInit {
             (merchantData as any).wa_last_connection = undefined;
         }
 
+        // ELIMINAR CAMPOS COMPUTADOS / TEMPORALES NO EXISTENTES EN TABLA MERCHANTS
+        delete (merchantData as any).stats;
+        delete (merchantData as any).wa_qr;
+        delete (merchantData as any).qrCodeUrl;
+        delete (merchantData as any).is_online;
+
         const { error } = await this.supabaseService.saveMerchant(merchantData);
 
         if (!error) {
