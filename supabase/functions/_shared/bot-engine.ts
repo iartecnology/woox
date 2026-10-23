@@ -618,7 +618,17 @@ async function executeAgentTool(
             
             variables['cart'] = cart;
             const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
-            return `✅ ${prod.name} x${quantity} añadido al carrito${notes ? ` con notas: "${notes}"` : ''}. Total actual del carrito: $${formatPrice(total)}`;
+            
+            // Sugerencia de venta cruzada inteligente según tipo de producto
+            let crossSellSuggestion = '';
+            const prodLower = prod.name.toLowerCase();
+            if (/(pizza|hamburguesa|burger|plato|sandwich)/i.test(prodLower)) {
+                crossSellSuggestion = ' ¿Te gustaría acompañarlo con una bebida bien fría o un jugo natural? 🥤';
+            } else if (/(jugo|coca|gaseosa|bebida|cerveza|malteada)/i.test(prodLower)) {
+                crossSellSuggestion = ' ¿Deseas agregar alguna pizza o hamburguesa para completar tu pedido? 🍕';
+            }
+
+            return `¡Excelente elección! 🍕 He agregado ${prod.name} x${quantity} a tu pedido.${notes ? ` (Notas: "${notes}")` : ''}\n🛒 Llevas: ${cart.map((it: any) => `${it.name} x${it.qty}`).join(', ')}\n💰 Total actual: $${formatPrice(total)}.${crossSellSuggestion}`;
         }
 
         case 'get_cart': {
@@ -671,24 +681,33 @@ async function executeAgentTool(
             if (cart.length === 0) return 'Tu carrito está vacío. Primero añade productos para poder registrar el pedido.';
             const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
             
-            const clientName = toolArgs?.customer_name || variables['customer_name'] || variables['nombre_cliente'];
-            const clientPhone = toolArgs?.customer_phone || variables['customer_phone'] || variables['telefono_cliente'];
-            const address = toolArgs?.address || variables['direccion_entrega'];
+            // Extracción inteligente si los datos vienen juntos en un solo campo (ej: "Juan Pérez, 3105559988, Calle 123")
+            let clientName = toolArgs?.customer_name || variables['customer_name'] || variables['nombre_cliente'];
+            let clientPhone = toolArgs?.customer_phone || variables['customer_phone'] || variables['telefono_cliente'];
+            let address = toolArgs?.address || variables['direccion_entrega'];
+
+            const combinedInput = [toolArgs?.customer_name, toolArgs?.address, toolArgs?.customer_phone].filter(Boolean).join(' ');
+            if ((!clientPhone || !address) && combinedInput) {
+                const phoneMatch = combinedInput.match(/\b(3\d{9}|[0-9]{7,10})\b/);
+                if (phoneMatch && !clientPhone) {
+                    clientPhone = phoneMatch[1];
+                }
+            }
 
             const isInvalidField = (v: any) => !v || typeof v !== 'string' || v.trim() === '' || /^(\.{2,}|no\s*(disponible|aplica|s[ée])|n\/a|por confirmar)$/i.test(v.trim());
             
             // Persistir datos parciales si vienen en la llamada
-            if (toolArgs?.customer_name && !isInvalidField(toolArgs.customer_name)) variables['customer_name'] = toolArgs.customer_name;
-            if (toolArgs?.customer_phone && !isInvalidField(toolArgs.customer_phone)) variables['customer_phone'] = toolArgs.customer_phone;
-            if (toolArgs?.address && !isInvalidField(toolArgs.address)) variables['direccion_entrega'] = toolArgs.address;
+            if (clientName && !isInvalidField(clientName)) variables['customer_name'] = clientName;
+            if (clientPhone && !isInvalidField(clientPhone)) variables['customer_phone'] = clientPhone;
+            if (address && !isInvalidField(address)) variables['direccion_entrega'] = address;
 
             const missing: string[] = [];
-            if (isInvalidField(clientName)) missing.push('tu nombre completo');
+            if (isInvalidField(clientName)) missing.push('tu nombre');
             if (isInvalidField(clientPhone)) missing.push('tu número de celular');
             if (isInvalidField(address)) missing.push('tu dirección de entrega');
 
             if (missing.length > 0) {
-                return `Para completar el pedido de tu carrito ($${formatPrice(total)}), por favor confírmame ${missing.join(', ')}.`;
+                return `¡Casi listo tu pedido! 📝 Por favor confírmame ${missing.join(', ')} para coordinar la entrega.`;
             }
 
             // Actualizar tabla de clientes si tenemos nuevos datos
@@ -717,12 +736,12 @@ async function executeAgentTool(
                     subtotal: it.price * it.qty
                 }));
                 { const { error: itemsErr } = await supabase.from('order_items').insert(items); if (itemsErr) console.error('[BOT-ENGINE] Error guardando order_items:', itemsErr); }
+                const previousCartSummary = cart.map((it: any) => `• ${it.name} x${it.qty}`).join('\n');
                 variables['cart'] = []; // Limpiar carrito tras registrar
                 
                 // NOTIFICAR SI EL PEDIDO SE CREÓ CORRECTAMENTE
                 if (order) {
-                   await notifyMerchantAgents(supabase, merchantId, "¡Nuevo Pedido (IA)! 🛵", `Se ha registrado el pedido #${orderNum}\nTotal: $${total.toFixed(2)}`);
-                   // Contabilizar orden en SaaS Metering
+                   await notifyMerchantAgents(supabase, merchantId, "¡Nuevo Pedido (IA)! 🛵", `Se ha registrado el pedido #${orderNum}\nTotal: $${formatPrice(total)}`);
                    try {
                        await supabase.rpc('track_merchant_usage', {
                            p_merchant_id: merchantId,
@@ -736,9 +755,9 @@ async function executeAgentTool(
                    }
                 }
 
-                return `🎉 ¡Pedido registrado exitosamente!\n📋 Número de pedido: ${orderNum}\n💰 Total: $${total.toFixed(2)}\n📍 Dirección: ${address}\n\nEn breve te contactaremos para confirmar la entrega.`;
+                return `🎉 ¡Listo, ${clientName}! Tu pedido ${orderNum} ha sido confirmado con éxito.\n\n📋 *Resumen de tu compra:*\n${previousCartSummary}\n💰 *Total a pagar:* $${formatPrice(total)}\n📍 *Dirección:* ${address}\n📞 *Contacto:* ${clientPhone}\n\nTu orden ya está en preparación y saldrá calientita. ¡Muchas gracias por elegirnos! 🍕🛵`;
             }
-            return `Error al registrar el pedido. Por favor intenta de nuevo.`;
+            return `Ocurrió un inconveniente al generar tu orden. Por favor confírmame tus datos de nuevo para registrarla de inmediato.`;
         }
 
         case 'order_status': {
@@ -1558,21 +1577,27 @@ async function _processFlowFromState(
 
                 console.log(`[BOT-ENGINE] Skills cargadas: ${toolDefs.map(t => t.name).join(', ') || 'ninguna'}`);
 
-                // ── 6. CONSTRUIR SYSTEM PROMPT (OPTIMIZADO Y COMPACTO) ────
+                // ── 6. CONSTRUIR SYSTEM PROMPT (VENDEDOR CONSULTIVO Y AMIGABLE) ────
                 const systemPrompt = `
-${compiledPrompt || 'Eres un asistente de ventas amigable y conciso.'}
+${compiledPrompt || 'Eres un anfitrión y asesor de ventas experto, cálido y entusiasta.'}
 ${node.data.prompt ? `### ETAPA: ${node.data.prompt}` : ''}
 
-### REGLAS OPERATIVAS CLAVE:
+### PERSONALIDAD Y ROL DE VENTA CONSULTIVA:
+- Eres el mejor anfitrión de la tienda: alegre, apasionado por complacer al cliente y muy resolutivo.
+- Mensajes breves (máximo 2 a 3 oraciones). Cada mensaje tuyo DEBE terminar con una pregunta guía clara y fácil de responder (ej: "¿Te gustaría agregar una bebida o pasamos a la entrega?").
+- AFIRMACIONES CORTAS: Si el cliente responde "sí", "dale", "de una", "por favor" o "claro" a una sugerencia tuya, entiende el contexto de inmediato y ejecuta la acción sugerida sin pedir explicaciones.
+- VENTA CRUZADA NATURAL: Cuando el cliente elija un plato fuerte, felicítalo por su elección y sugiere sutilmente una bebida fría o postre para acompañar.
+- CIERRE AMABLE: Si el cliente dice "no", "nada más" o "eso es todo", pasa con entusiasmo a coordinar los datos de entrega.
+
+### REGLAS OPERATIVAS:
 1. HERRAMIENTAS: Úsalas mediante function calling nativo (nunca texto plano tipo "add to cart").
-2. AGREGAR AL CARRITO: Si el cliente pide/confirma un producto, llama directamente a 'add_to_cart'. No busques en catálogo lo que ya pidió.
-3. CARRITO: Si pide modificar/eliminar usa 'remove_from_cart'; si pregunta qué lleva usa 'get_cart'.
-4. CIERRE: ${toolDefs.some(t => t.name === 'checkout_trigger') ? "Si el cliente termina o dice no más, llama a 'checkout_trigger'." : "Si tienes 'register_order' y ya tienes nombre, celular y dirección, llama a 'register_order'."}
-5. COMUNICACIÓN: Responde en 2-3 líneas, amable y con el total actualizado.
+2. AGREGAR AL CARRITO: Si el cliente pide o confirma un producto, llama directamente a 'add_to_cart'. No busques en catálogo lo que ya pidió.
+3. CARRITO: Si pide quitar/cambiar usa 'remove_from_cart'; si pregunta qué lleva usa 'get_cart'.
+4. CIERRE: ${toolDefs.some(t => t.name === 'checkout_trigger') ? "Si el cliente termina o dice no más, llama a 'checkout_trigger'." : "Si tienes 'register_order' y el cliente da sus datos o finaliza, llama a 'register_order'."}
 
 ### ESTADO SESIÓN:
 - Tienda: ${merchant?.name || 'Nuestra tienda'}
-- Catálogo: ${productsCatalogBrief}
+- Catálogo disponible: ${productsCatalogBrief}
 - Carrito: ${variables['cart']?.length > 0 ? variables['cart'].map((it: any) => `${it.name} x${it.qty} ($${formatPrice(it.price * it.qty)})`).join(', ') : 'vacío'}
 - Orden activa: ${variables['orderNumber'] || 'ninguna'}
 `;
@@ -1639,30 +1664,41 @@ ${node.data.prompt ? `### ETAPA: ${node.data.prompt}` : ''}
                         } else {
                             finalCleanResponse = `Tu carrito está vacío actualmente. ¿Qué te gustaría pedir? 🍕`;
                         }
-                    // 3. Cliente confirma o dice no (cierre de pedido)
+                    // 3. Cliente confirma o dice no (cierre de pedido o continuación)
                     } else if (/^(no|no mas|no más|nada m[aá]s|eso es todo|listo|ya est[aá]|as[ií] est[aá] bien|ser[ií]a todo|ninguno)/i.test(messageText.trim())) {
                         if (currentCart.length > 0) {
                             variables['_exit_ai_agent'] = true;
-                            finalCleanResponse = `¡Perfecto! Vamos a coordinar la entrega de tu pedido.`;
+                            finalCleanResponse = `¡Perfecto! Tienes ${currentCart.length} producto(s) en tu pedido por $${formatPrice(cartTotal)}. Por favor compárteme tu nombre, celular y dirección para coordinar la entrega de inmediato. 🛵`;
                         } else {
                             finalCleanResponse = `¡Entendido! Con gusto te colaboro con tu orden en ${merchant?.name || 'nuestro restaurante'}. ¿Qué te gustaría ordenar hoy?`;
                         }
+                    // 3b. Cliente responde afirmativo corto (ej: "sí", "dale", "de una", "por favor")
+                    } else if (/^(s[ií]|dale|de una|por favor|porfa|claro|bueno|ok|vale|s[ií] por favor)/i.test(messageText.trim())) {
+                        if (currentCart.length > 0) {
+                            finalCleanResponse = `¡Excelente! ¿Te gustaría agregar una bebida bien fría o procedemos a tomar tus datos de entrega? 🛵`;
+                        } else {
+                            finalCleanResponse = `¡Con todo gusto! ¿Qué delicia de nuestro menú se te antoja probar hoy? 🍕`;
+                        }
                     // 4. Consulta de tamaño, porciones o especificaciones
                     } else if (/(tama[ñn]o|porci[oó]n|porciones|medida|cu[aá]ntas personas|para cu[aá]ntos|alcanza)/i.test(messageText)) {
-                        finalCleanResponse = `Nuestras pizzas artesanales son de tamaño familiar (8 porciones / 35 cm aprox.), ideales para compartir entre 3 y 4 personas. ¿Te gustaría que te agregue alguna pizza o bebida a tu orden? 🍕`;
-                    // 5. Consulta de menú o productos (o pregunta si tienen algo no disponible)
-                    } else if (/(piza|pizza|men[uú]|producto|plato|carta|opci[oó]n|sabor|tienen|hay|hamburguesa|jugo|malteada|sushi|tacos)/i.test(messageText)) {
-                        finalCleanResponse = `¡Con gusto! En ${merchant?.name || 'nuestro menú'} tenemos disponible:\n${productsCatalogBrief}\n\n¿Cuál de estas delicias te gustaría pedir?`;
+                        finalCleanResponse = `Nuestras pizzas artesanales son de tamaño familiar (8 porciones / 35 cm aprox.), ideales para compartir entre 3 y 4 personas 🍕. ¿Te gustaría ordenar una Pizza Margherita ($23.000) o la Pepperoni Supreme ($31.000)?`;
+                    // 5. Consulta de menú, productos o solicitud directa de bebida/comida
+                    } else if (/(piza|pizza|men[uú]|producto|plato|carta|opci[oó]n|sabor|tienen|hay|hamburguesa|jugo|malteada|coca|gaseosa|bebida|cola|sushi|tacos)/i.test(messageText)) {
+                        if (/coca|cola|gaseosa|bebida|jugo/i.test(messageText)) {
+                            finalCleanResponse = `¡Con gusto! Tenemos Coca-Cola helada ($5.000) y jugos naturales ($8.000 - $9.000). ¿Deseas que te la sume a tu pedido actual? 🥤`;
+                        } else {
+                            finalCleanResponse = `¡Con gusto! En ${merchant?.name || 'nuestro menú'} tenemos opciones deliciosas como:\n• Pizza Margherita ($23.000)\n• Pizza Pepperoni Supreme ($31.000)\n• Hamburguesas gourmet, malteadas y bebidas frías.\n\n¿Cuál de estas opciones te gustaría probar hoy? 🍕`;
+                        }
                     // 6. Saludos (solo si no hay historial largo o el carrito no tiene ítems)
                     } else if (/^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches)/i.test(messageText.trim())) {
                         if (currentCart.length > 0) {
-                            finalCleanResponse = `¡Hola de nuevo! Tienes productos en tu carrito. ¿Deseas agregar algo más o procedemos a completar tu pedido?`;
+                            finalCleanResponse = `¡Hola de nuevo! Tienes productos en tu carrito por $${formatPrice(cartTotal)}. ¿Deseas agregar algo más o coordinamos tu entrega? 🛵`;
                         } else {
-                            finalCleanResponse = `¡Hola! 👋 Bienvenidos a ${merchant?.name || 'nuestro restaurante'}. ¿En qué te podemos deleitar hoy?`;
+                            finalCleanResponse = `¡Hola! 👋 Bienvenido a ${merchant?.name || 'nuestro restaurante'}. Qué alegría atenderte hoy. ¿Qué se te antoja pedir? 🍕`;
                         }
                     // 7. Fallback general
                     } else {
-                        finalCleanResponse = `Disculpa, no logré entender bien tu mensaje. ¿Me lo repites o me indicas qué te gustaría pedir?`;
+                        finalCleanResponse = `Con gusto te colaboro con tu pedido en ${merchant?.name || 'nuestro restaurante'}. ¿Deseas ordenar alguna de nuestras pizzas o bebidas? 🍕`;
                     }
                 }
 
