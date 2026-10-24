@@ -243,21 +243,43 @@ export async function callUnifiedAI(
             // Groq, OpenAI, DeepSeek, OpenRouter, Cerebras, Custom — todos usan formato OpenAI
             result = await callOpenAICompatibleWithTools(config, messages, tools, executeToolFn, debugLogs, MAX_TOOL_LOOPS);
             
-            // Detección proactiva de fallos de cuota o de servicio en el proveedor actual
+            // Si ya se ejecutaron herramientas y tenemos respuesta, retornar de inmediato para no duplicar acciones en el carrito
+            if (result.toolCalls.length > 0 && result.text) {
+                return result;
+            }
+
+            // Detección proactiva de fallos de cuota (429) o de servicio cuando aún no hay respuesta
             const hasError = result.debugLogs.some(log => log.includes('429') || log.includes('Rate limit') || log.includes('ERROR'));
             
-            if ((!result.text || hasError)) {
+            if (!result.text || hasError) {
+                // 1. Si el proveedor es Groq y dio 429 en el modelo actual, rotar por los otros modelos con pool de tokens independiente
+                if (config.provider === 'groq' && config.apiKey) {
+                    const groqBackupModels = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.8-27b']
+                        .filter(m => m !== config.model);
+
+                    for (const backupModel of groqBackupModels) {
+                        console.warn(`[AI-ADAPTER] [GROQ-ROTATION] ${config.model} saturado (429). Rotando a ${backupModel}...`);
+                        debugLogs.push(`[GROQ-ROTATION] Reintentando con ${backupModel}...`);
+                        const rotatedConfig: AIConfig = {
+                            ...config,
+                            model: backupModel
+                        };
+                        const rotatedResult = await callOpenAICompatibleWithTools(rotatedConfig, messages, tools, executeToolFn, debugLogs, MAX_TOOL_LOOPS);
+                        if (rotatedResult.text) return rotatedResult;
+                    }
+                }
+
                 const groqKey = Deno.env.get('GROQ_API_KEY');
                 const geminiKey = config.fallbackGeminiKey || Deno.env.get('GEMINI_API_KEY');
 
-                // Si falló y tenemos Groq configurado (y no era ya Groq)
+                // 2. Si falló otro proveedor y tenemos Groq configurado
                 if (groqKey && config.provider !== 'groq') {
                     console.warn(`[AI-ADAPTER] [FALLBACK] ${config.provider} falló o arrojó error. Intentando con Groq...`);
-                    debugLogs.push(`[FALLBACK-TRIGGERED] ${config.provider} falló/429. Reintentando con Groq (llama-3.3-70b-versatile)...`);
+                    debugLogs.push(`[FALLBACK-TRIGGERED] ${config.provider} falló/429. Reintentando con Groq (openai/gpt-oss-20b)...`);
                     
                     const fallbackConfig: AIConfig = {
                         provider: 'groq',
-                        model: 'llama-3.3-70b-versatile',
+                        model: 'openai/gpt-oss-20b',
                         apiKey: groqKey,
                         temperature: config.temperature,
                         maxTokens: config.maxTokens
@@ -267,7 +289,7 @@ export async function callUnifiedAI(
                     if (groqResult.text) return groqResult;
                 }
                 
-                // Si aún no hay texto o Groq no estaba disponible, intentar Gemini
+                // 3. Si aún no hay texto y tenemos Gemini con key válida
                 if (geminiKey && config.provider !== 'google_gemini') {
                     console.warn(`[AI-ADAPTER] [FALLBACK] ${config.provider} falló o arrojó 429. Intentando fallback con Gemini...`);
                     debugLogs.push(`[FALLBACK-TRIGGERED] ${config.provider} falló/429. Reintentando con Gemini (gemini-flash-latest)...`);
@@ -556,11 +578,24 @@ async function callOpenAICompatibleWithTools(
 
         const toolCalls = message.tool_calls;
 
+        // Herramientas transaccionales cuyo retorno ya es el mensaje final estructurado para el cliente
+        const TRANSACTIONAL_TOOLS = new Set([
+            'add_to_cart',
+            'remove_from_cart',
+            'get_cart',
+            'register_order',
+            'checkout_trigger',
+            'create_booking'
+        ]);
+
         // Si el modelo ejecutó tool_calls estructurados
         if (toolCalls && toolCalls.length > 0) {
             // Resetear finalText para que pensamientos intermedios o fugas de plantillas no se mezclen con la respuesta final
             finalText = '';
             requestBody.messages.push(message);
+
+            let lastToolResult = '';
+            let allTransactional = true;
 
             for (const tc of toolCalls) {
                 const name = tc.function.name;
@@ -571,6 +606,10 @@ async function callOpenAICompatibleWithTools(
                 debugLogs.push(`[TOOL] ${name}(${JSON.stringify(args).slice(0, 100)})`);
 
                 const result = await executeToolFn(name, args);
+                lastToolResult = result;
+                if (!TRANSACTIONAL_TOOLS.has(name)) {
+                    allTransactional = false;
+                }
                 allToolCalls.push({ id: tc.id, name, arguments: args });
 
                 requestBody.messages.push({
@@ -579,7 +618,16 @@ async function callOpenAICompatibleWithTools(
                     content: result
                 });
             }
-            // Continuar el loop para que el modelo procese el resultado y genere la respuesta final
+
+            // Si todas las herramientas ejecutadas son transaccionales, retornar directamente su confirmación determinista
+            // (ahorra ~50% de tokens por turno y evita errores 429 en la segunda llamada)
+            if (allTransactional && lastToolResult) {
+                finalText = lastToolResult;
+                debugLogs.push('[DIRECT-TOOL] Returning deterministic transactional tool output');
+                break;
+            }
+
+            // Continuar el loop para herramientas de consulta (search_catalog, knowledge_search, etc.)
             continue;
         }
 
@@ -609,6 +657,13 @@ async function callOpenAICompatibleWithTools(
                     tool_call_id: inlineId,
                     content: result
                 });
+
+                if (TRANSACTIONAL_TOOLS.has(name) && result) {
+                    finalText = result;
+                    debugLogs.push('[DIRECT-TOOL-INLINE] Returning deterministic transactional tool output');
+                    break;
+                }
+
                 finalText = '';
                 continue;
             }
