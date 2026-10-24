@@ -29,7 +29,7 @@ interface ChartPoint {
 export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ orders }) => {
   const [period, setPeriod] = useState<Period>('days');
   const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   // Procesamiento de datos: 30 Días o 12 Meses
   const chartData: ChartPoint[] = useMemo(() => {

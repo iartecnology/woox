@@ -124,7 +124,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'grid' : 'grid-outline'}
                 size={22}
-                color={focused ? '#FFFFFF' : color}
+                color={focused ? '#FFFFFF' : String(color)}
               />
             </View>
           ),
@@ -142,7 +142,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'receipt' : 'receipt-outline'}
                 size={22}
-                color={focused ? '#FFFFFF' : color}
+                color={focused ? '#FFFFFF' : String(color)}
               />
               {pendingOrdersCount > 0 && (
                 <View style={styles.badge}>
@@ -164,7 +164,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
                 size={22}
-                color={focused ? '#FFFFFF' : color}
+                color={focused ? '#FFFFFF' : String(color)}
               />
               {unreadChatsCount > 0 && (
                 <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
@@ -186,7 +186,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'people' : 'people-outline'}
                 size={22}
-                color={focused ? '#FFFFFF' : color}
+                color={focused ? '#FFFFFF' : String(color)}
               />
             </View>
           ),
@@ -204,7 +204,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'calendar' : 'calendar-outline'}
                 size={22}
-                color={focused ? '#FFFFFF' : color}
+                color={focused ? '#FFFFFF' : String(color)}
               />
             </View>
           ),
@@ -221,7 +221,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'fast-food' : 'fast-food-outline'}
                 size={22}
-                color={focused ? '#FFFFFF' : color}
+                color={focused ? '#FFFFFF' : String(color)}
               />
             </View>
           ),
@@ -238,7 +238,7 @@ export default function TabsLayout() {
               <Ionicons
                 name={focused ? 'settings' : 'settings-outline'}
                 size={22}
-                color={focused ? '#FFFFFF' : color}
+                color={focused ? '#FFFFFF' : String(color)}
               />
             </View>
           ),
