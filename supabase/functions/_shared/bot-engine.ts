@@ -1012,6 +1012,11 @@ const TOOL_DEFINITIONS: Record<string, any> = {
             required: ['address', 'customer_name', 'customer_phone']
         }
     },
+    checkout_trigger: {
+        name: 'checkout_trigger',
+        description: 'Activa el paso de captura de datos de entrega cuando el cliente confirma que su carrito está listo ("así está bien", "eso es todo", "listo", "quiero pagar").',
+        parameters: { type: 'object', properties: {}, required: [] }
+    },
     order_status: {
         name: 'order_status',
         description: 'Consulta el estado de un pedido previo del cliente.',
