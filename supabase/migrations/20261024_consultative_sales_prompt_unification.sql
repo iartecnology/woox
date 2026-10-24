@@ -6,22 +6,29 @@
 -- 3. Corregir precios en ai_menu_context de Burger & Smoke House
 -- 4. Unificar cierre conversacional en bot_flows (eliminar nodo checkout_trigger redundante)
 
--- 1. Actualizar skills_catalog
+-- 1. Actualizar skills_catalog (system_prompt_fragment compacto y sin contradicciones)
 UPDATE public.skills_catalog
-SET prompt_injection = 'CAPACIDAD DE VENTAS CONSULTIVAS Y CATÁLOGO:
-- Eres un vendedor estrella, cálido, antojador y práctico.
-- Cuando el cliente pida el menú o recomendaciones, destaca de 2 a 4 platos estrella con su precio real y una descripción breve que despierte el apetito.
-- Cuando el cliente pida uno o varios productos en el mismo mensaje, llama a `add_to_cart` por CADA producto solicitado.
-- Confirma siempre todos los productos agregados y el total acumulado del carrito.
-- VENTA CRUZADA INTELIGENTE: Si el cliente lleva solo comida, sugiere una bebida refrescante o entrada. Si ya lleva plato fuerte y bebida, no insistas más y pregúntale amablemente si desea algo adicional o si pasan a coordinar el envío.'
+SET system_prompt_fragment = '### VENTA CONSULTIVA
+1. Muestra productos reales del catálogo con sus precios exactos.
+2. Si el cliente pide 1 o varios productos (o dice sí/dale), ejecuta add_to_cart por CADA producto solicitado, confirma todos los ítems con el total y sugiere bebida si aún no lleva.'
 WHERE slug = 'inventory_sales';
 
 UPDATE public.skills_catalog
-SET prompt_injection = 'CAPACIDAD DE CIERRE Y CAPTURA DE PEDIDOS:
-- Cuando el cliente indique que terminó de elegir ("no más", "así está bien", "eso es todo", "quiero pagar") y tenga productos en el carrito, NUNCA reinicies la conversación ni preguntes qué desea pedir desde cero.
-- Revisa el estado de sesión: si ya conoces el nombre y teléfono del cliente, salúdalo por su nombre y pídele únicamente confirmar su dirección de entrega. Si es cliente nuevo, pídele de forma cálida su nombre completo, número de celular y dirección de entrega.
-- Tan pronto tengas nombre, celular y dirección de entrega (o cuando el cliente los envíe en un mensaje), ejecuta `register_order` para registrar la orden en el sistema y confirmar el número de pedido.'
+SET system_prompt_fragment = '### CIERRE DE COMPRA (register_order)
+1. Si el cliente dice "no así está bien", "eso es todo" o "quiero pagar" y tiene carrito, NO reinicies el saludo.
+2. Pide Nombre completo, Teléfono y Dirección de entrega (si ya tienes Nombre y Teléfono en sesión, llámalo por su nombre y pide solo Dirección).
+3. En cuanto el cliente envíe su dirección o complete los 3 datos, ejecuta INMEDIATAMENTE la herramienta register_order(customer_name, customer_phone, address).'
 WHERE slug = 'order_capture';
+
+UPDATE public.skills_catalog
+SET system_prompt_fragment = '### PROTOCOLO DE SEGURIDAD
+- Precios fijos y dominio exclusivo del restaurante.'
+WHERE slug = 'security_protocol';
+
+UPDATE public.skills_catalog
+SET system_prompt_fragment = '### BASE DE CONOCIMIENTO
+- Usa CONOCIMIENTO EXTRA para horarios y ubicación.'
+WHERE slug = 'knowledge_base';
 
 -- 2. Actualizar agente maestro
 UPDATE public.agents
