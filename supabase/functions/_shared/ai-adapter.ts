@@ -462,6 +462,9 @@ async function callOpenAICompatibleWithTools(
     if (config.provider === 'openrouter') {
         // En OpenRouter, desactivar tokens de razonamiento superfluos para bots de chat interactivo ultrarrápidos
         requestBody.reasoning = { max_tokens: 0 };
+    } else if (config.provider === 'groq' && config.model.includes('gpt-oss')) {
+        // En Groq gpt-oss-*, limitar reasoning_effort a 'low' para evitar que consuma todo max_tokens en razonamiento interno
+        requestBody.reasoning_effort = 'low';
     }
     if (oaiTools) {
         requestBody.tools = oaiTools;

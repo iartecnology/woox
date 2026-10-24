@@ -1587,18 +1587,18 @@ async function _processFlowFromState(
                     break;
                 }
 
-                // ── 3. DETECTAR SI ES UN NUEVO SALUDO / NUEVO PEDIDO TRAS UNA ORDEN COMPLETADA ──
+                // ── 3. DETECTAR SI ES UN NUEVO SALUDO / NUEVO PEDIDO TRAS UNA ORDEN COMPLETADA O INACTIVIDAD ──
                 delete variables['_turn_added_items'];
                 const cleanMsg = messageText.trim().toLowerCase();
                 const isGreetingOrReset = /^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches|inicio|empezar|ordenar|menu|menú|nuevo pedido|otra vez|quiero pedir|pedir)$/i.test(cleanMsg);
+                const sessionInactiveMs = session?.updated_at ? (Date.now() - new Date(session.updated_at).getTime()) : 0;
                 
-                if (variables['orderNumber'] && isGreetingOrReset) {
-                    console.log(`[BOT-ENGINE] Nuevo ciclo detectado tras orden completada (${variables['orderNumber']}). Limpiando variables de orden previa.`);
+                if (isGreetingOrReset && (variables['orderNumber'] || sessionInactiveMs > 15 * 60 * 1000)) {
+                    console.log(`[BOT-ENGINE] Nuevo ciclo detectado (orden previa o >15 min inactividad). Limpiando carrito y variables de orden previa.`);
                     delete variables['orderNumber'];
                     delete variables['direccion_entrega'];
                     delete variables['awaiting_checkout'];
                     variables['cart'] = [];
-                    // Limpiar historial de la sesión previa para que el modelo no se quede pegado repitiendo la despedida
                     await supabase.from('bot_flow_history').delete().eq('session_id', session.id);
                     history.length = 0;
                 }
@@ -1622,8 +1622,10 @@ async function _processFlowFromState(
                         .eq('session_id', session.id)
                         .order('created_at', { ascending: false })
                         .limit(memoryLimit);
-                    history.length = 0;
-                    if (newHist) history.push(...newHist.reverse());
+                    if (newHist && newHist.length > 0) {
+                        history.length = 0;
+                        history.push(...newHist.reverse());
+                    }
                 }
 
                 // ── 5. CARGAR SKILLS (HERRAMIENTAS) ───────────────────────
