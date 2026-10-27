@@ -520,10 +520,42 @@ async function executeAgentTool(
         }
 
         case 'add_to_cart': {
-            const queryRaw = (toolArgs?.product_name || toolArgs?.query || '').toLowerCase().trim();
-            const quantity = parseInt(toolArgs?.quantity) || 1;
-            const notes = toolArgs?.notes || '';
-            const query = queryRaw.replace(/^(papas|una|un|el|la|los|las|quiero|ver|busca|agregar|agrega|dame)\s+/i, '').replace(/s$/, '').trim();
+            // Soportar lista de items estructurada o producto individual
+            let incomingItems: Array<{ queryRaw: string; quantity: number; notes: string }> = [];
+
+            if (Array.isArray(toolArgs?.items) && toolArgs.items.length > 0) {
+                incomingItems = toolArgs.items.map((it: any) => ({
+                    queryRaw: String(it.product_name || it.name || it.query || '').trim(),
+                    quantity: parseInt(it.quantity || it.qty) || 1,
+                    notes: it.notes || ''
+                })).filter(it => it.queryRaw);
+            } else {
+                const singleRaw = (toolArgs?.product_name || toolArgs?.query || '').trim();
+                const singleQty = parseInt(toolArgs?.quantity) || 1;
+                const singleNotes = toolArgs?.notes || '';
+
+                // Detección automática si el LLM envió varios productos juntos (ej: "una bacon con papa y cocacola")
+                const cleanForSplit = singleRaw.replace(/^(quiero|dame|agregar|agrega|pedir|ponme|me das|para mi|traeme|ordenar)\s+/i, '');
+                const parts = cleanForSplit.split(/\s+(?:con|y|\+|m[aá]s)\s+|,\s*/i).map(p => p.trim()).filter(Boolean);
+
+                if (parts.length > 1) {
+                    incomingItems = parts.map(p => ({
+                        queryRaw: p,
+                        quantity: 1,
+                        notes: singleNotes
+                    }));
+                } else if (singleRaw) {
+                    incomingItems = [{
+                        queryRaw: singleRaw,
+                        quantity: singleQty,
+                        notes: singleNotes
+                    }];
+                }
+            }
+
+            if (incomingItems.length === 0) {
+                return 'No especificaste qué producto deseas agregar al carrito. ¿Cuál te gustaría pedir?';
+            }
 
             const synonyms: Record<string, string[]> = {
                 'aguacate': ['avocado', 'guacamole', 'avocada'],
@@ -532,6 +564,11 @@ async function executeAgentTool(
                 'guacamole': ['aguacate', 'avocado', 'avocada'],
                 'tocineta': ['bacon'],
                 'bacon': ['tocineta'],
+                'papa': ['papas', 'francesa', 'francesas', 'rustica', 'rusticas', 'chips'],
+                'papas': ['papa', 'francesa', 'francesas', 'rustica', 'rusticas', 'chips'],
+                'cocacola': ['coca', 'coca-cola', 'gaseosa', 'refresco', 'soda'],
+                'coca': ['cocacola', 'coca-cola', 'gaseosa', 'refresco', 'soda'],
+                'gaseosa': ['coca', 'coca-cola', 'cocacola', 'refresco', 'soda', 'sprite', 'quatro'],
                 'queso': ['cheese', 'colby', 'gouda', 'mozzarella'],
                 'cheese': ['queso'],
                 'carne': ['beef', 'angus', 'burger', 'hamburguesa'],
@@ -541,120 +578,116 @@ async function executeAgentTool(
                 'burger': ['hamburguesa']
             };
 
-            const filters = [
-                `name.ilike.%${query}%`,
-                `description.ilike.%${query}%`
-            ];
-            if (queryRaw && queryRaw !== query) {
-                filters.push(`name.ilike.%${queryRaw}%`);
-            }
-            const words = query.split(/\s+/).filter(w => w.length >= 3);
-            for (const w of words) {
-                const cleanWord = w.replace(/s$/, '');
-                filters.push(`name.ilike.%${cleanWord}%`);
-                if (synonyms[cleanWord]) {
-                    for (const syn of synonyms[cleanWord]) {
-                        filters.push(`name.ilike.%${syn}%`);
-                        filters.push(`description.ilike.%${syn}%`);
-                    }
-                }
-            }
-
-            let { data: prods } = await supabase
-                .from('products')
-                .select('id, name, price, is_available')
-                .eq('merchant_id', merchantId)
-                .eq('is_available', true)
-                .or(filters.join(','));
-            
-            // Fallback si no encuentra por palabras completas
-            if (!prods || prods.length === 0) {
-                const broadTerms = words.map(w => `name.ilike.%${w.slice(0, 4)}%`);
-                if (broadTerms.length > 0) {
-                    const { data: fallbackProds } = await supabase.from('products')
-                        .select('id, name, price, is_available')
-                        .eq('merchant_id', merchantId)
-                        .eq('is_available', true)
-                        .or(broadTerms.join(','))
-                        .limit(3);
-                    if (fallbackProds && fallbackProds.length > 0) {
-                        prods = fallbackProds;
-                    }
-                }
-            }
-            
-            if (!prods || prods.length === 0) return `No encontré el producto "${queryRaw}" en nuestro catálogo o no está disponible.`;
-            
-            // Encontrar la mejor coincidencia por similitud de nombre
-            let bestProd = prods[0];
-            let maxOverlap = 0;
-            const queryWords = query.split(/\s+/);
-            for (const p of prods) {
-                const nameLower = p.name.toLowerCase();
-                if (nameLower === query || nameLower.includes(query)) {
-                    bestProd = p;
-                    break;
-                }
-                let overlap = 0;
-                for (const qw of queryWords) {
-                    if (nameLower.includes(qw)) overlap++;
-                }
-                if (overlap > maxOverlap) {
-                    maxOverlap = overlap;
-                    bestProd = p;
-                }
-            }
-
-            const prod = bestProd;
             const cart = variables['cart'] || [];
-            const existing = cart.find((i: any) => i.id === prod.id);
-            
-            if (existing) { 
-                existing.qty += quantity; 
-                if (notes) existing.notes = existing.notes ? `${existing.notes}, ${notes}` : notes;
-            } else { 
-                cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: quantity, notes }); 
-            }
-            
-            variables['cart'] = cart;
-            delete variables['awaiting_checkout'];
-
-            // Registrar todos los productos agregados durante este mismo turno para no omitir ninguno si se llama add_to_cart múltiples veces
             const turnAdded: Array<{ name: string; qty: number; notes?: string }> = Array.isArray(variables['_turn_added_items'])
                 ? variables['_turn_added_items']
                 : [];
-            const existingTurnItem = turnAdded.find(t => t.name === prod.name);
-            if (existingTurnItem) {
-                existingTurnItem.qty += quantity;
-                if (notes) existingTurnItem.notes = existingTurnItem.notes ? `${existingTurnItem.notes}, ${notes}` : notes;
-            } else {
-                turnAdded.push({ name: prod.name, qty: quantity, notes });
+            const notFoundItems: string[] = [];
+
+            // Obtener todos los productos disponibles del comercio para búsqueda eficiente
+            const { data: allMerchantProds } = await supabase
+                .from('products')
+                .select('id, name, price, description, is_available')
+                .eq('merchant_id', merchantId)
+                .eq('is_available', true);
+
+            const availableCatalog = allMerchantProds || [];
+
+            for (const item of incomingItems) {
+                const queryRaw = item.queryRaw.toLowerCase().trim();
+                const quantity = item.quantity || 1;
+                const notes = item.notes || '';
+                const query = queryRaw.replace(/^(papas|una|un|el|la|los|las|quiero|ver|busca|agregar|agrega|dame)\s+/i, '').replace(/s$/, '').trim();
+
+                // 1. Coincidencia exacta o contiene
+                let matchedProd = availableCatalog.find(p => {
+                    const n = p.name.toLowerCase();
+                    return n === query || n.includes(query) || query.includes(n.replace(/s$/, ''));
+                });
+
+                // 2. Coincidencia por sinónimos
+                if (!matchedProd) {
+                    const words = query.split(/\s+/).filter(w => w.length >= 3);
+                    let maxOverlap = 0;
+                    for (const p of availableCatalog) {
+                        const nameLower = p.name.toLowerCase();
+                        let overlap = 0;
+                        for (const w of words) {
+                            const cleanW = w.replace(/s$/, '');
+                            if (nameLower.includes(cleanW)) overlap += 2;
+                            if (synonyms[cleanW]) {
+                                for (const syn of synonyms[cleanW]) {
+                                    if (nameLower.includes(syn)) overlap += 3;
+                                }
+                            }
+                        }
+                        if (overlap > maxOverlap) {
+                            maxOverlap = overlap;
+                            matchedProd = p;
+                        }
+                    }
+                }
+
+                if (!matchedProd) {
+                    notFoundItems.push(item.queryRaw);
+                    continue;
+                }
+
+                // Añadir al carrito
+                const prod = matchedProd;
+                const existing = cart.find((i: any) => i.id === prod.id);
+                if (existing) {
+                    existing.qty += quantity;
+                    if (notes) existing.notes = existing.notes ? `${existing.notes}, ${notes}` : notes;
+                } else {
+                    cart.push({ id: prod.id, name: prod.name, price: prod.price, qty: quantity, notes });
+                }
+
+                const existingTurn = turnAdded.find(t => t.name === prod.name);
+                if (existingTurn) {
+                    existingTurn.qty += quantity;
+                    if (notes) existingTurn.notes = existingTurn.notes ? `${existingTurn.notes}, ${notes}` : notes;
+                } else {
+                    turnAdded.push({ name: prod.name, qty: quantity, notes });
+                }
             }
+
+            variables['cart'] = cart;
             variables['_turn_added_items'] = turnAdded;
+            delete variables['awaiting_checkout'];
 
             const total = cart.reduce((acc: number, it: any) => acc + (Number(it.price) * it.qty), 0);
-            
+
+            if (turnAdded.length === 0) {
+                return `No encontré los productos solicitados (${notFoundItems.join(', ')}) en nuestro catálogo disponible. ¿Te gustaría consultar nuestro menú?`;
+            }
+
             // Analizar todo el carrito para sugerencia de venta cruzada inteligente
             const hasMainDish = cart.some((it: any) => /(pizza|hamburguesa|burger|crispy|chicken|costilla|rib|plato|sandwich|perro|alita|wrap|carne|angus)/i.test(it.name));
             const hasDrink = cart.some((it: any) => /(jugo|coca|gaseosa|bebida|cerveza|malteada|limonada|agua|soda|te\b|té\b)/i.test(it.name));
+            const hasSide = cart.some((it: any) => /(papa|papas|aro|nacho|croqueta|yuca|ensalada)/i.test(it.name));
 
             let crossSellSuggestion = '';
-            if (hasMainDish && hasDrink) {
-                crossSellSuggestion = '\n\n¿Te gustaría sumar algún acompañamiento o postre, o pasamos a coordinar tu entrega? 🛵';
+            if (hasMainDish && hasDrink && hasSide) {
+                crossSellSuggestion = '\n\n¡Tu combo está completísimo! ¿Deseas agregar algún postre o pasamos a coordinar tu entrega? 🛵';
+            } else if (hasMainDish && hasDrink && !hasSide) {
+                crossSellSuggestion = '\n\n¿Te gustaría sumar un acompañamiento como unas papas rústicas, o coordinamos tu entrega? 🛵';
             } else if (hasMainDish && !hasDrink) {
                 crossSellSuggestion = '\n\n¿Te gustaría acompañarlo con una bebida bien fría o una limonada natural? 🥤';
             } else if (!hasMainDish && hasDrink) {
-                crossSellSuggestion = '\n\n¿Qué plato fuerte o hamburguesa te gustaría sumar para acompañar tu bebida? 🍔';
+                crossSellSuggestion = '\n\n¿Qué hamburguesa o plato fuerte te gustaría sumar para acompañar tu bebida? 🍔';
             } else {
                 crossSellSuggestion = '\n\n¿Deseas agregar algo más o pasamos a coordinar tu entrega? 🛵';
             }
 
             const addedText = turnAdded
                 .map(t => `${t.name} x${t.qty}${t.notes ? ` (${t.notes})` : ''}`)
-                .join(' y ');
+                .join(', ');
             const foodEmoji = cart.some((it: any) => /pizza/i.test(it.name)) ? '🍕' : '🍔';
 
-            return `¡Excelente elección! ${foodEmoji} He agregado ${addedText} a tu pedido.\n🛒 Llevas: ${cart.map((it: any) => `${it.name} x${it.qty}`).join(', ')}\n💰 Total actual: $${formatPrice(total)}.${crossSellSuggestion}`;
+            let notFoundNote = notFoundItems.length > 0 ? `\n(Nota: no encontré "${notFoundItems.join(', ')}")` : '';
+
+            return `¡Excelente elección! ${foodEmoji} He agregado a tu pedido: ${addedText}.${notFoundNote}\n🛒 Llevas: ${cart.map((it: any) => `${it.name} x${it.qty}`).join(', ')}\n💰 Total actual: $${formatPrice(total)}.${crossSellSuggestion}`;
         }
 
         case 'get_cart': {
@@ -971,15 +1004,27 @@ const TOOL_DEFINITIONS: Record<string, any> = {
     },
     add_to_cart: {
         name: 'add_to_cart',
-        description: 'AÑADE AL CARRITO. Ejecuta esta herramienta en cuanto el cliente confirme que quiere un producto. No preguntes permiso para usar la herramienta, solo confirma después de añadirlo.',
+        description: 'AÑADE AL CARRITO. Ejecuta esta herramienta en cuanto el cliente confirme que quiere uno o varios productos. Si pide varios productos en el mismo mensaje (ej: "una bacon con papas y cocacola"), agrégalos todos usando el campo items o con product_name.',
         parameters: {
             type: 'object',
             properties: {
-                product_name: { type: 'string', description: 'Nombre exacto del producto a añadir' },
-                quantity: { type: 'number', description: 'Cantidad a añadir. Por defecto 1.' },
-                notes: { type: 'string', description: 'Observaciones o notas especiales para el producto' }
-            },
-            required: ['product_name']
+                product_name: { type: 'string', description: 'Nombre o frase de productos a añadir (ej: "Smoke Bacon Smash" o "una bacon con papas y cocacola")' },
+                quantity: { type: 'number', description: 'Cantidad a añadir si es un solo producto. Por defecto 1.' },
+                notes: { type: 'string', description: 'Observaciones o notas especiales para el producto' },
+                items: {
+                    type: 'array',
+                    description: 'Lista de múltiples productos a añadir cuando el cliente pide varios productos en una sola frase.',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            product_name: { type: 'string', description: 'Nombre del producto' },
+                            quantity: { type: 'number', description: 'Cantidad (por defecto 1)' },
+                            notes: { type: 'string', description: 'Notas u observaciones del producto' }
+                        },
+                        required: ['product_name']
+                    }
+                }
+            }
         }
     },
     get_cart: {
