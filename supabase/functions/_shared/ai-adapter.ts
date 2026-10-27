@@ -254,7 +254,7 @@ export async function callUnifiedAI(
             if (!result.text || hasError) {
                 // 1. Si el proveedor es Groq y dio 429 en el modelo actual, rotar por los otros modelos con pool de tokens independiente
                 if (config.provider === 'groq' && config.apiKey) {
-                    const groqBackupModels = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.8-27b']
+                    const groqBackupModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']
                         .filter(m => m !== config.model);
 
                     for (const backupModel of groqBackupModels) {
@@ -270,16 +270,19 @@ export async function callUnifiedAI(
                 }
 
                 const groqKey = Deno.env.get('GROQ_API_KEY');
-                const geminiKey = config.fallbackGeminiKey || Deno.env.get('GEMINI_API_KEY');
+                const rawGeminiKey = config.fallbackGeminiKey || Deno.env.get('GEMINI_API_KEY') || '';
+                // Validar que la llave realmente pertenezca a Google (no confundir con gsk_ de Groq)
+                const isRealGeminiKey = Boolean(rawGeminiKey && !rawGeminiKey.startsWith('gsk_') && (rawGeminiKey.startsWith('AIzaSy') || rawGeminiKey.startsWith('AQ.')));
+                const geminiKey = isRealGeminiKey ? rawGeminiKey : '';
 
                 // 2. Si falló otro proveedor y tenemos Groq configurado
                 if (groqKey && config.provider !== 'groq') {
                     console.warn(`[AI-ADAPTER] [FALLBACK] ${config.provider} falló o arrojó error. Intentando con Groq...`);
-                    debugLogs.push(`[FALLBACK-TRIGGERED] ${config.provider} falló/429. Reintentando con Groq (openai/gpt-oss-20b)...`);
+                    debugLogs.push(`[FALLBACK-TRIGGERED] ${config.provider} falló/429. Reintentando con Groq (qwen/qwen3.8-27b)...`);
                     
                     const fallbackConfig: AIConfig = {
                         provider: 'groq',
-                        model: 'openai/gpt-oss-20b',
+                        model: 'qwen/qwen3.8-27b',
                         apiKey: groqKey,
                         temperature: config.temperature,
                         maxTokens: config.maxTokens
@@ -289,14 +292,14 @@ export async function callUnifiedAI(
                     if (groqResult.text) return groqResult;
                 }
                 
-                // 3. Si aún no hay texto y tenemos Gemini con key válida
+                // 3. Si aún no hay texto y tenemos Gemini con key válida de Google
                 if (geminiKey && config.provider !== 'google_gemini') {
                     console.warn(`[AI-ADAPTER] [FALLBACK] ${config.provider} falló o arrojó 429. Intentando fallback con Gemini...`);
-                    debugLogs.push(`[FALLBACK-TRIGGERED] ${config.provider} falló/429. Reintentando con Gemini (gemini-flash-latest)...`);
+                    debugLogs.push(`[FALLBACK-TRIGGERED] ${config.provider} falló/429. Reintentando con Gemini (gemini-3.8-flash)...`);
                     
                     const fallbackConfig: AIConfig = {
                         provider: 'google_gemini',
-                        model: 'gemini-flash-latest',
+                        model: 'gemini-3.8-flash',
                         apiKey: geminiKey,
                         temperature: config.temperature,
                         maxTokens: config.maxTokens

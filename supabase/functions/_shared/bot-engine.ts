@@ -1633,7 +1633,7 @@ async function _processFlowFromState(
                     }
                 }
 
-                // ── 5. CARGAR SKILLS (HERRAMIENTAS) ───────────────────────
+                // ── 5. CARGAR SKILLS (HERRAMIENTAS CON MASKING DINÁMICO) ──
                 const skillConns = connections.filter((c: any) => c.to === node.id && c.toPort === 'skills_in');
                 const skills = skillConns.map((c: any) => nodes.find((n: any) => n.id === c.from)).filter((n: any) => n?.type === 'ai_skill');
                 let toolDefs: AIToolDef[] = skills.map((s: any) => {
@@ -1646,9 +1646,12 @@ async function _processFlowFromState(
                     return null;
                 }).filter((d: any) => d !== null);
 
+                const currentCart = variables['cart'] || [];
+                const hasCartItems = currentCart.length > 0;
+
                 // Auto-inyectar get_cart y remove_from_cart si el agente tiene add_to_cart
                 if (toolDefs.some(t => t.name === 'add_to_cart')) {
-                    if (!toolDefs.some(t => t.name === 'remove_from_cart')) {
+                    if (hasCartItems && !toolDefs.some(t => t.name === 'remove_from_cart')) {
                         toolDefs.push(TOOL_DEFINITIONS['remove_from_cart']);
                     }
                     if (!toolDefs.some(t => t.name === 'get_cart')) {
@@ -1656,12 +1659,17 @@ async function _processFlowFromState(
                     }
                 }
 
+                // TOOL MASKING: Si el carrito está vacío, ocultar herramientas de modificación/cierre para ahorrar 300+ tokens
+                if (!hasCartItems) {
+                    toolDefs = toolDefs.filter(t => t.name !== 'remove_from_cart' && t.name !== 'register_order' && t.name !== 'checkout_trigger');
+                }
+
                 // Unificar modo de cierre: si register_order está presente, desactivar checkout_trigger para evitar contradicciones
                 if (toolDefs.some(t => t.name === 'register_order') && toolDefs.some(t => t.name === 'checkout_trigger')) {
                     toolDefs = toolDefs.filter(t => t.name !== 'checkout_trigger');
                 }
 
-                console.log(`[BOT-ENGINE] Skills cargadas: ${toolDefs.map(t => t.name).join(', ') || 'ninguna'}`);
+                console.log(`[BOT-ENGINE] Skills cargadas (${hasCartItems ? 'con carrito' : 'carrito vacío'}): ${toolDefs.map(t => t.name).join(', ') || 'ninguna'}`);
 
                 // ── 6. CONSTRUIR SYSTEM PROMPT (VENDEDOR CONSULTIVO Y AMIGABLE) ────
                 const systemPrompt = `
