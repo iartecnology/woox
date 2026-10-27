@@ -1563,12 +1563,13 @@ async function _processFlowFromState(
                 const compiledPrompt = promptRes.data;
                 let history = histRes.data ? histRes.data.reverse() : [];
                 if (history.length === 0 && conversationId) {
+                    const fallbackLimit = memoryLimit > 0 ? Math.max(memoryLimit, 10) : 10;
                     const { data: convMessages } = await supabase
                         .from('messages')
                         .select('sender_type, content')
                         .eq('conversation_id', conversationId)
                         .order('created_at', { ascending: false })
-                        .limit(memoryLimit > 0 ? Math.min(memoryLimit, 4) : 4);
+                        .limit(fallbackLimit);
                     if (convMessages && convMessages.length > 0) {
                         history = convMessages.reverse().map((m: any) => ({
                             role: m.sender_type === 'customer' ? 'user' : 'assistant',
@@ -1821,8 +1822,8 @@ ${node.data.prompt ? `### ETAPA: ${node.data.prompt}` : ''}
                         } else {
                             finalCleanResponse = `Tu carrito está vacío actualmente. ¿Qué se te antoja pedir hoy? ${storeEmoji}`;
                         }
-                    // 3. Cliente confirma cierre o dice no más ("no así está bien", "eso es todo", "quiero pagar")
-                    } else if (/^(no\b|no mas|no más|nada m[aá]s|eso es todo|listo|ya est[aá]|as[ií] est[aá] bien|no,?\s*as[ií] est[aá] bien|ser[ií]a todo|ninguno|quiero pagar|pagar|finalizar|a la entrega|proceder)/i.test(messageText.trim())) {
+                    // 3. Cliente confirma cierre o dice no más ("no así está bien", "eso es todo", "quiero pagar", "como confirmo", "confirmar")
+                    } else if (/^(no\b|no mas|no más|nada m[aá]s|eso es todo|listo|ya est[aá]|as[ií] est[aá] bien|no,?\s*as[ií] est[aá] bien|ser[ií]a todo|ninguno|quiero pagar|pagar|finalizar|a la entrega|proceder|confirm[oa]|confirmar)/i.test(messageText.trim()) || /(qu[eé] debo hacer para confirmar|c[oó]mo confirm|confirmar (el )?pedido)/i.test(messageText)) {
                         if (currentCart.length > 0) {
                             if (toolDefs.some(t => t.name === 'register_order')) {
                                 finalCleanResponse = await executeAgentTool(
