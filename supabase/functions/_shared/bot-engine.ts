@@ -687,7 +687,11 @@ async function executeAgentTool(
 
             let notFoundNote = notFoundItems.length > 0 ? `\n(Nota: no encontré "${notFoundItems.join(', ')}")` : '';
 
-            return `¡Excelente elección! ${foodEmoji} He agregado a tu pedido: ${addedText}.${notFoundNote}\n🛒 Llevas: ${cart.map((it: any) => `${it.name} x${it.qty}`).join(', ')}\n💰 Total actual: $${formatPrice(total)}.${crossSellSuggestion}`;
+            const cartDetails = cart
+                .map((it: any) => `• ${it.name} x${it.qty}${it.notes ? ` (${it.notes})` : ''} = $${formatPrice(it.price * it.qty)}`)
+                .join('\n');
+
+            return `✅ Agregado: ${addedText}.${notFoundNote}\n\n🛒 *Tu carrito actual:*\n${cartDetails}\n\n💰 *Total: $${formatPrice(total)}*${crossSellSuggestion}`;
         }
 
         case 'get_cart': {
@@ -1325,12 +1329,14 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
     let variables: any = session.variables || {};
     let waitingFor: string | null = session.waiting_for;
 
-    // Detectar si el usuario envía un saludo o reinicio tras haber terminado o tener una orden
+    // Detectar si el usuario envía un saludo o reinicio tras haber terminado o tras inactividad prolongada (> 2 horas)
     const cleanMsg = messageText.trim().toLowerCase();
     const isGreetingOrReset = /^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches|inicio|empezar|ordenar|menu|menú|nuevo pedido|otra vez|quiero pedir|pedir)$/i.test(cleanMsg);
+    const sessionInactiveMs = session?.updated_at ? (Date.now() - new Date(session.updated_at).getTime()) : 0;
+    const isStaleSession = sessionInactiveMs > 2 * 60 * 60 * 1000; // 2 horas de inactividad
 
-    if (isGreetingOrReset && (variables['orderNumber'] || variables['order_number'] || currentNodeId === 'node_end' || !currentNodeId)) {
-        console.log(`[BOT-ENGINE] Saludo detectado tras orden o flujo completado. Reiniciando sesión al inicio.`);
+    if ((isGreetingOrReset && (variables['orderNumber'] || variables['order_number'] || currentNodeId === 'node_end' || !currentNodeId || isStaleSession)) || (isStaleSession && isGreetingOrReset)) {
+        console.log(`[BOT-ENGINE] Saludo detectado tras orden completada o inactividad (>2h). Reiniciando sesión al inicio.`);
         currentNodeId = startNode.id;
         waitingFor = null;
         variables['cart'] = [];
@@ -1338,6 +1344,7 @@ export async function processBotFlow(supabase: any, merchantId: string, conversa
         delete variables['order_number'];
         delete variables['direccion_entrega'];
         delete variables['checkout_summary_cache'];
+        delete variables['awaiting_checkout'];
     }
 
     const { data: merchantData } = await supabase.from('merchants').select('name, menu_pdf_url').eq('id', merchantId).single();
@@ -1644,8 +1651,8 @@ async function _processFlowFromState(
                 const isGreetingOrReset = /^(hola+|buenas|buenos d[ií]as|buenas tardes|buenas noches|inicio|empezar|ordenar|menu|menú|nuevo pedido|otra vez|quiero pedir|pedir)$/i.test(cleanMsg);
                 const sessionInactiveMs = session?.updated_at ? (Date.now() - new Date(session.updated_at).getTime()) : 0;
                 
-                if (isGreetingOrReset && (variables['orderNumber'] || sessionInactiveMs > 15 * 60 * 1000)) {
-                    console.log(`[BOT-ENGINE] Nuevo ciclo detectado (orden previa o >15 min inactividad). Limpiando carrito y variables de orden previa.`);
+                if (isGreetingOrReset && (variables['orderNumber'] || sessionInactiveMs > 2 * 60 * 60 * 1000)) {
+                    console.log(`[BOT-ENGINE] Nuevo ciclo detectado (orden previa o >2 horas inactividad). Limpiando carrito y variables de orden previa.`);
                     delete variables['orderNumber'];
                     delete variables['direccion_entrega'];
                     delete variables['awaiting_checkout'];
