@@ -55,7 +55,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         .eq('password', pass)
         .maybeSingle();
 
-      if (error || !data) {
+      if (error) {
+        console.error('[useAuthStore] Supabase error during signIn:', error);
+        return { success: false, error: `Error de conexión: ${error.message || 'No se pudo conectar al servidor'}` };
+      }
+
+      if (!data) {
         return { success: false, error: 'Credenciales incorrectas o usuario no encontrado.' };
       }
 
