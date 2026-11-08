@@ -1646,28 +1646,34 @@ export class SuperAdminComponent implements OnInit {
     }
 
     goToBotBuilder(merchant: any) {
-        if (!merchant || !merchant.id) {
+        const target = merchant?.id ? merchant : this.selectedMerchant || this.currentManagingMerchant;
+        if (!target || !target.id) {
             this.notificationService.show('Error: Comercio no identificado', 'error');
             return;
         }
 
-        console.log(`[SuperAdmin] Navigating to Bot Builder for ${merchant.name}`);
+        console.log(`[SuperAdmin] Navigating to Bot Builder for ${target.name}`);
         this.ngZone.run(() => {
             // Sincronizar contexto para el Bot Builder
-            localStorage.setItem('active_merchant_id', merchant.id);
-            localStorage.setItem('merchant_name', merchant.name || '');
-            localStorage.setItem('merchant_slug', merchant.slug || '');
-            localStorage.setItem('merchant_industry_type', merchant.industry_type || 'retail');
+            localStorage.setItem('active_merchant_id', target.id);
+            localStorage.setItem('merchant_name', target.name || '');
+            localStorage.setItem('merchant_slug', target.slug || '');
+            localStorage.setItem('merchant_industry_type', target.industry_type || 'retail');
             
             this.showAIConfig = false;
+            this.cdr.detectChanges();
             
             // Navegación inmediata
             this.router.navigate(['/bot-builder']).then(success => {
                 if (success) {
-                    this.notificationService.show(`Diseñador de Flujos: ${merchant.name}`, 'success');
+                    this.notificationService.show(`Diseñador de Flujos: ${target.name}`, 'success');
                 } else {
-                    this.notificationService.show('No se pudo abrir el Diseñador', 'error');
+                    console.warn('[SuperAdmin] router.navigate returned false for /bot-builder, forcing window location');
+                    window.location.href = '/bot-builder';
                 }
+            }).catch(err => {
+                console.error('[SuperAdmin] Error navegando a /bot-builder:', err);
+                window.location.href = '/bot-builder';
             });
         });
     }
