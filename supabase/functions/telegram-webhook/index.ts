@@ -65,17 +65,25 @@ Deno.serve(async (req: Request) => {
         const { data: existing } = await supabase.from("messages").select("id").eq("metadata->>telegram_message_id", messageId).maybeSingle();
         if (existing) return new Response("ok", { headers: corsHeaders });
 
-        // Obtener merchant
-        const { data: m } = await supabase.from("merchants").select("*").eq("id", merchantId).single();
+        // Obtener merchant (soporta UUID o merchant_code)
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(merchantId);
+        let mQuery = supabase.from("merchants").select("*");
+        if (isUUID) {
+            mQuery = mQuery.eq("id", merchantId);
+        } else {
+            mQuery = mQuery.eq("merchant_code", merchantId);
+        }
+        const { data: m } = await mQuery.maybeSingle();
         if (!m) throw new Error("Merchant not found");
+        const resolvedMerchantId = m.id;
 
 
 
         // Obtener o crear cliente
-        let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", merchantId).eq("telegram_user_id", telegramUserId).maybeSingle();
+        let { data: customer } = await supabase.from("customers").select("*").eq("merchant_id", resolvedMerchantId).eq("telegram_user_id", telegramUserId).maybeSingle();
         if (!customer) {
             const { data: nc } = await supabase.from("customers").insert({
-                merchant_id: merchantId,
+                merchant_id: resolvedMerchantId,
                 full_name: telegramUsername,
                 telegram_user_id: telegramUserId,
                 telegram_chat_id: chatId
@@ -86,14 +94,14 @@ Deno.serve(async (req: Request) => {
         // Obtener o crear conversación
         let { data: conversation } = await supabase.from("conversations")
             .select("*")
-            .eq("merchant_id", merchantId)
+            .eq("merchant_id", resolvedMerchantId)
             .eq("customer_id", customer!.id)
             .eq("platform", "telegram")
             .maybeSingle();
 
         if (!conversation) {
             const { data: nconv, error: convErr } = await supabase.from("conversations").insert({
-                merchant_id: merchantId,
+                merchant_id: resolvedMerchantId,
                 customer_id: customer!.id,
                 platform: "telegram",
                 channel: "telegram",
@@ -134,7 +142,7 @@ Deno.serve(async (req: Request) => {
         try {
             // Solo procesar si la IA está activa para esta conversación
             if (conversation!.ai_active) {
-                const engineRes = await processBotFlow(supabase, merchantId, conversation!.id, messageText, customer!.id);
+                const engineRes = await processBotFlow(supabase, resolvedMerchantId, conversation!.id, messageText, customer!.id);
                 if (engineRes) {
                     aiResponse = engineRes;
                     console.log("[BOT-ENGINE] Respuesta procesada desde Flujo Visual");
@@ -144,7 +152,7 @@ Deno.serve(async (req: Request) => {
             if (!aiResponse) {
                 // Si la IA no está activa o no hay respuesta del flujo, no respondemos automáticamente
                 // NOTIFICAR A LOS AGENTES
-                await notifyMerchantAgents(supabase, merchantId, "Nuevo mensaje (TG)", `De: ${customer!.full_name || 'Cliente'}\nMensaje: ${messageText.slice(0, 50)}...`);
+                await notifyMerchantAgents(supabase, resolvedMerchantId, "Nuevo mensaje (TG)", `De: ${customer!.full_name || 'Cliente'}\nMensaje: ${messageText.slice(0, 50)}...`);
                 clearInterval(typingInterval);
                 return new Response("ok", { headers: corsHeaders });
             }
