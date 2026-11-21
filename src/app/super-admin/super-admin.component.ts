@@ -821,7 +821,9 @@ export class SuperAdminComponent implements OnInit {
                         name: m.name
                     }));
                 } else {
-                    throw new Error('No se pudo conectar con Ollama en ' + baseUrl);
+                    const errData = await response.json().catch(() => ({}));
+                    const errMsg = errData.error?.message || (typeof errData.error === 'string' ? errData.error : errData.message);
+                    throw new Error(errMsg ? `Ollama (${response.status}): ${errMsg}` : `No se pudo conectar con Ollama en ${baseUrl} (HTTP ${response.status})`);
                 }
             } else if (provider === 'lmstudio') {
                 const baseUrl = this.selectedMerchant.lmstudio_base_url || 'http://localhost:1234/v1';
@@ -1097,16 +1099,22 @@ export class SuperAdminComponent implements OnInit {
                     ? { model: modelToUse || 'local-model', messages: [{ role: 'user', content: this.testMessage }] }
                     : { model: modelToUse || 'qwen2.5:1.5b', prompt: this.testMessage, stream: false };
 
+                const reqHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+                if (this.selectedMerchant.ai_api_key) {
+                    reqHeaders['Authorization'] = `Bearer ${this.selectedMerchant.ai_api_key}`;
+                }
+
                 const resp = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: reqHeaders,
                     body: JSON.stringify(body)
                 });
-                const data = await resp.json();
+                const data = await resp.json().catch(() => ({}));
                 if (resp.ok) {
                     this.testResponse = isLMStudio ? data.choices?.[0]?.message?.content : (data.response || 'Sin respuesta.');
                 } else {
-                    throw new Error(data.error || 'Error en proveedor local');
+                    const rawErr = data.error?.message || (typeof data.error === 'string' ? data.error : (data.message || (data.error ? JSON.stringify(data.error) : 'Error en proveedor local')));
+                    throw new Error(rawErr);
                 }
             } else {
                 throw new Error(`Proveedor de IA no soportado: ${provider}`);

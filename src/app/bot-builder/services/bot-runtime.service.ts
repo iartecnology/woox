@@ -1114,9 +1114,9 @@ Respuesta final sintetizada para el cliente:`;
 
             const provider = merchant.ai_provider || 'openrouter';
             const apiKey = merchant.ai_api_key;
-            const model = merchant.ai_model || (provider === 'openrouter' ? 'nvidia/nemotron-3.5-lightning:free' : 'gemini-1.5-flash');
+            const model = merchant.ai_model || (provider === 'openrouter' ? 'nvidia/nemotron-3.5-lightning:free' : (provider === 'ollama' ? 'qwen2.5:1.5b' : 'gemini-1.5-flash'));
 
-            if (!apiKey) return null;
+            if (!apiKey && provider !== 'ollama' && provider !== 'lmstudio') return null;
 
             // Obtener prompt compilado y catálogo
             const [{ data: compiledPrompt }, { data: products }] = await Promise.all([
@@ -1191,6 +1191,57 @@ INSTRUCCIONES CLAVE DE RESPUESTA:
                 if (response.ok) {
                     const data = await response.json();
                     return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+                }
+            } else if (provider === 'ollama' || provider === 'lmstudio' || provider === 'custom') {
+                const isLMStudio = provider === 'lmstudio';
+                const baseUrl = isLMStudio
+                    ? (merchant.lmstudio_base_url || 'http://localhost:1234/v1')
+                    : (merchant.ollama_base_url || 'https://woox-ollama-144-91-80-164.sslip.io');
+
+                const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+                // Try OpenAI-compatible endpoint first (/v1/chat/completions or /chat/completions)
+                const chatUrl = isLMStudio ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
+                try {
+                    const chatResp = await fetch(chatUrl, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({
+                            model: model || (isLMStudio ? 'local-model' : 'qwen2.5:1.5b'),
+                            messages: [
+                                { role: 'system', content: systemPrompt },
+                                { role: 'user', content: userMessage }
+                            ],
+                            max_tokens: 2048,
+                            temperature: 0.5
+                        })
+                    });
+
+                    if (chatResp.ok) {
+                        const data = await chatResp.json();
+                        return data.choices?.[0]?.message?.content || null;
+                    }
+                } catch {
+                    // Ignore and try Ollama native /api/generate
+                }
+
+                if (provider === 'ollama' || provider === 'custom') {
+                    const genResp = await fetch(`${baseUrl}/api/generate`, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({
+                            model: model || 'qwen2.5:1.5b',
+                            system: systemPrompt,
+                            prompt: userMessage,
+                            stream: false
+                        })
+                    });
+
+                    if (genResp.ok) {
+                        const data = await genResp.json();
+                        return data.response || null;
+                    }
                 }
             }
         } catch (err) {
