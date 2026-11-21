@@ -778,14 +778,14 @@
                             aiConnectionMessage }}</small>
                     </div>
 
-                    <div class="form-group full-width" *ngIf="platformAiSettings.ai_provider !== 'ollama'">
-                        <label>Master API Key (Chat)</label>
+                    <div class="form-group full-width">
+                        <label>{{ platformAiSettings.ai_provider === 'ollama' ? 'Token / Clave de Ollama o Bridge (Opcional)' : 'Master API Key (Chat)' }}</label>
                         <div style="display: flex; gap: 10px;">
                             <input type="password" [(ngModel)]="platformAiSettings.ai_api_key"
-                                placeholder="AI API Key..." style="flex: 1;"
+                                [placeholder]="platformAiSettings.ai_provider === 'ollama' ? 'Token si tu Ollama o Bridge lo requiere...' : 'AI API Key...'" style="flex: 1;"
                                 (ngModelChange)="aiConnectionStatus = 'none'">
                             <button class="action-btn" (click)="testPlatformAIConnection()"
-                                [disabled]="isTestingAI || !platformAiSettings.ai_api_key"
+                                [disabled]="isTestingAI || (!platformAiSettings.ai_api_key && platformAiSettings.ai_provider !== 'ollama' && platformAiSettings.ai_provider !== 'lmstudio')"
                                 style="white-space: nowrap; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;">
                                 {{ isTestingAI ? '🕒 Conectando...' : '⚡ Verificar' }}
                             </button>
@@ -1070,15 +1070,15 @@
                                 </select>
                             </div>
 
-                            <!-- API Key para proveedores en la nube -->
-                            <div class="form-group mb-3" *ngIf="selectedMerchant.ai_provider !== 'ollama' && selectedMerchant.ai_provider !== 'lmstudio'">
-                                <label>API Key del Proveedor</label>
+                            <!-- API Key para proveedores en la nube o puente local -->
+                            <div class="form-group mb-3">
+                                <label>{{ selectedMerchant.ai_provider === 'ollama' ? 'Token / Clave de Ollama o Bridge (Opcional)' : (selectedMerchant.ai_provider === 'lmstudio' ? 'API Key / Token (Opcional)' : 'API Key del Proveedor') }}</label>
                                 <div class="input-with-status">
                                     <input type="password" [(ngModel)]="selectedMerchant.ai_api_key"
-                                        placeholder="sk-... o API Key" autocomplete="off"
+                                        [placeholder]="selectedMerchant.ai_provider === 'ollama' ? 'Token de autenticación si tu Ollama/Bridge lo requiere' : 'sk-... o API Key'" autocomplete="off"
                                         (ngModelChange)="aiConnectionStatus = 'none'">
                                 </div>
-                                <small class="input-hint">Clave cifrada en reposo y usada exclusivamente para este comercio.</small>
+                                <small class="input-hint">{{ selectedMerchant.ai_provider === 'ollama' ? 'Si tu servidor Ollama o Bridge requiere Bearer Token, ingrésalo aquí.' : 'Clave cifrada en reposo y usada exclusivamente para este comercio.' }}</small>
                             </div>
 
                             <!-- URL para Ollama -->
